@@ -1,0 +1,20 @@
+{
+  "name": "山水S酒店 · 宴席菜单",
+  "short_name": "山水S菜单",
+  "description": "山水S酒店婚宴/宴席菜单平板点餐系统",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#F7F2EA",
+  "theme_color": "#B23A2E",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

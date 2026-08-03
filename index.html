@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>山水S酒店 · 婚宴菜单</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="theme-color" content="#B23A2E">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="brand"><span class="mark">S</span><span>山水S酒店</span></div>
+
+      <!-- 模式切换 -->
+      <div class="mode-switch" id="modeSwitch">
+        <button data-mode="order" class="on">点菜</button>
+        <button data-mode="manage">管理</button>
+      </div>
+
+      <nav class="banquet-tabs" id="banquetTabs"></nav>
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2B2622" stroke-width="2">
+          <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line>
+        </svg>
+        <input id="search" type="search" placeholder="搜索菜品…" autocomplete="off">
+      </div>
+    </header>
+
+    <!-- 点菜模式 -->
+    <div class="screen" id="orderScreen">
+      <div class="pkgbar" id="pkgbar"></div>
+      <div class="banner" id="banner" hidden></div>
+      <div class="body">
+        <aside class="rail" id="rail"></aside>
+        <main class="content" id="content">
+          <div class="hero" id="hero"></div>
+          <div class="list" id="list"></div>
+        </main>
+      </div>
+    </div>
+
+    <!-- 管理模式 -->
+    <div class="screen" id="manageScreen" hidden>
+      <div class="mg-toolbar" id="mgToolbar">
+        <button class="mg-collapse" id="mgCollapse" title="收起工具栏">▾</button>
+        <div class="mg-toolbar-main">
+          <div class="mg-tabs" id="mgTabs">
+            <button data-mgtab="lib" class="on">菜品库</button>
+            <button data-mgtab="menu">菜单</button>
+          </div>
+          <span class="mg-spacer"></span>
+          <button class="mg-btn ghost" id="mgSettings">⚙ 设置</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json" hidden>
+        <input type="file" id="importExcelFile" accept=".xlsx,.xls" hidden>
+      </div>
+      <div class="mg-hint">管理模式：所有菜品集中在「菜品库」录入，图片只存一份；新建/编辑菜单时从库中勾选即可。同一道菜出现在多个菜单会自动共用同一图片与展示位置——一处修改，处处同步。</div>
+
+      <!-- 菜品库 上下文栏 -->
+      <div class="mg-ctxbar" id="mgLibbar">
+        <div class="mg-sel"><label>分类</label>
+          <select id="libCat">
+            <option value="">全部</option>
+            <option value="凉菜">凉菜</option>
+            <option value="主菜">主菜</option>
+            <option value="主食点心">主食点心</option>
+          </select>
+        </div>
+        <span class="mg-spacer"></span>
+        <button class="mg-btn primary" id="mgAddLibDish">+ 新增菜品</button>
+      </div>
+
+      <!-- 菜单 上下文栏 -->
+      <div class="mg-ctxbar" id="mgCtxbar" hidden>
+        <div class="mg-sel"><label>宴席</label><select id="mgBanquet"></select></div>
+        <div class="mg-sel"><label>套餐</label><select id="mgPkg"></select></div>
+        <button class="mg-btn" id="mgAddPkg">+ 新增套餐</button>
+        <button class="mg-btn primary" id="mgAddFromLib">从菜品库添加</button>
+      </div>
+
+      <div class="mg-body">
+        <div class="mg-list" id="mgLibList"></div>
+        <div class="mg-list" id="mgList" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 菜品详情弹窗 -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" aria-label="关闭">✕</button>
+      <div class="modal-thumb"></div>
+      <div class="modal-body">
+        <div class="m-num"></div>
+        <h2 class="m-cn"></h2>
+        <div class="m-en"></div>
+        <span class="m-cat"></span>
+        <p class="m-desc"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 菜品编辑弹窗 -->
+  <div class="modal" id="editModal" hidden>
+    <div class="modal-card edit-card">
+      <button class="modal-close" aria-label="关闭" data-close="editModal">✕</button>
+      <h3 id="editTitle">编辑菜品</h3>
+      <p class="mg-note">菜品统一在「菜品库」管理，修改会同步到所有含此菜品的菜单（图片仅存一份）。</p>
+      <form id="editForm">
+        <div class="field"><label>编号</label><input id="eNum" name="num" maxlength="8" placeholder="如 17"></div>
+        <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称"></div>
+        <div class="field"><label>英文名</label><input id="eEn" name="en" placeholder="English name"></div>
+        <div class="field"><label>分类</label>
+          <select id="eCat" name="cat">
+            <option value="凉菜">凉菜</option>
+            <option value="主菜">主菜</option>
+            <option value="主食点心">主食点心</option>
+          </select>
+        </div>
+        <div class="field"><label>占位插画</label>
+          <select id="eIcon" name="icon">
+            <option value="platter">拼盘</option>
+            <option value="bird">禽类</option>
+            <option value="lobster">龙虾</option>
+            <option value="fish">鱼类</option>
+            <option value="shell">贝类</option>
+            <option value="bowl">汤/碗</option>
+            <option value="leaf">蔬菜</option>
+            <option value="mound">主食堆</option>
+            <option value="heart">心形点心</option>
+            <option value="fruit">水果</option>
+          </select>
+        </div>
+        <div class="field"><label>简介</label><textarea id="eDesc" name="desc" rows="3" placeholder="菜品介绍…"></textarea></div>
+        <div class="field">
+          <label>菜品图片</label>
+          <input type="file" id="imgInput" accept="image/*">
+          <div class="progress" id="imgProgress" hidden><div class="bar"></div></div>
+          <div class="img-prev" id="imgPrev"></div>
+          <p class="field-note">上传后会自动压缩并展示真实照片；未上传则使用占位插画。</p>
+        </div>
+        <div class="edit-actions">
+          <button type="button" class="mg-btn danger" id="editDelete">删除</button>
+          <span class="spacer"></span>
+          <button type="button" class="mg-btn" data-close="editModal">取消</button>
+          <button type="submit" class="mg-btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 套餐编辑弹窗 -->
+  <div class="modal" id="pkgModal" hidden>
+    <div class="modal-card edit-card">
+      <button class="modal-close" aria-label="关闭" data-close="pkgModal">✕</button>
+      <h3 id="pkgTitle">编辑套餐</h3>
+      <form id="pkgForm">
+        <div class="field"><label>编号</label><input id="pId" name="id" maxlength="8" placeholder="如 E"></div>
+        <div class="field"><label>名称</label><input id="pName" name="name" placeholder="套餐名称"></div>
+        <div class="field"><label>价格（元/桌）</label><input id="pPrice" name="price" type="number" min="0" step="1" placeholder="0"></div>
+        <div class="field field-inline"><label>示例餐</label><input id="pDemo" name="demo" type="checkbox"></div>
+        <div class="edit-actions">
+          <button type="button" class="mg-btn danger" id="pkgDelete">删除</button>
+          <span class="spacer"></span>
+          <button type="button" class="mg-btn" data-close="pkgModal">取消</button>
+          <button type="submit" class="mg-btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 图片展示位置编辑弹窗 -->
+  <div class="modal" id="cropModal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" aria-label="关闭" data-close="cropModal">✕</button>
+      <h3 style="font-size:18px;font-weight:700;padding:20px 24px 0;">调整图片展示位置</h3>
+      <div style="padding:16px 24px 6px;">
+        <div class="crop-win" id="cropWin">
+          <img id="cropImg" alt="">
+        </div>
+        <p class="crop-hint">按住图片拖动，选择点菜界面中显示的部位（展示框固定为 4:3，不变形）</p>
+      </div>
+      <div class="edit-actions" style="padding:6px 24px 22px;">
+        <span class="spacer"></span>
+        <button type="button" class="mg-btn" data-close="cropModal">取消</button>
+        <button type="button" class="mg-btn primary" id="cropApply">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 从菜品库选择弹窗（组建菜单，支持批量应用到多个套餐） -->
+  <div class="modal pick-modal" id="pickModal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" aria-label="关闭" id="pickCancel">✕</button>
+      <h3 style="font-size:18px;font-weight:700;padding:20px 24px 0;">从菜品库选择菜品</h3>
+      <div class="pick-toolbar">
+        <select id="pickCat">
+          <option value="">全部分类</option>
+          <option value="凉菜">凉菜</option>
+          <option value="主菜">主菜</option>
+          <option value="主食点心">主食点心</option>
+        </select>
+        <input id="pickSearch" type="search" placeholder="搜索菜品…">
+        <button class="mg-btn" id="pickNew">+ 新建菜品并加入</button>
+      </div>
+      <div class="pick-targets-head">应用到以下套餐（可多选）</div>
+      <div class="pick-targets" id="pickTargets"></div>
+      <div class="pick-grid" id="pickGrid"></div>
+      <div class="pick-actions">
+        <button class="mg-btn ghost" id="pickRemove">从所选套餐移除</button>
+        <span class="spacer"></span>
+        <button class="mg-btn" id="pickCancel2">取消</button>
+        <button class="mg-btn primary" id="pickConfirm">加入所选菜品</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗：整合 导出/导入/恢复默认/Excel -->
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-card set-card">
+      <button class="modal-close" aria-label="关闭" data-close="settingsModal">✕</button>
+      <h3 class="set-title">设置</h3>
+      <p class="set-sub">菜单数据各设备独立存储；以下操作用于备份、迁移与恢复。</p>
+      <div class="set-list">
+        <button class="set-item" id="setExport"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
+        <button class="set-item" id="setImportJson"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
+        <button class="set-item" id="setImportExcel"><span class="set-ic">▦</span><span><b>导入 Excel</b><i>按模板批量导入菜品 / 套餐</i></span></button>
+        <button class="set-item" id="setTemplate"><span class="set-ic">＋</span><span><b>下载 Excel 模板</b><i>获取标准导入表格</i></span></button>
+        <button class="set-item danger" id="setReset"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 恢复默认二次确认 -->
+  <div class="modal" id="resetConfirmModal" hidden>
+    <div class="modal-card conf-card">
+      <h3 class="conf-title">确认恢复默认？</h3>
+      <p class="conf-text">此操作将<strong>清空本设备所有菜品库与菜单修改</strong>（仅删除本地数据，不影响其他设备）。恢复后可用「导入配置」找回备份。</p>
+      <p class="conf-warn">⚠ 该操作不可撤销，请确认已导出备份。</p>
+      <div class="edit-actions">
+        <button class="mg-btn" id="resetCancel">取消</button>
+        <button class="mg-btn danger" id="resetConfirm">确认恢复</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/xlsx.full.min.js"></script>
+  <script src="assets/data.js"></script>
+  <script src="assets/store.js"></script>
+  <script src="assets/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

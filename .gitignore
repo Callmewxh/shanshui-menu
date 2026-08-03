@@ -1,0 +1,13 @@
+# WorkBuddy 项目数据（非源码，不纳入版本管理）
+.workbuddy/
+
+# 临时/测试文件
+__*.js
+*.tmp
+
+# 系统 & 依赖
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.venv/
