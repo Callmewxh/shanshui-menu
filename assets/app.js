@@ -599,14 +599,6 @@
     URL.revokeObjectURL(a.href);
   }
 
-  // ---------- 管理模式工具栏收起 / 展开 ----------
-  function toggleMgCollapse() {
-    const bar = $('#mgToolbar');
-    const collapsed = bar.classList.toggle('collapsed');
-    $('#mgCollapse').textContent = collapsed ? '▴' : '▾';
-    $('#mgCollapse').title = collapsed ? '展开工具栏' : '收起工具栏';
-  }
-
   // ---------- 设置弹窗 ----------
   function openSettings() { $('#settingsModal').hidden = false; }
   function closeSettings() { $('#settingsModal').hidden = true; }
@@ -827,8 +819,8 @@
       e.target.value = '';
     });
 
-    // —— 管理模式工具栏：收起 / 展开 ——
-    $('#mgCollapse').addEventListener('click', toggleMgCollapse);
+    // —— 提示栏可关闭 ——
+    $('#mgHintClose').addEventListener('click', () => { $('#mgHint').style.display = 'none'; });
 
     // —— 设置入口（整合 导出 / 导入 / 恢复默认 / Excel） ——
     $('#mgSettings').addEventListener('click', openSettings);
