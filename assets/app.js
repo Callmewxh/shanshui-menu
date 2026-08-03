@@ -191,9 +191,36 @@
     document.querySelectorAll('.sec[id^="sec-"]').forEach((s) => spy.observe(s));
   }
 
-  // ---------- 详情弹窗 ----------
-  function openModal(num) {
-    const d = resolvedDishes().find((x) => x.num === num);
+  // ---------- 手机端沉浸式：上滑隐藏顶栏 ----------
+  function initImmersive() {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    const mq = window.matchMedia('(max-width: 820px)');
+    let lastY = 0;
+    function onScroll(el) {
+      if (!mq.matches) { app.classList.remove('chrome-hidden'); lastY = el.scrollTop; return; }
+      const y = el.scrollTop;
+      if (y <= 4) app.classList.remove('chrome-hidden');
+      else if (y > lastY + 4) app.classList.add('chrome-hidden');
+      else if (y < lastY - 4) app.classList.remove('chrome-hidden');
+      lastY = y;
+    }
+    const c = $('#content'), mb = $('#mgBody');
+    if (c) c.addEventListener('scroll', () => onScroll(c), { passive: true });
+    if (mb) mb.addEventListener('scroll', () => onScroll(mb), { passive: true });
+  }
+
+  // ---------- 详情弹窗（支持在列表内左右切换菜品） ----------
+  const viewer = { list: [], index: 0 };
+  function openModal(num, list) {
+    viewer.list = (list && list.length) ? list : resolvedDishes();
+    viewer.index = Math.max(0, viewer.list.findIndex((x) => x.num === num));
+    if (viewer.index < 0) viewer.index = 0;
+    renderModal();
+    $('#modal').hidden = false;
+  }
+  function renderModal() {
+    const d = viewer.list[viewer.index];
     if (!d) return;
     const m = $('#modal');
     const thumb = m.querySelector('.modal-thumb');
@@ -206,12 +233,26 @@
     m.querySelector('.m-en').textContent = d.en;
     m.querySelector('.m-cat').textContent = d.cat;
     m.querySelector('.m-desc').textContent = d.desc || '介绍待补充';
-    m.hidden = false;
+    const prev = m.querySelector('.m-prev'); const next = m.querySelector('.m-next');
+    if (prev) prev.disabled = viewer.index <= 0;
+    if (next) next.disabled = viewer.index >= viewer.list.length - 1;
+    const cnt = m.querySelector('.modal-counter');
+    if (cnt) cnt.textContent = (viewer.index + 1) + ' / ' + viewer.list.length;
   }
-  const closeModal = () => { $('#modal').hidden = true; };
+  function viewerGo(delta) {
+    const ni = viewer.index + delta;
+    if (ni < 0 || ni >= viewer.list.length) return;
+    viewer.index = ni;
+    renderModal();
+  }
+  const closeModal = () => {
+    $('#modal').hidden = true;
+    const app = document.querySelector('.app'); if (app) app.classList.remove('chrome-hidden');
+  };
 
   // ================= 管理模式 =================
   function setMode(mode) {
+    const app = document.querySelector('.app'); if (app) app.classList.remove('chrome-hidden');
     state.mode = mode;
     const order = mode === 'order';
     $('#orderScreen').hidden = !order;
@@ -301,6 +342,9 @@
       return;
     }
     const total = (p.dishes || []).length;
+    const pIdx = b.packages.indexOf(p);
+    const disPkgUp = pIdx <= 0 ? 'disabled' : '';
+    const disPkgDown = pIdx >= b.packages.length - 1 ? 'disabled' : '';
     const cards = (p.dishes || []).map((id, idx) => {
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
@@ -334,7 +378,11 @@
           ${p.demo ? '<span class="mg-tag">示例</span>' : ''}
           <span class="mg-pkg-count">${p.dishes.length} 道（引用菜品库）</span>
         </div>
-        <button class="mg-btn" id="mgEditPkg">编辑套餐</button>
+        <div class="mg-pkg-ops">
+          <button class="mg-btn small move" data-pkgmv="up" ${disPkgUp} title="上移档位">↑</button>
+          <button class="mg-btn small move" data-pkgmv="down" ${disPkgDown} title="下移档位">↓</button>
+          <button class="mg-btn" id="mgEditPkg">编辑套餐</button>
+        </div>
       </div>
       <div class="mg-grid" id="mgGrid">${cards}</div>
       <p class="mg-footnote">拖动卡片左上角「⠿」可排序，或用每道菜的「↑ / ↓」按钮；顺序会同步保存到本地。编辑某道菜会同步到所有含该菜品的菜单。</p>`;
@@ -691,12 +739,34 @@
     $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); setupSpy(); });
     $('#list').addEventListener('click', (e) => {
       const c = e.target.closest('.card'); if (!c) return;
-      openModal(c.dataset.num);
+      const sec = c.closest('.sec');
+      let list = resolvedDishes();
+      if (sec) {
+        const cat = sec.id.replace('sec-', '');
+        list = list.filter((d) => d.cat === cat);
+      }
+      openModal(c.dataset.num, list);
     });
     $('#modal').addEventListener('click', (e) => {
+      if (e.target.closest('.m-prev')) { viewerGo(-1); return; }
+      if (e.target.closest('.m-next')) { viewerGo(1); return; }
       if (e.target.id === 'modal' || e.target.closest('.modal-close')) closeModal();
     });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#settingsModal').hidden = true; $('#resetConfirmModal').hidden = true; } });
+    document.addEventListener('keydown', (e) => {
+      if (!$('#modal').hidden) {
+        if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
+        if (e.key === 'ArrowRight') { viewerGo(1); return; }
+      }
+      if (e.key === 'Escape') { closeModal(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#settingsModal').hidden = true; $('#resetConfirmModal').hidden = true; }
+    });
+    // 详情弹窗：左右滑动切换菜品
+    const mEl = $('#modal');
+    let touchX = 0;
+    mEl.addEventListener('touchstart', (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+    mEl.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - touchX;
+      if (Math.abs(dx) > 40) viewerGo(dx < 0 ? 1 : -1);
+    }, { passive: true });
 
     // 管理模式：子标签 + 上下文栏
     $('#mgTabs').addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; mg.tab = t.dataset.mgtab; renderManage(); });
@@ -739,6 +809,15 @@
       if (rf) {
         const id = rf.dataset.ref;
         (async () => { await Store.removeDishRef(mg.banquet, mg.pkg, id); renderMgList(); toast('已移出本菜单'); })();
+        return;
+      }
+      const pmv = e.target.closest('[data-pkgmv]');
+      if (pmv) {
+        if (pmv.disabled) return;
+        (async () => {
+          const r = await Store.movePackage(mg.banquet, mg.pkg, pmv.dataset.pkgmv);
+          if (r.ok) { renderManage(); toast('已调整档位顺序'); }
+        })();
         return;
       }
       if (e.target.closest('#mgEditPkg')) { mg.pkgMode = 'edit'; openPkgEditor(); }
@@ -856,5 +935,6 @@
     bindStatic();
     renderAll();
     setupSpy();
+    initImmersive();
   });
 })();

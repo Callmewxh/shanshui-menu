@@ -206,6 +206,19 @@ const Store = (function () {
     if (b) { b.packages = b.packages.filter((p) => p.id !== pkgId); await save(); }
     return { ok: true };
   }
+  // 调整套餐档位顺序（up/down）：用于管理后端统一排序，点菜页档位条随之变化
+  async function movePackage(banquetId, pkgId, dir) {
+    const b = getBanquet(banquetId);
+    if (!b || !Array.isArray(b.packages)) return { ok: false, msg: '宴席不存在' };
+    const arr = b.packages;
+    const i = arr.findIndex((p) => p.id === pkgId);
+    if (i < 0) return { ok: false, msg: '套餐不存在' };
+    const j = dir === 'up' ? i - 1 : i + 1;
+    if (j < 0 || j >= arr.length) return { ok: false, msg: '已到边界' };
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    await save();
+    return { ok: true };
+  }
 
   // ================= 套餐中的菜品引用 =================
   // 往套餐追加菜品库引用（去重）
@@ -303,7 +316,7 @@ const Store = (function () {
     get BANQUETS() { return BANQUET_LIST; },
     save,
     getBanquet, ensureBanquet,
-    getPackage, addPackage, updatePackage, removePackage,
+    getPackage, addPackage, updatePackage, removePackage, movePackage,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     uploadImage, importConfig, reset,
