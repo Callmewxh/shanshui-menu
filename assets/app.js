@@ -617,55 +617,6 @@
     toast('已恢复默认');
   }
 
-  // ---------- Excel 模板下载 / 导入 ----------
-  function downloadExcelTemplate() {
-    if (typeof XLSX === 'undefined') { alert('Excel 组件未加载，请刷新页面后重试'); return; }
-    const libHead = ['编号', '中文名', '英文名', '分类', '图标', '描述'];
-    const pkgHead = ['宴席', '套餐编号', '套餐名称', '价格', '是否示例', '菜品编号'];
-    const wb = XLSX.utils.book_new();
-    const wsInfo = XLSX.utils.aoa_to_sheet([
-      ['山水S酒店 · 菜单 Excel 导入模板'], [''], ['填写说明：'],
-      ['1. 「菜品库」表：每行一道菜。编号用于套餐引用，请保持唯一；分类限 凉菜/主菜/主食点心。'],
-      ['   图标为占位插画关键字（platter/bird/lobster/fish/shell/bowl/leaf/mound/heart/fruit），留空默认。'],
-      ['2. 「套餐」表：宴席填 婚宴/宝宝宴/订婚宴/尾牙/乔迁 等；套餐编号唯一。'],
-      ['   菜品编号填「菜品库」里的编号，多个用英文逗号分隔。'],
-      ['3. 图片请在导入后于各设备「菜品库」中单独上传（Excel 不支持图片二进制）。'],
-      ['4. 保存为 .xlsx 后，在「设置 → 导入 Excel」中选择本文件即可。'],
-    ]);
-    const wsLib = XLSX.utils.aoa_to_sheet([libHead,
-      ['1', '太湖白虾', 'River Shrimp', '凉菜', 'shell', '鲜活太湖白虾白灼'],
-      ['2', '古法蒸石斑', 'Steamed Grouper', '主菜', 'fish', '清蒸保留原味'],
-    ]);
-    const wsPkg = XLSX.utils.aoa_to_sheet([pkgHead,
-      ['婚宴', 'A', '锦绣尊享宴', '6888', '否', '1,2'],
-    ]);
-    XLSX.utils.book_append_sheet(wb, wsInfo, '说明');
-    XLSX.utils.book_append_sheet(wb, wsLib, '菜品库');
-    XLSX.utils.book_append_sheet(wb, wsPkg, '套餐');
-    XLSX.writeFile(wb, '山水S酒店-菜单导入模板.xlsx');
-    toast('模板已下载');
-  }
-
-  function importExcelFile(file) {
-    if (typeof XLSX === 'undefined') { alert('Excel 组件未加载，请刷新页面后重试'); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
-        const wsLib = wb.Sheets['菜品库'];
-        const wsPkg = wb.Sheets['套餐'];
-        const rowsLib = wsLib ? XLSX.utils.sheet_to_json(wsLib, { defval: '' }) : [];
-        const rowsPkg = wsPkg ? XLSX.utils.sheet_to_json(wsPkg, { defval: '' }) : [];
-        Store.applyExcelData(rowsLib, rowsPkg).then(() => {
-          if (state.mode === 'order') { state.banquet = 'wedding'; renderAll(); setupSpy(); }
-          renderManage();
-          toast('Excel 已导入');
-        });
-      } catch (err) { alert('Excel 解析失败：' + err.message); }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
   // ---------- 图片展示位置（焦点）编辑 ----------
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
   function ptOf(e) { return { x: e.clientX, y: e.clientY, id: e.pointerId }; }
@@ -822,19 +773,11 @@
     // —— 提示栏可关闭 ——
     $('#mgHintClose').addEventListener('click', () => { $('#mgHint').style.display = 'none'; });
 
-    // —— 设置入口（整合 导出 / 导入 / 恢复默认 / Excel） ——
+    // —— 设置入口（整合 导出 / 导入 / 恢复默认） ——
     $('#mgSettings').addEventListener('click', openSettings);
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
-    $('#setImportExcel').addEventListener('click', () => { closeSettings(); $('#importExcelFile').click(); });
-    $('#setTemplate').addEventListener('click', downloadExcelTemplate);
     $('#setReset').addEventListener('click', openResetConfirm);
-
-    // Excel 导入：由「设置 → 导入 Excel」触发
-    $('#importExcelFile').addEventListener('change', (e) => {
-      const f = e.target.files[0]; if (!f) return;
-      importExcelFile(f); e.target.value = '';
-    });
 
     // 恢复默认二次确认
     $('#resetConfirm').addEventListener('click', confirmReset);

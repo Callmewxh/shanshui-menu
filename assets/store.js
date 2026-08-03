@@ -296,50 +296,6 @@ const Store = (function () {
     return { ok: true };
   }
 
-  // 从 Excel 数据导入（与「下载 Excel 模板」结构对应）：
-  //  - rowsLib: [{编号,中文名,英文名,分类,图标,描述}] 按「编号」upsert 到菜品库
-  //  - rowsPkg: [{宴席,套餐编号,套餐名称,价格,是否示例,菜品编号}] 按 宴席+套餐编号 upsert 套餐
-  async function applyExcelData(rowsLib, rowsPkg) {
-    const byNum = {};
-    STATE.library.forEach((d) => { if (d.num) byNum[d.num] = d.id; });
-    (rowsLib || []).forEach((r) => {
-      const num = (r.编号 != null ? String(r.编号) : (r.num != null ? String(r.num) : '')).trim();
-      const cn = (r.中文名 != null ? String(r.中文名) : (r.cn != null ? String(r.cn) : '')).trim();
-      if (!cn) return;
-      const data = {
-        num, cn,
-        en: (r.英文名 != null ? String(r.英文名) : (r.en != null ? String(r.en) : '')).trim(),
-        cat: (r.分类 != null ? String(r.分类) : (r.cat != null ? String(r.cat) : '')) || '主菜',
-        icon: (r.图标 != null ? String(r.图标) : (r.icon != null ? String(r.icon) : '')) || 'platter',
-        desc: (r.描述 != null ? String(r.描述) : (r.desc != null ? String(r.desc) : '')).trim(),
-      };
-      if (byNum[num]) { Object.assign(getLibDish(byNum[num]), data); }
-      else {
-        const id = nextLibId();
-        STATE.library.push(Object.assign({ id, image: null, crop: null, en: '', desc: '' }, data));
-        byNum[num] = id;
-      }
-    });
-    (rowsPkg || []).forEach((r) => {
-      const bName = (r.宴席 != null ? String(r.宴席) : (r.banquet != null ? String(r.banquet) : '')).trim();
-      const b = BANQUET_LIST.find((x) => x.name === bName || x.id === bName);
-      if (!b) return;
-      ensureBanquet(b.id, b.name);
-      const pid = (r.套餐编号 != null ? String(r.套餐编号) : (r.id != null ? String(r.id) : '')).trim();
-      const name = (r.套餐名称 != null ? String(r.套餐名称) : (r.name != null ? String(r.name) : '')).trim();
-      const price = parseFloat(r.价格 != null ? r.价格 : r.price) || 0;
-      const demo = /^(是|yes|true|1|y)$/i.test((r.是否示例 != null ? String(r.是否示例) : (r.demo != null ? String(r.demo) : '')).trim());
-      let p = getPackage(b.id, pid);
-      if (!p) { p = { id: pid, name, price, demo, dishes: [] }; STATE.menu[b.id].packages.push(p); }
-      else { p.name = name || p.name; p.price = price; p.demo = demo; if (!Array.isArray(p.dishes)) p.dishes = []; }
-      const nums = (r.菜品编号 != null ? String(r.菜品编号) : (r.dishNums != null ? String(r.dishNums) : ''))
-        .split(/[,，;；]/).map((s) => s.trim()).filter(Boolean);
-      p.dishes = nums.map((n) => byNum[n]).filter(Boolean);
-    });
-    await save();
-    return { ok: true, dishes: STATE.library.length };
-  }
-
   return {
     get STATE() { return STATE; },
     get MENU() { return STATE.menu; },        // 兼容旧调用
@@ -350,6 +306,6 @@ const Store = (function () {
     getPackage, addPackage, updatePackage, removePackage,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
-    uploadImage, importConfig, applyExcelData, reset,
+    uploadImage, importConfig, reset,
   };
 })();

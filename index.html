@@ -53,7 +53,6 @@
         <span class="mg-spacer"></span>
         <button class="mg-btn ghost" id="mgSettings">⚙ 设置</button>
         <input type="file" id="importFile" accept="application/json" hidden>
-        <input type="file" id="importExcelFile" accept=".xlsx,.xls" hidden>
       </div>
       <div class="mg-hint" id="mgHint">管理模式：所有菜品集中在「菜品库」录入，图片只存一份；新建/编辑菜单时从库中勾选即可。同一道菜出现在多个菜单会自动共用同一图片与展示位置——一处修改，处处同步。<button class="mg-hint-close" id="mgHintClose" aria-label="关闭提示">✕</button></div>
 
@@ -225,8 +224,6 @@
       <div class="set-list">
         <button class="set-item" id="setExport"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
         <button class="set-item" id="setImportJson"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
-        <button class="set-item" id="setImportExcel"><span class="set-ic">▦</span><span><b>导入 Excel</b><i>按模板批量导入菜品 / 套餐</i></span></button>
-        <button class="set-item" id="setTemplate"><span class="set-ic">＋</span><span><b>下载 Excel 模板</b><i>获取标准导入表格</i></span></button>
         <button class="set-item danger" id="setReset"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
       </div>
     </div>
@@ -245,7 +242,6 @@
     </div>
   </div>
 
-  <script src="assets/xlsx.full.min.js"></script>
   <script src="assets/data.js"></script>
   <script src="assets/store.js"></script>
   <script src="assets/app.js"></script>
