@@ -21,7 +21,12 @@
     '主菜': '#F0B8A0',
     '主食点心': '#E6C58F',
   };
-  const objPos = (d) => (d && d.crop ? `${d.crop.x}% ${d.crop.y}%` : '50% 50%');
+  // 缩略图定位样式：object-position 选展示部位 + transform:scale 控制缩放（默认 1 即原尺寸）
+  const objPos = (d) => {
+    const c = (d && d.crop) ? d.crop : { x: 50, y: 50, scale: 1 };
+    const s = (typeof c.scale === 'number') ? c.scale : 1;
+    return `object-position:${c.x}% ${c.y}%;transform:scale(${s});transform-origin:center;`;
+  };
   const ICON_KEYS = Object.keys(ICONS);
   const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
 
@@ -550,6 +555,7 @@
   function openLibEditor(id) {
     mg.libIsNew = !id;
     mg.libEditId = id || null;
+    clearCnError();
     const d = id ? Store.getLibDish(id) : null;
     $('#editTitle').textContent = (id ? '编辑' : '新增') + '菜品（菜品库）';
     $('#eCn').value = d ? d.cn : '';
@@ -557,7 +563,7 @@
     $('#eCat').value = d ? d.cat : '主菜';
     $('#eDesc').value = d ? (d.desc || '') : '';
     mg.pendingImage = d ? (d.image || null) : null;
-    mg.pendingCrop = d && d.crop ? { x: d.crop.x, y: d.crop.y } : { x: 50, y: 50 };
+    mg.pendingCrop = d && d.crop ? { x: d.crop.x, y: d.crop.y, scale: (typeof d.crop.scale === 'number' ? d.crop.scale : 1) } : { x: 50, y: 50, scale: 1 };
     renderImgPrev();
     $('#editDelete').hidden = !id;
     let seen = false;
@@ -575,16 +581,42 @@
         `<button type="button" id="cropOpen" class="mg-btn small">调整展示位置</button>` +
         `<button type="button" id="imgClear" class="mg-btn small ghost">移除图片</button>`;
       const co = $('#cropOpen'); if (co) co.onclick = openCrop;
-      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = { x: 50, y: 50 }; renderImgPrev(); };
+      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = { x: 50, y: 50, scale: 1 }; renderImgPrev(); };
     } else {
       el.innerHTML = '<span class="hint">未设置图片，将使用占位插画</span>';
     }
+  }
+
+  // 中文名重复校验：同菜品库内不能有同名（排除正在编辑的这道本身）
+  function showCnError(msg) {
+    const err = $('#cnErr');
+    if (err) { err.textContent = msg; err.hidden = false; }
+    const inp = $('#eCn'); if (inp) inp.classList.add('invalid');
+  }
+  function clearCnError() {
+    const err = $('#cnErr');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    const inp = $('#eCn'); if (inp) inp.classList.remove('invalid');
+  }
+  function checkCnDuplicate() {
+    const cn = $('#eCn').value.trim();
+    if (!cn) { clearCnError(); return; }
+    const dup = Store.LIBRARY.find((d) => d.cn === cn && d.id !== mg.libEditId);
+    if (dup) showCnError(`已存在同名菜品「${cn}」，请修改名称后再保存`);
+    else clearCnError();
   }
 
   async function saveLibDish(e) {
     e.preventDefault();
     const cn = $('#eCn').value.trim();
     if (!cn) { alert('请填写中文名'); return; }
+    // 重名校验：菜品库内不允许中文名重复（排除正在编辑的这道本身）
+    const dup = Store.LIBRARY.find((d) => d.cn === cn && d.id !== mg.libEditId);
+    if (dup) {
+      showCnError(`已存在同名菜品「${cn}」，请修改名称后再保存`);
+      $('#eCn').focus();
+      return;
+    }
     const existing = mg.libEditId ? Store.getLibDish(mg.libEditId) : null;
     const num = existing && existing.num ? existing.num : Store.nextNum();
     const icon = existing && existing.icon ? existing.icon : randomIcon();
@@ -595,7 +627,7 @@
       icon,
       desc: $('#eDesc').value.trim(),
       image: mg.pendingImage || null,
-      crop: (mg.pendingImage && mg.pendingCrop) ? { x: mg.pendingCrop.x, y: mg.pendingCrop.y } : null,
+      crop: (mg.pendingImage && mg.pendingCrop) ? { x: mg.pendingCrop.x, y: mg.pendingCrop.y, scale: (typeof mg.pendingCrop.scale === 'number' ? mg.pendingCrop.scale : 1) } : null,
     };
     try {
       if (mg.libIsNew) {
@@ -816,11 +848,25 @@
   function openCrop() {
     if (!mg.pendingImage) { alert('请先上传图片再调整展示位置'); return; }
     const img = $('#cropImg');
-    const c = mg.pendingCrop || { x: 50, y: 50 };
+    const c = mg.pendingCrop || { x: 50, y: 50, scale: 1 };
     img.src = mg.pendingImage;
+    const scale = (typeof c.scale === 'number') ? c.scale : 1;
     img.style.objectPosition = c.x + '% ' + c.y + '%';
-    cropTemp = { x: c.x, y: c.y };
+    img.style.transform = 'scale(' + scale + ')';
+    img.style.transformOrigin = 'center';
+    cropTemp = { x: c.x, y: c.y, scale };
+    const z = $('#cropZoom'); if (z) z.value = String(scale);
+    const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(scale * 100) + '%';
     $('#cropModal').hidden = false;
+  }
+
+  function setCropZoom(scale) {
+    scale = clamp(scale, 1, 3);
+    if (!cropTemp) cropTemp = { x: 50, y: 50, scale: 1 };
+    cropTemp.scale = scale;
+    const img = $('#cropImg'); if (img) { img.style.transform = 'scale(' + scale + ')'; img.style.transformOrigin = 'center'; }
+    const z = $('#cropZoom'); if (z) z.value = String(scale);
+    const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(scale * 100) + '%';
   }
 
   function initCrop() {
@@ -843,11 +889,14 @@
     win.addEventListener('pointermove', move);
     win.addEventListener('pointerup', up);
     win.addEventListener('pointercancel', up);
+    const z = $('#cropZoom'); if (z) z.addEventListener('input', () => setCropZoom(parseFloat(z.value)));
+    const zin = $('#cropZoomIn'); if (zin) zin.addEventListener('click', () => setCropZoom((cropTemp ? cropTemp.scale : 1) + 0.1));
+    const zout = $('#cropZoomOut'); if (zout) zout.addEventListener('click', () => setCropZoom((cropTemp ? cropTemp.scale : 1) - 0.1));
   }
 
   function applyCrop() {
     if (!cropTemp) return;
-    mg.pendingCrop = { x: Math.round(cropTemp.x), y: Math.round(cropTemp.y) };
+    mg.pendingCrop = { x: Math.round(cropTemp.x), y: Math.round(cropTemp.y), scale: (typeof cropTemp.scale === 'number' ? cropTemp.scale : 1) };
     renderImgPrev();
     $('#cropModal').hidden = true;
     toast('展示位置已调整');
@@ -1094,6 +1143,7 @@
 
     // 菜品库表单
     $('#editForm').addEventListener('submit', saveLibDish);
+    $('#eCn').addEventListener('input', checkCnDuplicate);
     $('#editDelete').addEventListener('click', async () => {
       if (mg.libEditId) {
         const n = Store.usageCount(mg.libEditId);

@@ -22,7 +22,7 @@
       </div>
 
       <div class="banquet-select" id="banquetSelect">
-        <button class="bs-trigger" id="bsTrigger" type="button"><span id="bsCurrentName">婚宴</span><span class="bs-caret" id="bsCaret">▾</span></button>
+        <button class="bs-trigger" id="bsTrigger" type="button"><span id="bsCurrentName">婚宴</span></button>
         <div class="bs-menu" id="bsMenu" hidden></div>
       </div>
       <div class="search">
@@ -82,7 +82,7 @@
 
         <!-- 设置：折叠菜单（不再弹独立窗口） -->
         <div class="mg-setwrap" id="mgSetWrap">
-          <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置 <span class="set-caret">▾</span></button>
+          <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置</button>
           <div class="mg-setmenu" id="mgSetMenu" hidden>
             <div class="set-menu-head">菜单数据各设备独立存储，以下用于备份与迁移</div>
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
@@ -132,7 +132,7 @@
         <button type="button" class="onboard-x" id="editOnboardX">知道了</button>
       </p>
       <form id="editForm">
-        <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称"></div>
+        <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称" autocomplete="off"><div class="field-err" id="cnErr" hidden></div></div>
         <div class="field"><label>英文名</label><input id="eEn" name="en" placeholder="English name"></div>
         <div class="field"><label>分类</label>
           <select id="eCat" name="cat">
@@ -188,6 +188,13 @@
           <img id="cropImg" alt="">
         </div>
         <p class="crop-hint">按住图片拖动，选择点菜界面中显示的部位（展示框固定为 4:3，不变形）</p>
+        <div class="crop-zoom">
+          <span class="crop-zoom-label">缩放</span>
+          <button type="button" id="cropZoomOut" class="mg-btn small" aria-label="缩小">－</button>
+          <input type="range" id="cropZoom" min="1" max="3" step="0.01" value="1">
+          <button type="button" id="cropZoomIn" class="mg-btn small" aria-label="放大">＋</button>
+          <span class="crop-zoom-val" id="cropZoomVal">100%</span>
+        </div>
       </div>
       <div class="edit-actions" style="padding:6px 24px 22px;">
         <span class="spacer"></span>
