@@ -1,5 +1,5 @@
 // 山水S酒店 · 菜单系统 Service Worker（离线缓存 + 安装为 App）
-const CACHE = 'ss-menu-v5-6';
+const CACHE = 'ss-menu-v5-7';
 const ASSETS = [
   './',
   './index.html',

@@ -350,7 +350,7 @@ body {
   overflow: hidden; display: flex; flex-direction: column;
 }
 .mg-thumb { width: 100%; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #efe8dc; }
-.mg-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.mg-thumb img { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; user-select: none; }
 .mg-thumb .thumb { width: 100%; height: 100%; }
 .mg-thumb .thumb svg { width: 60px; height: 60px; }
 .mg-info { padding: 10px 12px; flex: 1; }

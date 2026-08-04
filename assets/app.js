@@ -420,6 +420,11 @@
   function renderLibList() {
     const cat = $('#libCat').value;
     const list = Store.LIBRARY.filter((d) => !cat || d.cat === cat);
+    // 按编号升序排列，无编号的菜品排在末尾，保证整体顺序稳定
+    list.sort((a, b) => {
+      const na = parseInt(a.num, 10), nb = parseInt(b.num, 10);
+      return (isNaN(na) ? Infinity : na) - (isNaN(nb) ? Infinity : nb);
+    });
     const el = $('#mgLibList');
     if (!list.length) {
       el.innerHTML = '<div class="mg-empty">菜品库暂无菜品，点击右上角「+ 新增菜品」开始录入（图片只存一份，多个菜单可共用）。</div>';
@@ -431,7 +436,7 @@
   function libCardHTML(d) {
     const n = Store.usageCount(d.id);
     const inner = d.image
-      ? `<img src="${d.image}" alt="${d.cn}" style="object-position:${objPos(d)}">`
+      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="object-position:${objPos(d)}">`
       : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
     return `<div class="mg-card lib-card" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
@@ -463,7 +468,7 @@
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
-        ? `<img src="${d.image}" alt="${d.cn}" style="object-position:${objPos(d)}">`
+        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="object-position:${objPos(d)}">`
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=编辑菜品，右上 ✕=移出本菜单，左上 ⠿=拖动排序
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
@@ -636,16 +641,16 @@
       }
     }
     let n = 0;
-    // 反向逐个 prepend，最终页面从上到下是 待命名1、待命名2…
-    for (let i = entries.length - 1; i >= 0; i--) {
+    // 按拖入/选择顺序追加到菜品库末尾，配合列表按编号排序后自然排在最后
+    for (let i = 0; i < entries.length; i++) {
       try {
-        const res = await Store.addLibDish(entries[i], { prepend: true });
+        const res = await Store.addLibDish(entries[i]);
         if (res.ok) n++;
       } catch (err) { console.warn(err); }
     }
     renderLibList();
-    const mb = $('#mgBody'); if (mb) mb.scrollTop = 0;
-    if (n) toast(`已新增 ${n} 道菜（待命名1…${n}），点开即可改名`);
+    const mb = $('#mgBody'); if (mb) mb.scrollTop = mb.scrollHeight;
+    if (n) toast(`已新增 ${n} 道菜（待命名1…${n}），已排到列表末尾，点开即可改名`);
     else toast('图片导入失败，请重试');
   }
 
