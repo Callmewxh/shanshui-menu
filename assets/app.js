@@ -138,7 +138,7 @@
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
   function thumbHTML(d) {
     if (d.image) {
-      return `<div class="thumb"><img src="${d.image}" alt="${d.cn}" style="object-position:${objPos(d)}"></div>`;
+      return `<div class="thumb"><img src="${d.image}" alt="${d.cn}" style="${objPos(d)}"></div>`;
     }
     const col = CAT_COLORS[d.cat] || '#eee';
     return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${d.num}</span></div>`;
@@ -264,7 +264,7 @@
     const thumb = m.querySelector('.modal-thumb');
     if (d.image) {
       thumb.style.background = 'transparent';
-      thumb.innerHTML = `<img src="${d.image}" alt="${d.cn}" style="width:100%;height:100%;object-fit:cover;object-position:${objPos(d)}">`;
+      thumb.innerHTML = `<img src="${d.image}" alt="${d.cn}" style="width:100%;height:100%;object-fit:cover;${objPos(d)}">`;
     } else { thumb.style.background = CAT_COLORS[d.cat] || '#eee'; thumb.innerHTML = ICONS[d.icon] || ''; }
     m.querySelector('.m-num').textContent = 'NO. ' + d.num;
     m.querySelector('.m-cn').textContent = d.cn;
@@ -441,7 +441,7 @@
   function libCardHTML(d) {
     const n = Store.usageCount(d.id);
     const inner = d.image
-      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="object-position:${objPos(d)}">`
+      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPos(d)}">`
       : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
     return `<div class="mg-card lib-card" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
@@ -473,7 +473,7 @@
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
-        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="object-position:${objPos(d)}">`
+        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPos(d)}">`
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=编辑菜品，右上 ✕=移出本菜单，左上 ⠿=拖动排序
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
@@ -577,7 +577,7 @@
     const op = objPos({ crop: mg.pendingCrop });
     if (mg.pendingImage) {
       el.innerHTML =
-        `<img src="${mg.pendingImage}" alt="" style="object-position:${op}">` +
+        `<img src="${mg.pendingImage}" alt="" style="${op}">` +
         `<button type="button" id="cropOpen" class="mg-btn small">调整展示位置</button>` +
         `<button type="button" id="imgClear" class="mg-btn small ghost">移除图片</button>`;
       const co = $('#cropOpen'); if (co) co.onclick = openCrop;
@@ -779,7 +779,7 @@
     if (!list.length) { grid.innerHTML = '<div class="pick-empty">菜品库暂无菜品，请先到「菜品库」录入。</div>'; return; }
     grid.innerHTML = list.map((d) => {
       const inner = d.image
-        ? `<img src="${d.image}" style="object-position:${objPos(d)}">`
+        ? `<img src="${d.image}" style="${objPos(d)}">`
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       return `<label class="pick-card ${inPkg.has(d.id) ? 'in' : ''}">
         <input type="checkbox" value="${d.id}" ${inPkg.has(d.id) ? 'checked' : ''}>
