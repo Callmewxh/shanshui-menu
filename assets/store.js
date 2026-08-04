@@ -216,7 +216,23 @@ const Store = (function () {
     if (b) { b.packages = b.packages.filter((p) => p.id !== pkgId); await save(); }
     return { ok: true };
   }
-  // 调整套餐档位顺序（up/down）：用于管理后端统一排序，点菜页档位条随之变化
+  // 重排宴席下的套餐顺序（ids 为完整的新顺序，全部为套餐 id）
+  // 管理端「套餐条」拖动排序调用；点菜页档位条顺序随之变化。
+  async function reorderPackages(banquetId, ids) {
+    const b = getBanquet(banquetId);
+    if (!b || !Array.isArray(b.packages)) return { ok: false, msg: '宴席不存在' };
+    const map = {};
+    b.packages.forEach((p) => { map[p.id] = p; });
+    const next = [];
+    ids.forEach((id) => { if (map[id]) { next.push(map[id]); delete map[id]; } });
+    // 兜底：ids 中未出现的套餐（异常情况）按原顺序追加到末尾，避免丢数据
+    b.packages.forEach((p) => { if (map[p.id]) next.push(p); });
+    b.packages = next;
+    await save();
+    return { ok: true };
+  }
+
+  // 调整套餐档位顺序（up/down）：保留给键盘/无障碍等场景调用
   async function movePackage(banquetId, pkgId, dir) {
     const b = getBanquet(banquetId);
     if (!b || !Array.isArray(b.packages)) return { ok: false, msg: '宴席不存在' };
@@ -326,7 +342,7 @@ const Store = (function () {
     get BANQUETS() { return BANQUET_LIST; },
     save,
     getBanquet, ensureBanquet, nextNum,
-    getPackage, addPackage, updatePackage, removePackage, movePackage,
+    getPackage, addPackage, updatePackage, removePackage, movePackage, reorderPackages,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     uploadImage, importConfig, reset,

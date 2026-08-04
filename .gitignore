@@ -4,6 +4,7 @@
 # 临时/测试文件
 __*.js
 *.tmp
+.cache/
 
 # 系统 & 依赖
 .DS_Store

@@ -79,12 +79,18 @@
       <!-- 菜单 上下文栏 -->
       <div class="mg-ctxbar" id="mgCtxbar" hidden>
         <div class="mg-sel"><label>宴席</label><select id="mgBanquet"></select></div>
-        <div class="mg-sel"><label>套餐</label><select id="mgPkg"></select></div>
+        <span class="mg-spacer"></span>
         <button class="mg-btn" id="mgAddPkg">+ 新增套餐</button>
         <button class="mg-btn primary" id="mgAddFromLib">从菜品库添加</button>
       </div>
 
-      <div class="mg-body">
+      <!-- 套餐条：点击切换套餐，按住卡片拖动即可调整套餐顺序（同步点菜页档位条） -->
+      <div class="mg-pkgbar" id="mgPkgBar" hidden>
+        <span class="mg-pkgbar-tip">套餐顺序 · 按住卡片拖动排序</span>
+        <div class="mg-pkgrow" id="mgPkgRow"></div>
+      </div>
+
+      <div class="mg-body" id="mgBody">
         <div class="mg-list" id="mgLibList"></div>
         <div class="mg-list" id="mgList" hidden></div>
       </div>
@@ -114,7 +120,10 @@
     <div class="modal-card edit-card">
       <button class="modal-close" aria-label="关闭" data-close="editModal">✕</button>
       <h3 id="editTitle">编辑菜品</h3>
-      <p class="mg-note">菜品统一在「菜品库」管理，修改会同步到所有含此菜品的菜单（图片仅存一份）。</p>
+      <p class="onboard-note" id="editOnboard" hidden>
+        <span>首次使用：菜品统一在「菜品库」录入，<b>编号与占位插画自动生成</b>；图片只存一份，改一处所有含该菜品的菜单同步更新。</span>
+        <button type="button" class="onboard-x" id="editOnboardX">知道了</button>
+      </p>
       <form id="editForm">
         <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称"></div>
         <div class="field"><label>英文名</label><input id="eEn" name="en" placeholder="English name"></div>
@@ -126,13 +135,11 @@
           </select>
         </div>
         <div class="field"><label>简介</label><textarea id="eDesc" name="desc" rows="3" placeholder="菜品介绍…"></textarea></div>
-        <p class="field-note">编号与占位插画由系统自动生成（插画随机分配），无需手动填写。</p>
         <div class="field">
           <label>菜品图片</label>
           <input type="file" id="imgInput" accept="image/*">
           <div class="progress" id="imgProgress" hidden><div class="bar"></div></div>
           <div class="img-prev" id="imgPrev"></div>
-          <p class="field-note">上传后会自动压缩并展示真实照片；未上传则使用占位插画。</p>
         </div>
         <div class="edit-actions">
           <button type="button" class="mg-btn danger" id="editDelete">删除</button>
