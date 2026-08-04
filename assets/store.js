@@ -145,11 +145,12 @@ const Store = (function () {
   // ================= 菜品库（主数据） =================
   function getLibDish(id) { return STATE.library.find((d) => d.id === id) || null; }
 
-  async function addLibDish(data) {
+  async function addLibDish(data, opts) {
+    opts = opts || {};
     if (!data || !data.cn) return { ok: false, msg: '请填写中文名' };
     const entry = Object.assign({ id: nextLibId(), image: null, crop: null, en: '', desc: '' }, data);
     if (!entry.num) entry.num = '';
-    STATE.library.push(entry);
+    if (opts.prepend) STATE.library.unshift(entry); else STATE.library.push(entry);
     await save();
     return { ok: true, id: entry.id };
   }

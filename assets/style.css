@@ -264,17 +264,47 @@ body {
 .mode-switch button.on { background: var(--primary); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
 /* ---------- 管理模式 ---------- */
+/* 顶部操作区：标签 + 上下文控件 + 设置，尽量压在同一行 */
 .mg-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 12px 22px; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding: 9px 18px; background: var(--surface); border-bottom: 1px solid var(--line);
 }
+.mg-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.mg-inline[hidden] { display: none; }
+.mg-mini {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 9px;
+  padding: 7px 10px; font-size: 13px; color: var(--ink); outline: none; cursor: pointer;
+  max-width: 150px;
+}
+.mg-mini:focus { border-color: var(--primary); }
 .mg-sel { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
 .mg-sel select {
   border: 1px solid var(--line); background: var(--bg); border-radius: 10px;
   padding: 8px 12px; font-size: 14px; color: var(--ink); outline: none; cursor: pointer;
 }
 .mg-sel select:focus { border-color: var(--primary); }
-.mg-spacer { flex: 1; }
+.mg-spacer { flex: 1; min-width: 0; }
+
+/* 设置：折叠菜单（锚定在 ⚙ 按钮下方） */
+.mg-setwrap { position: relative; flex: 0 0 auto; }
+.set-caret { font-size: 10px; opacity: .7; }
+.mg-setmenu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 46; width: 268px; max-width: 84vw;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.16); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.mg-setmenu[hidden] { display: none; }
+.set-menu-head { font-size: 11.5px; color: var(--muted); padding: 8px 10px 6px; line-height: 1.5; }
+.set-row {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  border: 0; background: transparent; border-radius: 9px; padding: 9px 10px; cursor: pointer; color: var(--ink);
+}
+.set-row:hover { background: var(--bg); }
+.set-row .set-ic { font-size: 16px; width: 20px; text-align: center; color: var(--primary); flex: 0 0 auto; line-height: 1.4; }
+.set-row b { display: block; font-size: 14px; font-weight: 600; }
+.set-row i { font-style: normal; display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.set-row.danger .set-ic, .set-row.danger b { color: #B23A2E; }
+.set-row.danger:hover { background: #FBEDEB; }
 
 .mg-btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
@@ -289,9 +319,9 @@ body {
 .mg-btn.small { padding: 6px 12px; font-size: 13px; }
 
 .mg-hint {
-  margin: 12px 22px 0; padding: 9px 12px 9px 14px; background: #EEF4F5; color: #4a6a72;
-  border-radius: 10px; font-size: 12.5px; border: 1px solid #D6E4E6;
-  display: flex; align-items: flex-start; gap: 10px;
+  margin: 10px 18px 0; padding: 7px 10px 7px 12px; background: #EEF4F5; color: #4a6a72;
+  border-radius: 9px; font-size: 12px; border: 1px solid #D6E4E6;
+  display: flex; align-items: center; gap: 10px;
 }
 .mg-hint-close {
   margin-left: auto; flex: 0 0 auto; align-self: center;
@@ -328,29 +358,23 @@ body {
 .mg-en { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; min-height: 28px; }
 .mg-info .cat-tag { margin-top: 8px; }
 
-/* ---------- 套餐条（管理·菜单）：点击切换 + 拖动排序 ---------- */
-.mg-pkgbar {
-  padding: 10px 22px 12px; background: var(--surface); border-bottom: 1px solid var(--line);
-}
-.mg-pkgbar[hidden] { display: none; }
-.mg-pkgbar-tip { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.mg-pkgrow { display: flex; flex-wrap: wrap; gap: 10px; }
+/* ---------- 套餐条（管理·菜单，内嵌于顶部一行）：点击切换 + 拖动排序 ---------- */
+.mg-pkgrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
 .mg-pkgchip {
-  display: flex; align-items: center; gap: 8px;
-  border: 1px solid var(--line); background: var(--bg); border-radius: 12px;
-  padding: 8px 14px 8px 9px; cursor: pointer; user-select: none; touch-action: none;
+  display: flex; align-items: baseline; gap: 6px;
+  border: 1px solid var(--line); background: var(--bg); border-radius: 9px;
+  padding: 6px 11px 6px 8px; cursor: pointer; user-select: none; touch-action: none;
   transition: border-color .15s, background .15s, box-shadow .15s;
 }
 .mg-pkgchip:hover { border-color: var(--primary); }
-.mg-pkgchip .pc-grip { color: var(--muted); font-size: 14px; line-height: 1; cursor: grab; }
-.mg-pkgchip .pc-main { display: flex; flex-direction: column; align-items: flex-start; }
-.mg-pkgchip .pc-name { font-size: 14px; font-weight: 600; }
-.mg-pkgchip .pc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.mg-pkgchip .pc-grip { color: var(--muted); font-size: 12px; line-height: 1; cursor: grab; align-self: center; }
+.mg-pkgchip .pc-name { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.mg-pkgchip .pc-meta { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 .mg-pkgchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
 .mg-pkgchip.on .pc-meta, .mg-pkgchip.on .pc-grip { color: rgba(255,255,255,.85); }
 .mg-pkgchip.dragging { opacity: .85; box-shadow: 0 10px 24px rgba(0,0,0,.18); outline: 2px solid var(--primary); cursor: grabbing; }
 .mg-pkgrow.dragging-row .mg-pkgchip:not(.dragging) { transition: transform .12s ease; }
-.mg-pkgrow-empty { font-size: 13px; color: var(--muted); }
+.mg-pkgrow-empty { font-size: 12.5px; color: var(--muted); }
 
 /* 拖拽排序手柄 + 拖拽态 */
 .mg-handle {
@@ -529,24 +553,7 @@ body {
   .mg-info, .pick-cn { padding-left: 7px; padding-right: 7px; }
 }
 
-/* 设置弹窗 */
-.set-card { max-width: 440px; }
-.set-title { font-size: 18px; font-weight: 700; padding: 20px 24px 0; }
-.set-sub { font-size: 13px; color: var(--muted); margin: 6px 24px 16px; line-height: 1.5; }
-.set-list { display: flex; flex-direction: column; gap: 10px; padding: 0 24px 24px; }
-.set-item {
-  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
-  border: 1px solid var(--line); background: var(--surface); border-radius: 12px;
-  padding: 13px 14px; cursor: pointer; transition: .15s; color: var(--ink);
-}
-.set-item:hover { border-color: var(--primary); }
-.set-item .set-ic { font-size: 18px; width: 24px; text-align: center; color: var(--primary); flex: 0 0 auto; }
-.set-item b { display: block; font-size: 15px; font-weight: 600; }
-.set-item i { font-style: normal; display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.set-item.danger .set-ic, .set-item.danger b { color: #B23A2E; }
-.set-item.danger:hover { border-color: #B23A2E; }
-
-/* 恢复默认二次确认 */
+/* 恢复默认二次确认（居中弹窗，刻意不支持点遮罩关闭，防误触） */
 .conf-card { max-width: 400px; padding: 22px 24px; }
 .conf-title { font-size: 18px; font-weight: 700; }
 .conf-text { font-size: 14px; line-height: 1.7; margin-top: 10px; color: #4a443e; }
@@ -558,3 +565,32 @@ body {
 .app.chrome-hidden .topbar,
 .app.chrome-hidden .pkgbar,
 .app.chrome-hidden .rail { display: none; }
+
+/* 管理端沉浸式：上滑（向下滚动管理列表）时自动隐藏顶部操作区，腾出编辑空间 */
+.app.mg-chrome-hidden .mg-toolbar,
+.app.mg-chrome-hidden .mg-hint { display: none; }
+
+/* 菜品库：拖放图片时的全屏提示遮罩（仅菜品库标签页、拖图片时显示） */
+.mg-dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(178, 58, 46, 0.12);
+  border: 3px dashed #B23A2E;
+  pointer-events: none;
+}
+.mg-dropzone[hidden] { display: none; }
+.mg-dropzone-inner {
+  background: #fff;
+  color: #B23A2E;
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+  padding: 16px 26px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}

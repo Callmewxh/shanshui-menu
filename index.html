@@ -51,48 +51,55 @@
 
     <!-- 管理模式 -->
     <div class="screen" id="manageScreen" hidden>
+      <!-- 顶部操作区：标签 + 上下文控件 + 设置，尽量压在同一行；向下滚动时自动隐藏 -->
       <div class="mg-toolbar" id="mgToolbar">
         <div class="mg-tabs" id="mgTabs">
           <button data-mgtab="lib" class="on">菜品库</button>
           <button data-mgtab="menu">菜单</button>
         </div>
-        <span class="mg-spacer"></span>
-        <button class="mg-btn ghost" id="mgSettings">⚙ 设置</button>
-        <input type="file" id="importFile" accept="application/json" hidden>
-      </div>
-      <div class="mg-hint" id="mgHint">管理模式：所有菜品集中在「菜品库」录入，图片只存一份；新建/编辑菜单时从库中勾选即可。同一道菜出现在多个菜单会自动共用同一图片与展示位置——一处修改，处处同步。<button class="mg-hint-close" id="mgHintClose" aria-label="关闭提示">✕</button></div>
 
-      <!-- 菜品库 上下文栏 -->
-      <div class="mg-ctxbar" id="mgLibbar">
-        <div class="mg-sel"><label>分类</label>
-          <select id="libCat">
-            <option value="">全部</option>
+        <!-- 菜品库 上下文 -->
+        <div class="mg-inline" id="mgLibbar">
+          <select id="libCat" class="mg-mini" title="按分类筛选">
+            <option value="">全部分类</option>
             <option value="凉菜">凉菜</option>
             <option value="主菜">主菜</option>
             <option value="主食点心">主食点心</option>
           </select>
+          <button class="mg-btn primary small" id="mgAddLibDish">+ 新增菜品</button>
+          <button class="mg-btn small" id="mgBatchImg" type="button" title="批量导入图片，自动建立若干「待命名」菜品，之后逐个改名">⤓ 批量图片</button>
         </div>
+
+        <!-- 菜单 上下文：宴席 + 套餐条（按住套餐可拖动排序） -->
+        <div class="mg-inline" id="mgCtxbar" hidden>
+          <select id="mgBanquet" class="mg-mini" title="切换宴席类型"></select>
+          <div class="mg-pkgrow" id="mgPkgRow" title="点击切换套餐，按住拖动可调整套餐顺序"></div>
+          <button class="mg-btn small" id="mgAddPkg">+ 套餐</button>
+          <button class="mg-btn primary small" id="mgAddFromLib">+ 菜品</button>
+        </div>
+
         <span class="mg-spacer"></span>
-        <button class="mg-btn primary" id="mgAddLibDish">+ 新增菜品</button>
+
+        <!-- 设置：折叠菜单（不再弹独立窗口） -->
+        <div class="mg-setwrap" id="mgSetWrap">
+          <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置 <span class="set-caret">▾</span></button>
+          <div class="mg-setmenu" id="mgSetMenu" hidden>
+            <div class="set-menu-head">菜单数据各设备独立存储，以下用于备份与迁移</div>
+            <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
+            <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
+            <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
+          </div>
+        </div>
+        <input type="file" id="importFile" accept="application/json" hidden>
+        <input type="file" id="batchImgInput" accept="image/*" multiple hidden>
       </div>
 
-      <!-- 菜单 上下文栏 -->
-      <div class="mg-ctxbar" id="mgCtxbar" hidden>
-        <div class="mg-sel"><label>宴席</label><select id="mgBanquet"></select></div>
-        <span class="mg-spacer"></span>
-        <button class="mg-btn" id="mgAddPkg">+ 新增套餐</button>
-        <button class="mg-btn primary" id="mgAddFromLib">从菜品库添加</button>
-      </div>
-
-      <!-- 套餐条：点击切换套餐，按住卡片拖动即可调整套餐顺序（同步点菜页档位条） -->
-      <div class="mg-pkgbar" id="mgPkgBar" hidden>
-        <span class="mg-pkgbar-tip">套餐顺序 · 按住卡片拖动排序</span>
-        <div class="mg-pkgrow" id="mgPkgRow"></div>
-      </div>
+      <div class="mg-hint" id="mgHint">菜品集中在「菜品库」录入，图片只存一份；一处修改，所有含该菜品的菜单同步更新。<button class="mg-hint-close" id="mgHintClose" aria-label="关闭提示">✕</button></div>
 
       <div class="mg-body" id="mgBody">
         <div class="mg-list" id="mgLibList"></div>
         <div class="mg-list" id="mgList" hidden></div>
+        <div class="mg-dropzone" id="mgDrop" hidden><div class="mg-dropzone-inner">松开鼠标，把图片批量加入菜品库<br>（自动建立若干「待命名」菜品，之后逐个点开改名）</div></div>
       </div>
     </div>
   </div>
@@ -217,21 +224,7 @@
     </div>
   </div>
 
-  <!-- 设置弹窗：整合 导出/导入/恢复默认/Excel -->
-  <div class="modal" id="settingsModal" hidden>
-    <div class="modal-card set-card">
-      <button class="modal-close" aria-label="关闭" data-close="settingsModal">✕</button>
-      <h3 class="set-title">设置</h3>
-      <p class="set-sub">菜单数据各设备独立存储；以下操作用于备份、迁移与恢复。</p>
-      <div class="set-list">
-        <button class="set-item" id="setExport"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
-        <button class="set-item" id="setImportJson"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
-        <button class="set-item danger" id="setReset"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 恢复默认二次确认 -->
+  <!-- 恢复默认二次确认（保留居中弹窗，防误触） -->
   <div class="modal" id="resetConfirmModal" hidden>
     <div class="modal-card conf-card">
       <h3 class="conf-title">确认恢复默认？</h3>

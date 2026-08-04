@@ -205,23 +205,42 @@
     document.querySelectorAll('.sec[id^="sec-"]').forEach((s) => spy.observe(s));
   }
 
-  // ---------- 手机端沉浸式：上滑隐藏顶栏 ----------
+  // ---------- 上滑隐藏顶部 ----------
+  // 点菜页：手机端隐藏顶栏/档位条/分类条（沉浸式看菜）
+  // 管理页：所有尺寸都隐藏顶部操作区（平板上腾出更多编辑空间），手机端额外隐藏顶栏
   function initImmersive() {
     const app = document.querySelector('.app');
     if (!app) return;
     const mq = window.matchMedia('(max-width: 820px)');
-    let lastY = 0;
-    function onScroll(el) {
-      if (!mq.matches) { app.classList.remove('chrome-hidden'); lastY = el.scrollTop; return; }
+    let lastOrderY = 0, lastMgY = 0;
+
+    function onOrderScroll(el) {
+      if (!mq.matches) { app.classList.remove('chrome-hidden'); lastOrderY = el.scrollTop; return; }
       const y = el.scrollTop;
       if (y <= 4) app.classList.remove('chrome-hidden');
-      else if (y > lastY + 4) app.classList.add('chrome-hidden');
-      else if (y < lastY - 4) app.classList.remove('chrome-hidden');
-      lastY = y;
+      else if (y > lastOrderY + 4) app.classList.add('chrome-hidden');
+      else if (y < lastOrderY - 4) app.classList.remove('chrome-hidden');
+      lastOrderY = y;
     }
+
+    function onMgScroll(el) {
+      const y = el.scrollTop;
+      let hide = null;                                  // null=不变，true=隐藏，false=显示
+      if (y <= 4) hide = false;
+      else if (y > lastMgY + 6) hide = true;
+      else if (y < lastMgY - 6) hide = false;
+      lastMgY = y;
+      if (hide === null) return;
+      // 拖动套餐 / 设置菜单展开时不收起，避免操作被打断
+      if (hide && (pkgDrag || !$('#mgSetMenu').hidden)) return;
+      app.classList.toggle('mg-chrome-hidden', hide);
+      if (mq.matches) app.classList.toggle('chrome-hidden', hide);
+      else app.classList.remove('chrome-hidden');
+    }
+
     const c = $('#content'), mb = $('#mgBody');
-    if (c) c.addEventListener('scroll', () => onScroll(c), { passive: true });
-    if (mb) mb.addEventListener('scroll', () => onScroll(mb), { passive: true });
+    if (c) c.addEventListener('scroll', () => onOrderScroll(c), { passive: true });
+    if (mb) mb.addEventListener('scroll', () => onMgScroll(mb), { passive: true });
   }
 
   // ---------- 详情弹窗（整份菜单打通、循环左右切换） ----------
@@ -278,7 +297,9 @@
 
   // ================= 管理模式 =================
   function setMode(mode) {
-    const app = document.querySelector('.app'); if (app) app.classList.remove('chrome-hidden');
+    const app = document.querySelector('.app');
+    if (app) app.classList.remove('chrome-hidden', 'mg-chrome-hidden');
+    closeSettings();
     state.mode = mode;
     const order = mode === 'order';
     $('#orderScreen').hidden = !order;
@@ -305,14 +326,12 @@
     document.querySelectorAll('#mgTabs button').forEach((b) => b.classList.toggle('on', b.dataset.mgtab === mg.tab));
     if (mg.tab === 'lib') {
       $('#mgCtxbar').hidden = true;
-      $('#mgPkgBar').hidden = true;
       $('#mgLibbar').hidden = false;
       $('#mgList').hidden = true;
       $('#mgLibList').hidden = false;
       renderLibList();
     } else {
       $('#mgCtxbar').hidden = false;
-      $('#mgPkgBar').hidden = false;
       $('#mgLibbar').hidden = true;
       $('#mgList').hidden = false;
       $('#mgLibList').hidden = true;
@@ -333,12 +352,10 @@
       row.innerHTML = '<span class="mg-pkgrow-empty">该宴席暂无套餐，点右上「+ 新增套餐」开始配置</span>';
       return;
     }
-    row.innerHTML = pkgs.map((p) => `<div class="mg-pkgchip ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}">
+    row.innerHTML = pkgs.map((p) => `<div class="mg-pkgchip ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}" title="${p.name} · ¥${p.price}/桌 · ${(p.dishes || []).length} 道（按住可拖动排序）">
       <span class="pc-grip" aria-hidden="true">⠿</span>
-      <span class="pc-main">
-        <span class="pc-name">${p.name}</span>
-        <span class="pc-meta">¥${p.price} · ${(p.dishes || []).length} 道${p.demo ? ' · 示例' : ''}</span>
-      </span>
+      <span class="pc-name">${p.name}</span>
+      <span class="pc-meta">¥${p.price}·${(p.dishes || []).length}道</span>
     </div>`).join('');
   }
 
@@ -577,7 +594,7 @@
     };
     try {
       if (mg.libIsNew) {
-        const res = Store.addLibDish(data);
+        const res = await Store.addLibDish(data);
         if (!res.ok) { alert(res.msg); return; }
         if (mg.pendingAddToPkg) {
           await Store.addDishesToPackage(mg.pendingAddToPkg.banquet, mg.pendingAddToPkg.pkg, [res.id]);
@@ -591,6 +608,45 @@
     mg.pendingAddToPkg = null;
     if (back === 'lib') renderLibList(); else renderMenuTab();
     toast('已保存到本地');
+  }
+
+  // ---------- 菜品库：批量导入图片，自动建立若干「待命名」菜品 ----------
+  async function handleBatchFiles(files) {
+    const imgs = Array.from(files || []).filter((f) => f.type && f.type.startsWith('image/'));
+    if (!imgs.length) { toast('没有检测到图片文件'); return; }
+    const cat = $('#libCat').value || '主菜';
+    toast(`正在导入 ${imgs.length} 张图片…`);
+    const base = parseInt(Store.nextNum(), 10) - 1;
+    const entries = [];
+    for (let i = 0; i < imgs.length; i++) {
+      try {
+        const dataUrl = await Store.uploadImage(imgs[i]);
+        entries.push({
+          num: String(base + i + 1),
+          cn: '待命名' + (i + 1),
+          en: '',
+          cat,
+          icon: randomIcon(),
+          desc: '',
+          image: dataUrl,
+          crop: null,
+        });
+      } catch (err) {
+        console.warn('批量导入图片失败：', imgs[i].name, err);
+      }
+    }
+    let n = 0;
+    // 反向逐个 prepend，最终页面从上到下是 待命名1、待命名2…
+    for (let i = entries.length - 1; i >= 0; i--) {
+      try {
+        const res = await Store.addLibDish(entries[i], { prepend: true });
+        if (res.ok) n++;
+      } catch (err) { console.warn(err); }
+    }
+    renderLibList();
+    const mb = $('#mgBody'); if (mb) mb.scrollTop = 0;
+    if (n) toast(`已新增 ${n} 道菜（待命名1…${n}），点开即可改名`);
+    else toast('图片导入失败，请重试');
   }
 
   // ---------- 套餐编辑 ----------
@@ -727,13 +783,16 @@
     URL.revokeObjectURL(a.href);
   }
 
-  // ---------- 设置弹窗 ----------
-  function openSettings() { $('#settingsModal').hidden = false; }
-  function closeSettings() { $('#settingsModal').hidden = true; }
+  // ---------- 设置：折叠菜单（不弹独立窗口） ----------
+  function toggleSettings(force) {
+    const m = $('#mgSetMenu');
+    m.hidden = (typeof force === 'boolean') ? !force : !m.hidden;
+  }
+  function closeSettings() { $('#mgSetMenu').hidden = true; }
 
-  // ---------- 恢复默认（二次确认） ----------
+  // ---------- 恢复默认（保留居中二次确认弹窗，防误触） ----------
   function openResetConfirm() {
-    $('#settingsModal').hidden = true;
+    closeSettings();
     $('#resetConfirmModal').hidden = false;
   }
   async function confirmReset() {
@@ -851,7 +910,7 @@
         if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
         if (e.key === 'ArrowRight') { viewerGo(1); return; }
       }
-      if (e.key === 'Escape') { closeModal(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#settingsModal').hidden = true; $('#resetConfirmModal').hidden = true; }
+      if (e.key === 'Escape') { closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; }
     });
     // 详情弹窗：左右滑动循环切换菜品（横向位移明显大于纵向才算滑动）
     const mEl = $('#modal');
@@ -887,6 +946,40 @@
       }
       const card = e.target.closest('.lib-card');
       if (card) openLibEditor(card.dataset.id);
+    });
+
+    // —— 菜品库：批量导入图片（按钮 + 拖放）——
+    $('#mgBatchImg').addEventListener('click', () => $('#batchImgInput').click());
+    $('#batchImgInput').addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length) handleBatchFiles(files);
+      e.target.value = '';
+    });
+    const dtHasFiles = (dt) => !!(dt && (Array.from(dt.types || []).includes('Files') || (dt.files && dt.files.length)));
+    let dragDepth = 0;
+    document.addEventListener('dragenter', (e) => {
+      if (!dtHasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      if (mg.tab !== 'lib') return;
+      dragDepth++;
+      $('#mgDrop').hidden = false;
+    });
+    document.addEventListener('dragover', (e) => {
+      if (!dtHasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    document.addEventListener('dragleave', (e) => {
+      if (mg.tab !== 'lib') return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) $('#mgDrop').hidden = true;
+    });
+    document.addEventListener('drop', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      dragDepth = 0;
+      $('#mgDrop').hidden = true;
+      if (mg.tab === 'lib') handleBatchFiles(e.dataTransfer.files);
     });
 
     // —— 菜单标签 ——
@@ -951,11 +1044,15 @@
       try { localStorage.setItem('ss_ob_edit', '1'); } catch (_) {}
     });
 
-    // —— 设置入口（整合 导出 / 导入 / 恢复默认） ——
-    $('#mgSettings').addEventListener('click', openSettings);
+    // —— 设置折叠菜单（导出 / 导入 / 恢复默认） ——
+    $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
     $('#setReset').addEventListener('click', openResetConfirm);
+    document.addEventListener('click', (e) => {
+      const w = $('#mgSetWrap');
+      if (w && !w.contains(e.target)) closeSettings();
+    });
 
     // 恢复默认二次确认
     $('#resetConfirm').addEventListener('click', confirmReset);
@@ -1024,7 +1121,8 @@
     document.querySelectorAll('[data-close]').forEach((btn) => {
       btn.addEventListener('click', () => { $('#' + btn.dataset.close).hidden = true; });
     });
-    ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'settingsModal', 'resetConfirmModal'].forEach((id) => {
+    // 「恢复默认」确认框刻意不加点遮罩关闭，必须显式选择，防误触
+    ['editModal', 'pkgModal', 'cropModal', 'pickModal'].forEach((id) => {
       $('#' + id).addEventListener('click', (e) => { if (e.target.id === id) $('#' + id).hidden = true; });
     });
   }
