@@ -22,6 +22,8 @@
     '主食点心': '#E6C58F',
   };
   const objPos = (d) => (d && d.crop ? `${d.crop.x}% ${d.crop.y}%` : '50% 50%');
+  const ICON_KEYS = Object.keys(ICONS);
+  const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
 
   // ---------- 状态 ----------
   let state = { banquet: 'wedding', pkg: 'B', search: '', mode: 'order' };
@@ -64,9 +66,16 @@
 
   // ---------- 点菜模式渲染 ----------
   function renderTopTabs() {
-    $('#banquetTabs').innerHTML = Store.BANQUETS.map(
-      (b) => `<button class="tab ${b.id === state.banquet ? 'on' : ''}" data-b="${b.id}">${b.name}</button>`
-    ).join('');
+    const cur = Store.BANQUETS.find((b) => b.id === state.banquet);
+    const name = cur ? cur.name : '婚宴';
+    const trig = $('#bsCurrentName'); if (trig) trig.textContent = name;
+    const menu = $('#bsMenu');
+    if (menu) {
+      menu.innerHTML = Store.BANQUETS.map(
+        (b) => `<button class="bs-item ${b.id === state.banquet ? 'on' : ''}" data-b="${b.id}">${b.name}</button>`
+      ).join('');
+      menu.hidden = true;
+    }
   }
 
   function renderPkg() {
@@ -115,7 +124,7 @@
 
   function renderRail() {
     const cats = ['全部', ...CATEGORIES];
-    $('#rail').innerHTML = cats.map(
+    $('#railList').innerHTML = cats.map(
       (c, i) => `<button class="rail-item ${i === 0 ? 'on' : ''}" data-c="${c}"><span>${c}</span></button>`
     ).join('');
   }
@@ -317,17 +326,16 @@
     const inner = d.image
       ? `<img src="${d.image}" alt="${d.cn}" style="object-position:${objPos(d)}">`
       : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
-    return `<div class="mg-card">
-      <div class="mg-thumb">${inner}</div>
+    return `<div class="mg-card lib-card" data-id="${d.id}">
+      <div class="mg-thumb lib-thumb">
+        ${inner}
+        <button class="lib-del" data-libdel="${d.id}" title="删除" aria-label="删除">✕</button>
+      </div>
       <div class="mg-info">
         <div class="mg-cn">${d.num} · ${d.cn}</div>
         <div class="mg-en">${d.en || ''}</div>
         <span class="cat-tag">${d.cat}</span>
         <span class="lib-usage">用于 ${n} 个菜单</span>
-      </div>
-      <div class="mg-ops">
-        <button class="mg-btn small" data-libedit="${d.id}">编辑</button>
-        <button class="mg-btn small danger" data-libdel="${d.id}">删除</button>
       </div>
     </div>`;
   }
@@ -342,9 +350,6 @@
       return;
     }
     const total = (p.dishes || []).length;
-    const pIdx = b.packages.indexOf(p);
-    const disPkgUp = pIdx <= 0 ? 'disabled' : '';
-    const disPkgDown = pIdx >= b.packages.length - 1 ? 'disabled' : '';
     const cards = (p.dishes || []).map((id, idx) => {
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
@@ -379,8 +384,6 @@
           <span class="mg-pkg-count">${p.dishes.length} 道（引用菜品库）</span>
         </div>
         <div class="mg-pkg-ops">
-          <button class="mg-btn small move" data-pkgmv="up" ${disPkgUp} title="上移档位">↑</button>
-          <button class="mg-btn small move" data-pkgmv="down" ${disPkgDown} title="下移档位">↓</button>
           <button class="mg-btn" id="mgEditPkg">编辑套餐</button>
         </div>
       </div>
@@ -453,11 +456,9 @@
     mg.libEditId = id || null;
     const d = id ? Store.getLibDish(id) : null;
     $('#editTitle').textContent = (id ? '编辑' : '新增') + '菜品（菜品库）';
-    $('#eNum').value = d ? d.num : '';
     $('#eCn').value = d ? d.cn : '';
     $('#eEn').value = d ? d.en : '';
     $('#eCat').value = d ? d.cat : '主菜';
-    $('#eIcon').value = d ? (d.icon || 'platter') : 'platter';
     $('#eDesc').value = d ? (d.desc || '') : '';
     mg.pendingImage = d ? (d.image || null) : null;
     mg.pendingCrop = d && d.crop ? { x: d.crop.x, y: d.crop.y } : { x: 50, y: 50 };
@@ -483,14 +484,16 @@
 
   async function saveLibDish(e) {
     e.preventDefault();
-    const num = $('#eNum').value.trim();
     const cn = $('#eCn').value.trim();
-    if (!num || !cn) { alert('请填写编号与中文名'); return; }
+    if (!cn) { alert('请填写中文名'); return; }
+    const existing = mg.libEditId ? Store.getLibDish(mg.libEditId) : null;
+    const num = existing && existing.num ? existing.num : Store.nextNum();
+    const icon = existing && existing.icon ? existing.icon : randomIcon();
     const data = {
       num, cn,
       en: $('#eEn').value.trim(),
       cat: $('#eCat').value,
-      icon: $('#eIcon').value,
+      icon,
       desc: $('#eDesc').value.trim(),
       image: mg.pendingImage || null,
       crop: (mg.pendingImage && mg.pendingCrop) ? { x: mg.pendingCrop.x, y: mg.pendingCrop.y } : null,
@@ -717,13 +720,23 @@
       setMode(t.dataset.mode);
     });
 
-    // 点菜模式
-    $('#banquetTabs').addEventListener('click', (e) => {
-      const t = e.target.closest('.tab'); if (!t) return;
+    // 点菜模式：宴席折叠下拉（默认只显示当前宴席，避免客人看到其他宴席）
+    $('#bsTrigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = $('#bsMenu');
+      m.hidden = !m.hidden;
+    });
+    $('#bsMenu').addEventListener('click', (e) => {
+      const t = e.target.closest('.bs-item'); if (!t) return;
       state.banquet = t.dataset.b;
       const b = banquet();
       state.pkg = b ? b.packages[0].id : null;
+      $('#bsMenu').hidden = true;
       renderAll();
+    });
+    document.addEventListener('click', (e) => {
+      const sel = $('#banquetSelect');
+      if (sel && !sel.contains(e.target)) { const m = $('#bsMenu'); if (m) m.hidden = true; }
     });
     $('#pkgbar').addEventListener('click', (e) => {
       const t = e.target.closest('.chip'); if (!t) return;
@@ -735,6 +748,14 @@
       const c = t.dataset.c;
       if (c === '全部') { $('#content').scrollTo({ top: 0, behavior: 'smooth' }); setRail(''); }
       else { const s = document.getElementById('sec-' + c); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+    // 侧边栏（分类）可折叠：收起/展开并持久化
+    $('#railToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const screen = $('#orderScreen');
+      const collapsed = screen.classList.toggle('rail-collapsed');
+      $('#railToggle').textContent = collapsed ? '⟩' : '⟨';
+      try { localStorage.setItem('ss_rail', collapsed ? '1' : '0'); } catch (_) {}
     });
     $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); setupSpy(); });
     $('#list').addEventListener('click', (e) => {
@@ -775,15 +796,16 @@
     $('#libCat').addEventListener('change', renderLibList);
     $('#mgAddLibDish').addEventListener('click', () => openLibEditor(null));
     $('#mgLibList').addEventListener('click', (e) => {
-      const ed = e.target.closest('[data-libedit]');
-      if (ed) { openLibEditor(ed.dataset.libedit); return; }
       const dl = e.target.closest('[data-libdel]');
       if (dl) {
         const id = dl.dataset.libdel;
         const n = Store.usageCount(id);
         if (n > 0 && !confirm(`该菜品正用于 ${n} 个菜单，删除后这些菜单也将移出此菜品，确定删除？`)) return;
         (async () => { await Store.removeLibDish(id); renderLibList(); toast('已删除'); })();
+        return;
       }
+      const card = e.target.closest('.lib-card');
+      if (card) openLibEditor(card.dataset.id);
     });
 
     // —— 菜单标签 ——
@@ -809,15 +831,6 @@
       if (rf) {
         const id = rf.dataset.ref;
         (async () => { await Store.removeDishRef(mg.banquet, mg.pkg, id); renderMgList(); toast('已移出本菜单'); })();
-        return;
-      }
-      const pmv = e.target.closest('[data-pkgmv]');
-      if (pmv) {
-        if (pmv.disabled) return;
-        (async () => {
-          const r = await Store.movePackage(mg.banquet, mg.pkg, pmv.dataset.pkgmv);
-          if (r.ok) { renderManage(); toast('已调整档位顺序'); }
-        })();
         return;
       }
       if (e.target.closest('#mgEditPkg')) { mg.pkgMode = 'edit'; openPkgEditor(); }
@@ -932,6 +945,7 @@
 
   // ---------- 启动 ----------
   document.addEventListener('DOMContentLoaded', () => {
+    try { if (localStorage.getItem('ss_rail') === '1') { $('#orderScreen').classList.add('rail-collapsed'); $('#railToggle').textContent = '⟩'; } } catch (_) {}
     bindStatic();
     renderAll();
     setupSpy();

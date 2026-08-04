@@ -102,6 +102,16 @@ const Store = (function () {
     return 'lib' + String(max + 1).padStart(3, '0');
   }
 
+  // 自动编号：取菜品库当前最大数值编号 + 1（新增菜品时使用，避免手动填号）
+  function nextNum() {
+    let max = 0;
+    (STATE.library || []).forEach((d) => {
+      const n = parseInt(d.num, 10);
+      if (!isNaN(n)) max = Math.max(max, n);
+    });
+    return String(max + 1);
+  }
+
   // 持久化（异步：配额超限时自动把图片再压一轮后重试）
   async function save() {
     // TODO 后端接入点：将 STATE 提交至服务端
@@ -315,7 +325,7 @@ const Store = (function () {
     get LIBRARY() { return STATE.library; },
     get BANQUETS() { return BANQUET_LIST; },
     save,
-    getBanquet, ensureBanquet,
+    getBanquet, ensureBanquet, nextNum,
     getPackage, addPackage, updatePackage, removePackage, movePackage,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,

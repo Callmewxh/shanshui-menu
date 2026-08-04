@@ -21,7 +21,10 @@
         <button data-mode="manage">管理</button>
       </div>
 
-      <nav class="banquet-tabs" id="banquetTabs"></nav>
+      <div class="banquet-select" id="banquetSelect">
+        <button class="bs-trigger" id="bsTrigger" type="button"><span id="bsCurrentName">婚宴</span><span class="bs-caret" id="bsCaret">▾</span></button>
+        <div class="bs-menu" id="bsMenu" hidden></div>
+      </div>
       <div class="search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2B2622" stroke-width="2">
           <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line>
@@ -35,7 +38,10 @@
       <div class="pkgbar" id="pkgbar"></div>
       <div class="banner" id="banner" hidden></div>
       <div class="body">
-        <aside class="rail" id="rail"></aside>
+        <aside class="rail" id="rail">
+          <button class="rail-toggle" id="railToggle" type="button" title="收起/展开分类">⟨</button>
+          <div class="rail-list" id="railList"></div>
+        </aside>
         <main class="content" id="content">
           <div class="hero" id="hero"></div>
           <div class="list" id="list"></div>
@@ -110,7 +116,6 @@
       <h3 id="editTitle">编辑菜品</h3>
       <p class="mg-note">菜品统一在「菜品库」管理，修改会同步到所有含此菜品的菜单（图片仅存一份）。</p>
       <form id="editForm">
-        <div class="field"><label>编号</label><input id="eNum" name="num" maxlength="8" placeholder="如 17"></div>
         <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称"></div>
         <div class="field"><label>英文名</label><input id="eEn" name="en" placeholder="English name"></div>
         <div class="field"><label>分类</label>
@@ -120,21 +125,8 @@
             <option value="主食点心">主食点心</option>
           </select>
         </div>
-        <div class="field"><label>占位插画</label>
-          <select id="eIcon" name="icon">
-            <option value="platter">拼盘</option>
-            <option value="bird">禽类</option>
-            <option value="lobster">龙虾</option>
-            <option value="fish">鱼类</option>
-            <option value="shell">贝类</option>
-            <option value="bowl">汤/碗</option>
-            <option value="leaf">蔬菜</option>
-            <option value="mound">主食堆</option>
-            <option value="heart">心形点心</option>
-            <option value="fruit">水果</option>
-          </select>
-        </div>
         <div class="field"><label>简介</label><textarea id="eDesc" name="desc" rows="3" placeholder="菜品介绍…"></textarea></div>
+        <p class="field-note">编号与占位插画由系统自动生成（插画随机分配），无需手动填写。</p>
         <div class="field">
           <label>菜品图片</label>
           <input type="file" id="imgInput" accept="image/*">
