@@ -46,6 +46,8 @@
     const y = (c && typeof c.y === 'number') ? c.y : 50;
     return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:#efe8dc;`;
   };
+  // 统一展示：所有有图窗口（点菜页/详情/菜品库/菜单/选择器）共用同一裁剪渲染，保证所见一致
+  const dishCropThumb = (d) => `<div class="cropimg" style="${cropBg(d)}"></div>`;
   const defaultCrop = () => ({ x: 0.1667, y: 0.1667, w: 0.6667 });  // 居中、约 150% 缩放
   const ICON_KEYS = Object.keys(ICONS);
   const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
@@ -150,7 +152,7 @@
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
   function thumbHTML(d) {
     if (d.image) {
-      return `<div class="thumb"><div class="cropimg" style="${cropBg(d)}"></div></div>`;
+      return `<div class="thumb">${dishCropThumb(d)}</div>`;
     }
     const col = CAT_COLORS[d.cat] || '#eee';
     return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${d.num}</span></div>`;
@@ -244,7 +246,7 @@
     const thumb = m.querySelector('.modal-thumb');
     if (d.image) {
       thumb.style.background = 'transparent';
-      thumb.innerHTML = `<div class="cropimg" style="${cropBg(d)}"></div>`;
+      thumb.innerHTML = dishCropThumb(d);
     } else { thumb.style.background = CAT_COLORS[d.cat] || '#eee'; thumb.innerHTML = ICONS[d.icon] || ''; }
     m.querySelector('.m-num').textContent = 'NO. ' + d.num;
     m.querySelector('.m-cn').textContent = d.cn;
@@ -421,7 +423,7 @@
   function libCardHTML(d) {
     const n = Store.usageCount(d.id);
     const inner = d.image
-      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPosFixed()}">`
+      ? dishCropThumb(d)
       : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
     return `<div class="mg-card lib-card" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
@@ -453,7 +455,7 @@
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
-        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPosFixed()}">`
+        ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=编辑菜品，右上 ✕=移出本菜单，左上 ⠿=拖动排序
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
@@ -758,7 +760,7 @@
     if (!list.length) { grid.innerHTML = '<div class="pick-empty">菜品库暂无菜品，请先到「菜品库」录入。</div>'; return; }
     grid.innerHTML = list.map((d) => {
       const inner = d.image
-        ? `<img src="${d.image}" style="${objPosFixed()}">`
+        ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       return `<label class="pick-card ${inPkg.has(d.id) ? 'in' : ''}">
         <input type="checkbox" value="${d.id}" ${inPkg.has(d.id) ? 'checked' : ''}>
@@ -908,8 +910,8 @@
       if (mode === 'pan') {
         setCropXY(sc.x + (e.clientX - sx) / r.width, sc.y + (e.clientY - sy) / r.height);
       } else {
-        const dd = ((e.clientX - sx) + (e.clientY - sy)) / 2;   // 向右下拖 = 放大（w 变小）
-        const nw = clamp(sc.w - dd / r.width, 0.05, 1);
+        const dd = ((e.clientX - sx) + (e.clientY - sy)) / 2;   // 拖右下角手柄往外 = 框变大（zoom out）；往内 = 框变小（放大）
+        const nw = clamp(sc.w + dd / r.width, 0.05, 1);
         const nh = nw * 0.75 * cropAspect;
         cropTemp = { x: clamp(sc.x, 0, 1 - nw), y: clamp(sc.y, 0, 1 - nh), w: nw, h: nh };
         syncZoomSlider();
