@@ -801,6 +801,26 @@
     URL.revokeObjectURL(a.href);
   }
 
+  // 从同源 JSON 拉取已发布的菜单（仓库/部署目录中的 data/menu-config.json）。
+  // 用途：1) 新设备首次打开自动加载；2) 设置里手动「从云端拉取菜单」覆盖本机。
+  // 与 exportConfig 互为导入/导出：JSON 结构为 { library, menu }，正好匹配 Store.importConfig。
+  async function pullFromCloud(opts) {
+    opts = opts || {};
+    try {
+      const res = await fetch('./data/menu-config.json?t=' + Date.now(), { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const r = await Store.importConfig(data);
+      if (!r.ok) throw new Error(r.msg || '配置格式不正确');
+      if (state.mode === 'order') renderAll(); else renderManage();
+      if (!opts.silent) toast('已从云端拉取菜单');
+      return true;
+    } catch (e) {
+      if (!opts.silent) toast('拉取失败：' + e.message);
+      return false;
+    }
+  }
+
   // ---------- 设置：折叠菜单（不弹独立窗口） ----------
   function toggleSettings(force) {
     const m = $('#mgSetMenu');
@@ -1156,6 +1176,11 @@
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
     $('#setReset').addEventListener('click', openResetConfirm);
+    $('#setPull').addEventListener('click', async () => {
+      closeSettings();
+      if (!confirm('将从云端拉取已发布的菜单，并覆盖本设备当前菜单。确定继续？')) return;
+      await pullFromCloud();
+    });
     document.addEventListener('click', (e) => {
       const w = $('#mgSetWrap');
       if (w && !w.contains(e.target)) closeSettings();
@@ -1236,11 +1261,15 @@
   }
 
   // ---------- 启动 ----------
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     try {
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
     bindStatic();
+    // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子
+    try {
+      if (!localStorage.getItem('ss_menu_v1')) await pullFromCloud({ silent: true });
+    } catch (_) {}
     renderAll();
     initImmersive();
   });
