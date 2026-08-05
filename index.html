@@ -82,7 +82,7 @@
             <div class="set-menu-head">菜单数据各设备独立存储，以下用于备份与迁移</div>
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
             <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
-            <button class="set-row" id="setBatch" type="button"><span class="set-ic">⤓</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
+            <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
             <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>
         </div>
@@ -180,16 +180,16 @@
       <button class="modal-close" aria-label="关闭" data-close="cropModal">✕</button>
       <h3 style="font-size:18px;font-weight:700;padding:20px 24px 0;">调整图片展示位置</h3>
       <div style="padding:16px 24px 6px;">
-        <div class="crop-win" id="cropWin">
-          <img id="cropImg" alt="">
-          <div class="crop-frame" id="cropFrame"></div>
-        </div>
-        <p class="crop-hint">拖动取景框上下移动，选定点菜界面显示的部位（展示框固定 4:3，不变形）</p>
-        <div class="crop-zoom">
-          <span class="crop-zoom-label">上下</span>
-          <input type="range" id="cropY" min="0" max="100" step="1" value="50">
-          <span class="crop-zoom-val" id="cropYVal">50%</span>
-        </div>
+      <div class="crop-win" id="cropWin">
+        <img id="cropImg" alt="">
+        <div class="crop-frame" id="cropFrame"><span class="crop-grip" id="cropGrip"></span></div>
+      </div>
+      <p class="crop-hint">拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（展示框固定 4:3，不变形）</p>
+      <div class="crop-zoom">
+        <span class="crop-zoom-label">缩放</span>
+        <input type="range" id="cropZoom" min="100" max="400" step="1" value="150">
+        <span class="crop-zoom-val" id="cropZoomVal">150%</span>
+      </div>
       </div>
       <div class="edit-actions" style="padding:6px 24px 22px;">
         <span class="spacer"></span>

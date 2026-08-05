@@ -29,13 +29,32 @@
   };
   // 管理端缩略图：统一居中裁切，不随展示位置调整而变
   const objPosFixed = () => `object-position:50% 50%;`;
+  // 展示裁剪：支持 2D 平移 + 缩放的 4:3 截图框（方案 B：完整图上拖 4:3 框 + 缩放）。
+  // 新模型 crop = {x,y,w,h}（图片归一化裁剪矩形：x/y=左上角占宽/高比例，w=宽比例，h=高比例；h=w*0.75*图片宽高比 以保证 4:3）。
+  // 用 background-size/position 精确还原，保证编辑框与展示端所见即所得。
+  const cropBg = (d) => {
+    const c = (d && d.crop) ? d.crop : null;
+    if (c && typeof c.w === 'number') {
+      const w = clamp(c.w, 0.05, 1), h = clamp((typeof c.h === 'number' ? c.h : w * 0.75), 0.05, 1);
+      const x = clamp(c.x, 0, 1 - w), y = clamp(c.y, 0, 1 - h);
+      const sizeW = (100 / w).toFixed(3), sizeH = (100 / h).toFixed(3);
+      const posX = (1 - w < 1e-4) ? '0' : (x / (1 - w) * 100).toFixed(2);
+      const posY = (1 - h < 1e-4) ? '0' : (y / (1 - h) * 100).toFixed(2);
+      return `background-image:url('${d.image}');background-size:${sizeW}% ${sizeH}%;background-position:${posX}% ${posY}%;background-repeat:no-repeat;background-color:#efe8dc;`;
+    }
+    // 旧模型 {y} / 无 crop：cover + 垂直平移（向后兼容）
+    const y = (c && typeof c.y === 'number') ? c.y : 50;
+    return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:#efe8dc;`;
+  };
+  const defaultCrop = () => ({ x: 0.1667, y: 0.1667, w: 0.6667 });  // 居中、约 150% 缩放
   const ICON_KEYS = Object.keys(ICONS);
   const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
 
   // ---------- 状态 ----------
   let state = { banquet: 'wedding', pkg: 'B', search: '', mode: 'order' };
   let viewList = [];      // 当前点菜页可见菜品的展示顺序（大图循环浏览用）
-  let cropTemp = null; // 图片展示位置临时值 {y}
+  let cropTemp = null; // 图片展示位置临时值 {x,y,w,h}
+  let cropAspect = 1;  // 当前编辑图片宽高比（IW/IH），用于把 4:3 裁剪框换算成图片归一化高度
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -131,7 +150,7 @@
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
   function thumbHTML(d) {
     if (d.image) {
-      return `<div class="thumb"><img src="${d.image}" alt="${d.cn}" style="${objPos(d)}"></div>`;
+      return `<div class="thumb"><div class="cropimg" style="${cropBg(d)}"></div></div>`;
     }
     const col = CAT_COLORS[d.cat] || '#eee';
     return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${d.num}</span></div>`;
@@ -225,7 +244,7 @@
     const thumb = m.querySelector('.modal-thumb');
     if (d.image) {
       thumb.style.background = 'transparent';
-      thumb.innerHTML = `<img src="${d.image}" alt="${d.cn}" style="width:100%;height:100%;object-fit:cover;${objPos(d)}">`;
+      thumb.innerHTML = `<div class="cropimg" style="${cropBg(d)}"></div>`;
     } else { thumb.style.background = CAT_COLORS[d.cat] || '#eee'; thumb.innerHTML = ICONS[d.icon] || ''; }
     m.querySelector('.m-num').textContent = 'NO. ' + d.num;
     m.querySelector('.m-cn').textContent = d.cn;
@@ -524,7 +543,7 @@
     $('#eCat').value = d ? d.cat : '主菜';
     $('#eDesc').value = d ? (d.desc || '') : '';
     mg.pendingImage = d ? (d.image || null) : null;
-    mg.pendingCrop = d && d.crop ? { y: (typeof d.crop.y === 'number' ? d.crop.y : 50) } : { y: 50 };
+    mg.pendingCrop = (d && d.crop && typeof d.crop.w === 'number') ? { x: d.crop.x, y: d.crop.y, w: d.crop.w, h: (typeof d.crop.h === 'number' ? d.crop.h : undefined) } : defaultCrop();
     renderImgPrev();
     $('#editDelete').hidden = !id;
     let seen = false;
@@ -535,15 +554,13 @@
 
   function renderImgPrev() {
     const el = $('#imgPrev');
-    const op = objPos({ crop: mg.pendingCrop });
     if (mg.pendingImage) {
+      const d = { image: mg.pendingImage, crop: mg.pendingCrop };
       el.innerHTML =
-        `<img id="cropPrevImg" src="${mg.pendingImage}" alt="" style="${op}" title="点击调整展示位置">` +
-        `<button type="button" id="cropOpen" class="mg-btn small">调整展示位置</button>` +
+        `<div id="cropPrevImg" class="cropimg" style="${cropBg(d)}" title="点击调整展示位置"></div>` +
         `<button type="button" id="imgClear" class="mg-btn small ghost">移除图片</button>`;
       const pv = $('#cropPrevImg'); if (pv) pv.onclick = openCrop;
-      const co = $('#cropOpen'); if (co) co.onclick = openCrop;
-      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = { y: 50 }; renderImgPrev(); };
+      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = defaultCrop(); renderImgPrev(); };
     } else {
       el.innerHTML = '<span class="hint">未设置图片，将使用占位插画</span>';
     }
@@ -589,7 +606,7 @@
       icon,
       desc: $('#eDesc').value.trim(),
       image: mg.pendingImage || null,
-      crop: (mg.pendingImage && mg.pendingCrop) ? { y: (typeof mg.pendingCrop.y === 'number' ? mg.pendingCrop.y : 50) } : null,
+      crop: (mg.pendingImage && mg.pendingCrop && typeof mg.pendingCrop.w === 'number') ? { x: +mg.pendingCrop.x.toFixed(4), y: +mg.pendingCrop.y.toFixed(4), w: +mg.pendingCrop.w.toFixed(4), h: (typeof mg.pendingCrop.h === 'number' ? +mg.pendingCrop.h.toFixed(4) : +(mg.pendingCrop.w * 0.75).toFixed(4)) } : null,
     };
     try {
       if (mg.libIsNew) {
@@ -803,79 +820,113 @@
     toast('已恢复默认');
   }
 
-  // ---------- 图片展示位置编辑（截图框式：固定 4:3，仅上下移动） ----------
+  // ---------- 图片展示位置编辑（截图框式：4:3 框可上下左右拖动 + 缩放） ----------
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function openCrop() {
     if (!mg.pendingImage) { alert('请先上传图片再调整展示位置'); return; }
     const img = $('#cropImg');
-    const c = mg.pendingCrop || { y: 50 };
+    const c = (mg.pendingCrop && typeof mg.pendingCrop.w === 'number') ? mg.pendingCrop : defaultCrop();
+    const apply = () => {
+      const win = $('#cropWin');
+      if (win && img.naturalWidth) {
+        cropAspect = img.naturalWidth / img.naturalHeight;
+        win.style.aspectRatio = cropAspect.toFixed(4);
+      }
+      const h = (typeof c.h === 'number') ? c.h : c.w * 0.75 * (cropAspect || 1);
+      cropTemp = { x: c.x, y: c.y, w: c.w, h: clamp(h, 0.05, 1) };
+      syncZoomSlider();
+      positionCropFrame();
+    };
+    img.onload = apply;
     img.src = mg.pendingImage;
-    cropTemp = { y: (typeof c.y === 'number') ? c.y : 50 };
-    const y = $('#cropY'); if (y) y.value = String(cropTemp.y);
-    const yv = $('#cropYVal'); if (yv) yv.textContent = Math.round(cropTemp.y) + '%';
     $('#cropModal').hidden = false;
-    positionCropFrame();
+    if (img.complete && img.naturalWidth) apply();   // dataURL 可能同步完成
   }
 
-  // 取景框：宽=容器宽、高=容器宽*3/4（4:3），只可上下移动；dark 遮罩用 box-shadow 实现
+  // 取景框：4:3，可在完整图上拖动（上下左右）+ 缩放；dark 遮罩用 box-shadow 实现
   function positionCropFrame() {
-    const win = $('#cropWin'); const frame = $('#cropFrame'); const img = $('#cropImg');
-    if (!win || !frame) return;
+    const win = $('#cropWin'); const frame = $('#cropFrame');
+    if (!win || !frame || !cropTemp) return;
     const r = win.getBoundingClientRect();
-    const imgW = (img && img.naturalWidth) ? img.naturalWidth : 0;
-    const imgH = (img && img.naturalHeight) ? img.naturalHeight : 0;
-    const frameH = r.width * 3 / 4;
-    const dispH = (imgW > 0) ? r.width * imgH / imgW : frameH;   // 图片按宽 100% 显示时的高度
-    const centerY = clamp(cropTemp.y / 100 * dispH, frameH / 2, Math.max(frameH / 2, dispH - frameH / 2));
-    frame.style.height = frameH + 'px';
-    frame.style.top = (centerY - frameH / 2) + 'px';
-    frame.style.left = '0'; frame.style.right = '0';
+    if (!r.width) return;
+    const fw = cropTemp.w * r.width;
+    const fh = cropTemp.h * r.height;
+    const fx = cropTemp.x * r.width;
+    const fy = cropTemp.y * r.height;
+    frame.style.width = fw + 'px';
+    frame.style.height = fh + 'px';
+    frame.style.left = fx + 'px';
+    frame.style.top = fy + 'px';
   }
 
-  function setCropY(y) {
-    y = clamp(y, 0, 100);
-    if (!cropTemp) cropTemp = { y: 50 };
-    cropTemp.y = y;
-    const yv = $('#cropYVal'); if (yv) yv.textContent = Math.round(y) + '%';
-    const ys = $('#cropY'); if (ys) ys.value = String(y);
+  function setCropXY(x, y) {
+    if (!cropTemp) return;
+    const w = cropTemp.w, h = cropTemp.h;
+    cropTemp.x = clamp(x, 0, 1 - w);
+    cropTemp.y = clamp(y, 0, 1 - h);
     positionCropFrame();
   }
 
+  function setCropZoom(zoomPct) {
+    if (!cropTemp) return;
+    const nw = clamp(100 / zoomPct, 0.05, 1);
+    const nh = nw * 0.75 * cropAspect;
+    const cx = cropTemp.x + cropTemp.w / 2;
+    const cy = cropTemp.y + cropTemp.h / 2;
+    cropTemp.w = nw; cropTemp.h = nh;
+    cropTemp.x = clamp(cx - nw / 2, 0, 1 - nw);
+    cropTemp.y = clamp(cy - nh / 2, 0, 1 - nh);
+    const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(zoomPct) + '%';
+    positionCropFrame();
+  }
+
+  function syncZoomSlider() {
+    const z = $('#cropZoom'); if (!z || !cropTemp) return;
+    const zoom = clamp(Math.round(100 / cropTemp.w), 100, 400);
+    z.value = String(zoom);
+    const zv = $('#cropZoomVal'); if (zv) zv.textContent = zoom + '%';
+  }
+
+  // 一次性绑定（启动期调用）：框内拖动平移、右下角手柄缩放、缩放滑块
   function initCrop() {
-    const win = $('#cropWin');
-    if (!win) return;
-    const img = $('#cropImg');
-    if (img) img.onload = positionCropFrame;
-    let dragging = false;
-    // 由指针 Y 推算取景框中心（限定在图片范围内）
-    const relY = (clientY) => {
-      const r = win.getBoundingClientRect();
-      const imgW = (img && img.naturalWidth) ? img.naturalWidth : 0;
-      const imgH = (img && img.naturalHeight) ? img.naturalHeight : 0;
-      const frameH = r.width * 3 / 4;
-      const dispH = (imgW > 0) ? r.width * imgH / imgW : frameH;
-      const cy = clamp(clientY - r.top, frameH / 2, Math.max(frameH / 2, dispH - frameH / 2));
-      return { cy, dispH };
-    };
-    const down = (e) => { dragging = true; if (win.setPointerCapture) try { win.setPointerCapture(e.pointerId); } catch (_) {} };
-    const move = (e) => {
-      if (!dragging || !cropTemp) return;
+    const win = $('#cropWin'); const frame = $('#cropFrame');
+    if (!win || !frame) return;
+    let mode = null, sx = 0, sy = 0, sc = null;
+    const down = (e) => {
+      if (!cropTemp) return;
+      mode = (e.target && e.target.id === 'cropGrip') ? 'zoom' : 'pan';
+      sx = e.clientX; sy = e.clientY;
+      sc = { x: cropTemp.x, y: cropTemp.y, w: cropTemp.w };
+      if (frame.setPointerCapture) try { frame.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
-      const { cy, dispH } = relY(e.clientY);
-      setCropY(cy / dispH * 100);
     };
-    const up = () => { dragging = false; };
-    win.addEventListener('pointerdown', down);
-    win.addEventListener('pointermove', move);
-    win.addEventListener('pointerup', up);
-    win.addEventListener('pointercancel', up);
-    const y = $('#cropY'); if (y) y.addEventListener('input', () => setCropY(parseFloat(y.value)));
+    const move = (e) => {
+      if (!mode || !cropTemp) return;
+      e.preventDefault();
+      const r = win.getBoundingClientRect();
+      if (mode === 'pan') {
+        setCropXY(sc.x + (e.clientX - sx) / r.width, sc.y + (e.clientY - sy) / r.height);
+      } else {
+        const dd = ((e.clientX - sx) + (e.clientY - sy)) / 2;   // 向右下拖 = 放大（w 变小）
+        const nw = clamp(sc.w - dd / r.width, 0.05, 1);
+        const nh = nw * 0.75 * cropAspect;
+        cropTemp = { x: clamp(sc.x, 0, 1 - nw), y: clamp(sc.y, 0, 1 - nh), w: nw, h: nh };
+        syncZoomSlider();
+        positionCropFrame();
+      }
+    };
+    const up = () => { mode = null; };
+    frame.addEventListener('pointerdown', down);
+    frame.addEventListener('pointermove', move);
+    frame.addEventListener('pointerup', up);
+    frame.addEventListener('pointercancel', up);
+    const z = $('#cropZoom'); if (z) z.addEventListener('input', () => setCropZoom(parseFloat(z.value)));
   }
 
   function applyCrop() {
     if (!cropTemp) return;
-    mg.pendingCrop = { y: Math.round(clamp(cropTemp.y, 0, 100)) };
+    mg.pendingCrop = { x: +cropTemp.x.toFixed(4), y: +cropTemp.y.toFixed(4), w: +cropTemp.w.toFixed(4), h: +cropTemp.h.toFixed(4) };
     renderImgPrev();
     $('#cropModal').hidden = true;
     toast('展示位置已调整');
