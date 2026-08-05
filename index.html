@@ -38,10 +38,6 @@
       <div class="pkgbar" id="pkgbar"></div>
       <div class="banner" id="banner" hidden></div>
       <div class="body">
-        <aside class="rail" id="rail">
-          <button class="rail-toggle" id="railToggle" type="button" title="收起/展开分类">⟨</button>
-          <div class="rail-list" id="railList"></div>
-        </aside>
         <main class="content" id="content">
           <div class="hero" id="hero"></div>
           <div class="list" id="list"></div>
@@ -67,7 +63,6 @@
             <option value="主食点心">主食点心</option>
           </select>
           <button class="mg-btn primary small" id="mgAddLibDish">+ 新增菜品</button>
-          <button class="mg-btn small" id="mgBatchImg" type="button" title="批量导入图片，自动建立若干「待命名」菜品，之后逐个改名">⤓ 批量图片</button>
         </div>
 
         <!-- 菜单 上下文：宴席 + 套餐条（按住套餐可拖动排序） -->
@@ -87,6 +82,7 @@
             <div class="set-menu-head">菜单数据各设备独立存储，以下用于备份与迁移</div>
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
             <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
+            <button class="set-row" id="setBatch" type="button"><span class="set-ic">⤓</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
             <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>
         </div>
@@ -178,7 +174,7 @@
     </div>
   </div>
 
-  <!-- 图片展示位置编辑弹窗 -->
+  <!-- 图片展示位置编辑弹窗（截图框式：固定 4:3，仅上下移动） -->
   <div class="modal" id="cropModal" hidden>
     <div class="modal-card">
       <button class="modal-close" aria-label="关闭" data-close="cropModal">✕</button>
@@ -186,14 +182,13 @@
       <div style="padding:16px 24px 6px;">
         <div class="crop-win" id="cropWin">
           <img id="cropImg" alt="">
+          <div class="crop-frame" id="cropFrame"></div>
         </div>
-        <p class="crop-hint">按住图片拖动，选择点菜界面中显示的部位（展示框固定为 4:3，不变形）</p>
+        <p class="crop-hint">拖动取景框上下移动，选定点菜界面显示的部位（展示框固定 4:3，不变形）</p>
         <div class="crop-zoom">
-          <span class="crop-zoom-label">缩放</span>
-          <button type="button" id="cropZoomOut" class="mg-btn small" aria-label="缩小">－</button>
-          <input type="range" id="cropZoom" min="1" max="3" step="0.01" value="1">
-          <button type="button" id="cropZoomIn" class="mg-btn small" aria-label="放大">＋</button>
-          <span class="crop-zoom-val" id="cropZoomVal">100%</span>
+          <span class="crop-zoom-label">上下</span>
+          <input type="range" id="cropY" min="0" max="100" step="1" value="50">
+          <span class="crop-zoom-val" id="cropYVal">50%</span>
         </div>
       </div>
       <div class="edit-actions" style="padding:6px 24px 22px;">

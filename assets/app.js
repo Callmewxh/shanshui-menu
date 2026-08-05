@@ -21,20 +21,21 @@
     '主菜': '#F0B8A0',
     '主食点心': '#E6C58F',
   };
-  // 缩略图定位样式：object-position 选展示部位 + transform:scale 控制缩放（默认 1 即原尺寸）
+  // 缩略图定位样式：仅垂直方向（crop.y，0-100），固定比例 4:3，不变形
   const objPos = (d) => {
-    const c = (d && d.crop) ? d.crop : { x: 50, y: 50, scale: 1 };
-    const s = (typeof c.scale === 'number') ? c.scale : 1;
-    return `object-position:${c.x}% ${c.y}%;transform:scale(${s});transform-origin:center;`;
+    const c = (d && d.crop) ? d.crop : null;
+    const y = (c && typeof c.y === 'number') ? c.y : 50;
+    return `object-position:50% ${y}%;`;
   };
+  // 管理端缩略图：统一居中裁切，不随展示位置调整而变
+  const objPosFixed = () => `object-position:50% 50%;`;
   const ICON_KEYS = Object.keys(ICONS);
   const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
 
   // ---------- 状态 ----------
   let state = { banquet: 'wedding', pkg: 'B', search: '', mode: 'order' };
-  let spy = null;
   let viewList = [];      // 当前点菜页可见菜品的展示顺序（大图循环浏览用）
-  let cropTemp = null; // 图片展示位置临时值 {x,y}
+  let cropTemp = null; // 图片展示位置临时值 {y}
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -44,7 +45,7 @@
     libEditId: null,       // 正在编辑的菜品库 id（null=新增）
     libIsNew: false,
     pendingImage: null,
-    pendingCrop: { x: 50, y: 50 },
+    pendingCrop: { y: 50 },
     pendingAddToPkg: null, // {banquet, pkg}：从选择器“新建并加入”时暂存
   };
 
@@ -92,7 +93,6 @@
       $('#hero').hidden = true;
       $('#banner').hidden = true;
       $('#list').innerHTML = '';
-      renderRail();
       return;
     }
     bar.innerHTML = b.packages.map(
@@ -128,13 +128,6 @@
     </div>`;
   }
 
-  function renderRail() {
-    const cats = ['全部', ...CATEGORIES];
-    $('#railList').innerHTML = cats.map(
-      (c, i) => `<button class="rail-item ${i === 0 ? 'on' : ''}" data-c="${c}"><span>${c}</span></button>`
-    ).join('');
-  }
-
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
   function thumbHTML(d) {
     if (d.image) {
@@ -163,26 +156,9 @@
 
     if (!ds.length) { list.innerHTML = '<div class="empty-state">未找到相关菜品</div>'; viewList = []; return; }
 
-    if (q) {
-      viewList = ds.slice();
-      list.innerHTML = `<section class="sec"><div class="sec-head"><h3>搜索结果</h3><span>${ds.length} 道</span></div>
-        <div class="grid">${ds.map(cardHTML).join('')}</div></section>`;
-      return;
-    }
-
-    const groups = CATEGORIES
-      .map((c) => ({ c, items: ds.filter((d) => d.cat === c) }))
-      .filter((g) => g.items.length);
-
-    // 大图浏览用的顺序＝页面可见顺序（跨分类打通，滑动不再被分类边界打断）
-    viewList = groups.reduce((acc, g) => acc.concat(g.items), []);
-
-    list.innerHTML = groups.map(
-      (g) => `<section class="sec" id="sec-${g.c}">
-        <div class="sec-head"><h3>${g.c}</h3><span>${g.items.length} 道</span></div>
-        <div class="grid">${g.items.map(cardHTML).join('')}</div>
-      </section>`
-    ).join('');
+    // 点菜页不再分类，全部菜品直接铺满一个网格（跨菜品打通循环浏览）
+    viewList = ds.slice();
+    list.innerHTML = `<div class="grid">${ds.map(cardHTML).join('')}</div>`;
   }
 
   function renderAll() {
@@ -190,25 +166,10 @@
     renderPkg();
     renderHero();
     renderBanner();
-    renderRail();
     renderList();
   }
 
-  // ---------- 滚动联动 ----------
-  function setRail(cat) {
-    document.querySelectorAll('.rail-item').forEach((i) =>
-      i.classList.toggle('on', i.dataset.c === (CATEGORIES.includes(cat) ? cat : '全部'))
-    );
-  }
-
-  function setupSpy() {
-    if (spy) spy.disconnect();
-    spy = new IntersectionObserver(
-      (entries) => entries.forEach((e) => { if (e.isIntersecting) setRail(e.target.id.replace('sec-', '')); }),
-      { root: $('#content'), rootMargin: '-12% 0px -70% 0px', threshold: 0 }
-    );
-    document.querySelectorAll('.sec[id^="sec-"]').forEach((s) => spy.observe(s));
-  }
+  // 点菜页不再有分类侧边栏，无需分类滚动联动
 
   // ---------- 上滑隐藏顶部 ----------
   // 点菜页：手机端隐藏顶栏/档位条/分类条（沉浸式看菜）
@@ -317,7 +278,7 @@
       const b = banquet();
       if (!b || !b.packages.length) { state.banquet = 'wedding'; const bb = banquet(); state.pkg = bb && bb.packages[0] ? bb.packages[0].id : null; }
       else if (!b.packages.some((p) => p.id === state.pkg)) state.pkg = b.packages[0].id;
-      renderAll(); setupSpy();
+      renderAll();
     } else {
       // 进入管理：同步点菜端当前宴席/套餐
       mg.banquet = state.banquet;
@@ -441,7 +402,7 @@
   function libCardHTML(d) {
     const n = Store.usageCount(d.id);
     const inner = d.image
-      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPos(d)}">`
+      ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPosFixed()}">`
       : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
     return `<div class="mg-card lib-card" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
@@ -449,7 +410,7 @@
         <button class="lib-del" data-libdel="${d.id}" title="删除" aria-label="删除">✕</button>
       </div>
       <div class="mg-info">
-        <div class="mg-cn">${d.num} · ${d.cn}</div>
+        <div class="mg-cn" data-name="${d.id}" title="点击直接改名">${d.num} · ${d.cn}</div>
         <div class="mg-en">${d.en || ''}</div>
         <span class="cat-tag">${d.cat}</span>
         <span class="lib-usage">用于 ${n} 个菜单</span>
@@ -473,7 +434,7 @@
       const d = Store.getLibDish(id);
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
-        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPos(d)}">`
+        ? `<img src="${d.image}" alt="${d.cn}" draggable="false" style="${objPosFixed()}">`
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=编辑菜品，右上 ✕=移出本菜单，左上 ⠿=拖动排序
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
@@ -483,7 +444,7 @@
           <button class="lib-del" data-ref="${id}" title="移出本菜单" aria-label="移出本菜单">✕</button>
         </div>
         <div class="mg-info">
-          <div class="mg-cn">${d.num} · ${d.cn}</div>
+          <div class="mg-cn" data-name="${id}" title="点击直接改名">${d.num} · ${d.cn}</div>
           <div class="mg-en">${d.en || ''}</div>
           <span class="cat-tag">${d.cat}</span>
         </div>
@@ -563,7 +524,7 @@
     $('#eCat').value = d ? d.cat : '主菜';
     $('#eDesc').value = d ? (d.desc || '') : '';
     mg.pendingImage = d ? (d.image || null) : null;
-    mg.pendingCrop = d && d.crop ? { x: d.crop.x, y: d.crop.y, scale: (typeof d.crop.scale === 'number' ? d.crop.scale : 1) } : { x: 50, y: 50, scale: 1 };
+    mg.pendingCrop = d && d.crop ? { y: (typeof d.crop.y === 'number' ? d.crop.y : 50) } : { y: 50 };
     renderImgPrev();
     $('#editDelete').hidden = !id;
     let seen = false;
@@ -577,11 +538,12 @@
     const op = objPos({ crop: mg.pendingCrop });
     if (mg.pendingImage) {
       el.innerHTML =
-        `<img src="${mg.pendingImage}" alt="" style="${op}">` +
+        `<img id="cropPrevImg" src="${mg.pendingImage}" alt="" style="${op}" title="点击调整展示位置">` +
         `<button type="button" id="cropOpen" class="mg-btn small">调整展示位置</button>` +
         `<button type="button" id="imgClear" class="mg-btn small ghost">移除图片</button>`;
+      const pv = $('#cropPrevImg'); if (pv) pv.onclick = openCrop;
       const co = $('#cropOpen'); if (co) co.onclick = openCrop;
-      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = { x: 50, y: 50, scale: 1 }; renderImgPrev(); };
+      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = { y: 50 }; renderImgPrev(); };
     } else {
       el.innerHTML = '<span class="hint">未设置图片，将使用占位插画</span>';
     }
@@ -627,7 +589,7 @@
       icon,
       desc: $('#eDesc').value.trim(),
       image: mg.pendingImage || null,
-      crop: (mg.pendingImage && mg.pendingCrop) ? { x: mg.pendingCrop.x, y: mg.pendingCrop.y, scale: (typeof mg.pendingCrop.scale === 'number' ? mg.pendingCrop.scale : 1) } : null,
+      crop: (mg.pendingImage && mg.pendingCrop) ? { y: (typeof mg.pendingCrop.y === 'number' ? mg.pendingCrop.y : 50) } : null,
     };
     try {
       if (mg.libIsNew) {
@@ -779,7 +741,7 @@
     if (!list.length) { grid.innerHTML = '<div class="pick-empty">菜品库暂无菜品，请先到「菜品库」录入。</div>'; return; }
     grid.innerHTML = list.map((d) => {
       const inner = d.image
-        ? `<img src="${d.image}" style="${objPos(d)}">`
+        ? `<img src="${d.image}" style="${objPosFixed()}">`
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       return `<label class="pick-card ${inPkg.has(d.id) ? 'in' : ''}">
         <input type="checkbox" value="${d.id}" ${inPkg.has(d.id) ? 'checked' : ''}>
@@ -836,70 +798,118 @@
     $('#resetConfirmModal').hidden = true;
     Store.reset();
     mg.tab = 'lib'; mg.banquet = 'wedding'; mg.pkg = 'B'; mg.pkgMode = 'edit';
-    if (state.mode === 'order') { state.banquet = 'wedding'; state.pkg = 'B'; renderAll(); setupSpy(); }
+    if (state.mode === 'order') { state.banquet = 'wedding'; state.pkg = 'B'; renderAll(); }
     renderManage();
     toast('已恢复默认');
   }
 
-  // ---------- 图片展示位置（焦点）编辑 ----------
+  // ---------- 图片展示位置编辑（截图框式：固定 4:3，仅上下移动） ----------
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-  function ptOf(e) { return { x: e.clientX, y: e.clientY, id: e.pointerId }; }
 
   function openCrop() {
     if (!mg.pendingImage) { alert('请先上传图片再调整展示位置'); return; }
     const img = $('#cropImg');
-    const c = mg.pendingCrop || { x: 50, y: 50, scale: 1 };
+    const c = mg.pendingCrop || { y: 50 };
     img.src = mg.pendingImage;
-    const scale = (typeof c.scale === 'number') ? c.scale : 1;
-    img.style.objectPosition = c.x + '% ' + c.y + '%';
-    img.style.transform = 'scale(' + scale + ')';
-    img.style.transformOrigin = 'center';
-    cropTemp = { x: c.x, y: c.y, scale };
-    const z = $('#cropZoom'); if (z) z.value = String(scale);
-    const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(scale * 100) + '%';
+    cropTemp = { y: (typeof c.y === 'number') ? c.y : 50 };
+    const y = $('#cropY'); if (y) y.value = String(cropTemp.y);
+    const yv = $('#cropYVal'); if (yv) yv.textContent = Math.round(cropTemp.y) + '%';
     $('#cropModal').hidden = false;
+    positionCropFrame();
   }
 
-  function setCropZoom(scale) {
-    scale = clamp(scale, 1, 3);
-    if (!cropTemp) cropTemp = { x: 50, y: 50, scale: 1 };
-    cropTemp.scale = scale;
-    const img = $('#cropImg'); if (img) { img.style.transform = 'scale(' + scale + ')'; img.style.transformOrigin = 'center'; }
-    const z = $('#cropZoom'); if (z) z.value = String(scale);
-    const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(scale * 100) + '%';
+  // 取景框：宽=容器宽、高=容器宽*3/4（4:3），只可上下移动；dark 遮罩用 box-shadow 实现
+  function positionCropFrame() {
+    const win = $('#cropWin'); const frame = $('#cropFrame'); const img = $('#cropImg');
+    if (!win || !frame) return;
+    const r = win.getBoundingClientRect();
+    const imgW = (img && img.naturalWidth) ? img.naturalWidth : 0;
+    const imgH = (img && img.naturalHeight) ? img.naturalHeight : 0;
+    const frameH = r.width * 3 / 4;
+    const dispH = (imgW > 0) ? r.width * imgH / imgW : frameH;   // 图片按宽 100% 显示时的高度
+    const centerY = clamp(cropTemp.y / 100 * dispH, frameH / 2, Math.max(frameH / 2, dispH - frameH / 2));
+    frame.style.height = frameH + 'px';
+    frame.style.top = (centerY - frameH / 2) + 'px';
+    frame.style.left = '0'; frame.style.right = '0';
+  }
+
+  function setCropY(y) {
+    y = clamp(y, 0, 100);
+    if (!cropTemp) cropTemp = { y: 50 };
+    cropTemp.y = y;
+    const yv = $('#cropYVal'); if (yv) yv.textContent = Math.round(y) + '%';
+    const ys = $('#cropY'); if (ys) ys.value = String(y);
+    positionCropFrame();
   }
 
   function initCrop() {
     const win = $('#cropWin');
-    const img = $('#cropImg');
     if (!win) return;
-    let dragging = false, lastX = 0, lastY = 0;
-    const down = (e) => { dragging = true; const p = ptOf(e); lastX = p.x; lastY = p.y; if (win.setPointerCapture) try { win.setPointerCapture(p.id); } catch (_) {} };
+    const img = $('#cropImg');
+    if (img) img.onload = positionCropFrame;
+    let dragging = false;
+    // 由指针 Y 推算取景框中心（限定在图片范围内）
+    const relY = (clientY) => {
+      const r = win.getBoundingClientRect();
+      const imgW = (img && img.naturalWidth) ? img.naturalWidth : 0;
+      const imgH = (img && img.naturalHeight) ? img.naturalHeight : 0;
+      const frameH = r.width * 3 / 4;
+      const dispH = (imgW > 0) ? r.width * imgH / imgW : frameH;
+      const cy = clamp(clientY - r.top, frameH / 2, Math.max(frameH / 2, dispH - frameH / 2));
+      return { cy, dispH };
+    };
+    const down = (e) => { dragging = true; if (win.setPointerCapture) try { win.setPointerCapture(e.pointerId); } catch (_) {} };
     const move = (e) => {
       if (!dragging || !cropTemp) return;
-      const p = ptOf(e);
-      const dx = p.x - lastX, dy = p.y - lastY; lastX = p.x; lastY = p.y;
-      const r = win.getBoundingClientRect();
-      cropTemp.x = clamp(cropTemp.x + (dx / r.width) * 100, 0, 100);
-      cropTemp.y = clamp(cropTemp.y + (dy / r.height) * 100, 0, 100);
-      img.style.objectPosition = cropTemp.x + '% ' + cropTemp.y + '%';
+      e.preventDefault();
+      const { cy, dispH } = relY(e.clientY);
+      setCropY(cy / dispH * 100);
     };
     const up = () => { dragging = false; };
     win.addEventListener('pointerdown', down);
     win.addEventListener('pointermove', move);
     win.addEventListener('pointerup', up);
     win.addEventListener('pointercancel', up);
-    const z = $('#cropZoom'); if (z) z.addEventListener('input', () => setCropZoom(parseFloat(z.value)));
-    const zin = $('#cropZoomIn'); if (zin) zin.addEventListener('click', () => setCropZoom((cropTemp ? cropTemp.scale : 1) + 0.1));
-    const zout = $('#cropZoomOut'); if (zout) zout.addEventListener('click', () => setCropZoom((cropTemp ? cropTemp.scale : 1) - 0.1));
+    const y = $('#cropY'); if (y) y.addEventListener('input', () => setCropY(parseFloat(y.value)));
   }
 
   function applyCrop() {
     if (!cropTemp) return;
-    mg.pendingCrop = { x: Math.round(cropTemp.x), y: Math.round(cropTemp.y), scale: (typeof cropTemp.scale === 'number' ? cropTemp.scale : 1) };
+    mg.pendingCrop = { y: Math.round(clamp(cropTemp.y, 0, 100)) };
     renderImgPrev();
     $('#cropModal').hidden = true;
     toast('展示位置已调整');
+  }
+
+  // ---------- 管理端：点击菜品名直接改名（内联编辑） ----------
+  function inlineEditName(id, el) {
+    if (!el || el.querySelector('input')) return;
+    const cur = Store.getLibDish(id);
+    if (!cur) return;
+    const input = document.createElement('input');
+    input.className = 'mg-cn-edit';
+    input.value = cur.cn;
+    el.textContent = '';
+    el.appendChild(input);
+    input.focus(); input.select();
+    let done = false;
+    const commit = async () => {
+      if (done) return; done = true;
+      const v = input.value.trim();
+      if (!v) { toast('名称不能为空'); renderLibList(); renderMgList(); return; }
+      if (v !== cur.cn) {
+        const dup = Store.LIBRARY.find((d) => d.cn === v && d.id !== id);
+        if (dup) { toast(`已存在同名菜品「${v}」`); renderLibList(); renderMgList(); return; }
+        await Store.updateLibDish(id, { cn: v });
+        toast('已改名');
+      }
+      renderLibList(); renderMgList();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { done = true; renderLibList(); renderMgList(); }
+    });
+    input.addEventListener('blur', commit);
   }
 
   // ---------- 事件绑定 ----------
@@ -931,23 +941,9 @@
     $('#pkgbar').addEventListener('click', (e) => {
       const t = e.target.closest('.chip'); if (!t) return;
       state.pkg = t.dataset.p;
-      renderHero(); renderPkg(); renderBanner(); renderRail(); renderList(); setupSpy();
+      renderHero(); renderPkg(); renderBanner(); renderList();
     });
-    $('#rail').addEventListener('click', (e) => {
-      const t = e.target.closest('.rail-item'); if (!t) return;
-      const c = t.dataset.c;
-      if (c === '全部') { $('#content').scrollTo({ top: 0, behavior: 'smooth' }); setRail(''); }
-      else { const s = document.getElementById('sec-' + c); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    });
-    // 侧边栏（分类）可折叠：收起/展开并持久化
-    $('#railToggle').addEventListener('click', (e) => {
-      e.stopPropagation();
-      const screen = $('#orderScreen');
-      const collapsed = screen.classList.toggle('rail-collapsed');
-      $('#railToggle').textContent = collapsed ? '⟩' : '⟨';
-      try { localStorage.setItem('ss_rail', collapsed ? '1' : '0'); } catch (_) {}
-    });
-    $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); setupSpy(); });
+    $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); });
     $('#list').addEventListener('click', (e) => {
       const c = e.target.closest('.card'); if (!c) return;
       // 打通整份菜单：不再按分类切片，大图里可循环浏览本套餐全部菜品
@@ -998,12 +994,14 @@
         (async () => { await Store.removeLibDish(id); renderLibList(); toast('已删除'); })();
         return;
       }
+      const nm = e.target.closest('[data-name]');
+      if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm); return; }
       const card = e.target.closest('.lib-card');
       if (card) openLibEditor(card.dataset.id);
     });
 
-    // —— 菜品库：批量导入图片（按钮 + 拖放）——
-    $('#mgBatchImg').addEventListener('click', () => $('#batchImgInput').click());
+    // —— 菜品库：批量导入图片（入口在「设置 → 批量新建菜品」）——
+    $('#setBatch').addEventListener('click', () => { closeSettings(); $('#batchImgInput').click(); });
     $('#batchImgInput').addEventListener('change', (e) => {
       const files = e.target.files;
       if (files && files.length) handleBatchFiles(files);
@@ -1047,6 +1045,8 @@
     $('#mgAddFromLib').addEventListener('click', openPicker);
     $('#mgList').addEventListener('click', (e) => {
       if (e.target.closest('[data-handle]')) return;          // 拖动手柄不触发编辑
+      const nm = e.target.closest('[data-name]');
+      if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm); return; }
       const rf = e.target.closest('[data-ref]');              // 先判删除，再判编辑
       if (rf) {
         const id = rf.dataset.ref;
@@ -1075,7 +1075,7 @@
             mg.banquet = 'wedding';
             const b = MENU()[mg.banquet];
             mg.pkg = b && b.packages[0] ? b.packages[0].id : null;
-            if (state.mode === 'order') { state.banquet = 'wedding'; state.pkg = mg.pkg; renderAll(); setupSpy(); }
+            if (state.mode === 'order') { state.banquet = 'wedding'; state.pkg = mg.pkg; renderAll(); }
             renderManage();
             closeSettings();
             toast('配置已导入');
@@ -1185,12 +1185,10 @@
   // ---------- 启动 ----------
   document.addEventListener('DOMContentLoaded', () => {
     try {
-      if (localStorage.getItem('ss_rail') === '1') { $('#orderScreen').classList.add('rail-collapsed'); $('#railToggle').textContent = '⟩'; }
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
     bindStatic();
     renderAll();
-    setupSpy();
     initImmersive();
   });
 })();

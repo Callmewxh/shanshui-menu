@@ -444,6 +444,30 @@ body {
 .crop-zoom-val { font-size: 12px; color: var(--ink); width: 44px; text-align: right; flex: 0 0 auto; }
 .crop-zoom .mg-btn.small { padding: 4px 10px; font-size: 16px; line-height: 1; }
 
+/* 4:3 取景框（截图框式，仅上下移动；框外暗色遮罩用 box-shadow 实现） */
+.crop-frame {
+  position: absolute;
+  left: 0; right: 0;            /* 宽度撑满，高度/上下位置由 JS 按 4:3 计算 */
+  border: 2px solid #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
+  pointer-events: none;         /* 拖动事件穿透到 .crop-win */
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+/* 管理端：点击菜名直接改名 */
+.mg-cn[data-name] { cursor: pointer; }
+.mg-cn[data-name]:hover { color: var(--primary); }
+.mg-cn-edit {
+  font: inherit; font-weight: 600; font-size: 15px;
+  width: 100%; min-width: 80px; padding: 2px 6px;
+  border: 1px solid var(--primary); border-radius: 6px;
+  background: var(--surface); color: var(--ink);
+  outline: none; box-sizing: border-box;
+}
+.mg-cn-edit:focus { box-shadow: 0 0 0 2px var(--primary-soft); }
+
 /* 表单校验：重名等错误 */
 .field-err { color: #B23A2E; font-size: 12px; margin-top: 6px; line-height: 1.4; }
 .field input.invalid { border-color: #B23A2E; box-shadow: 0 0 0 2px rgba(178,58,46,.15); }

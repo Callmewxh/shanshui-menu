@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>山水S酒店 · 菜单系统 v6 设计原型（可交互）</title>
+<style>
+  :root{
+    --primary:#B23A2E; --primary-d:#8f2d23; --ink:#2B2622; --muted:#8a817a;
+    --bg:#f6f1ea; --card:#fff; --line:#e7ded3; --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);}
+  /* 顶部 tab */
+  .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;
+    padding:10px 16px;background:#fff;border-bottom:1px solid var(--line);}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;}
+  .brand .mark{width:28px;height:28px;border-radius:8px;background:var(--primary);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;}
+  .modeswitch{margin-left:auto;display:flex;background:var(--bg);border-radius:999px;padding:3px;}
+  .modeswitch button{border:0;background:transparent;padding:7px 16px;border-radius:999px;
+    font-size:14px;color:var(--muted);cursor:pointer;}
+  .modeswitch button.on{background:var(--primary);color:#fff;font-weight:600;}
+  .demo-tag{font-size:12px;color:var(--muted);background:var(--bg);padding:3px 8px;border-radius:6px;}
+
+  /* ===== 点菜页（无侧边栏） ===== */
+  .pkgbar{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;}
+  .pk{white-space:nowrap;padding:8px 14px;border:1px solid var(--line);border-radius:999px;
+    background:#fff;font-size:13px;cursor:pointer;}
+  .pk.on{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600;}
+  .banner{margin:0 16px 8px;padding:8px 12px;background:#fff5f3;border:1px solid #f0d9d4;
+    border-radius:10px;font-size:13px;color:var(--primary-d);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:14px;padding:8px 16px 40px;}
+  .dish{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;}
+  /* 点菜大图：固定 4:3，使用自定义上下展示位置 */
+  .dish .shot{position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;background:#eee;cursor:pointer;}
+  .dish .shot img{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;}
+  .dish .shot .edit-hint{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.55);
+    color:#fff;font-size:11px;padding:3px 8px;border-radius:999px;pointer-events:none;}
+  .dish .meta{padding:10px 12px;}
+  .dish .name{font-weight:700;font-size:15px;}
+  .dish .en{color:var(--muted);font-size:12px;margin-top:2px;}
+  .dish .price{color:var(--primary);font-weight:700;margin-top:6px;font-size:14px;}
+
+  /* ===== 管理页 ===== */
+  .mg-tabs{display:flex;gap:8px;padding:12px 16px 4px;}
+  .mg-tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;
+    padding:7px 16px;font-size:14px;cursor:pointer;}
+  .mg-tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .mg-toolbar{display:flex;align-items:center;gap:10px;padding:8px 16px;}
+  .setwrap{position:relative;margin-left:auto;}
+  .setbtn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;
+    cursor:pointer;font-size:14px;}
+  .setmenu{position:absolute;right:0;top:42px;background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);min-width:240px;z-index:30;overflow:hidden;}
+  .setmenu .row{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+    border:0;background:#fff;padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--line);}
+  .setmenu .row:last-child{border-bottom:0;}
+  .setmenu .row:hover{background:var(--bg);}
+  .setmenu .row b{font-size:14px;}
+  .setmenu .row i{font-size:12px;color:var(--muted);font-style:normal;}
+  .libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:12px;padding:10px 16px 40px;}
+  .libcard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  /* 缩略图：统一裁切，不随展示位置变化 */
+  .libcard .thumb{width:100%;aspect-ratio:1/1;overflow:hidden;background:#eee;}
+  .libcard .thumb img{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;}
+  .libcard .row2{padding:8px 10px;display:flex;align-items:center;gap:6px;}
+  /* 点名字即编辑 */
+  .libcard .name-edit{border:1px solid transparent;background:transparent;border-radius:6px;
+    font-size:14px;font-weight:600;width:100%;padding:4px 6px;color:var(--ink);}
+  .libcard .name-edit:hover{border-color:var(--line);}
+  .libcard .name-edit:focus{outline:none;border-color:var(--primary);background:#fff;}
+
+  /* ===== 框选弹窗 ===== */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal.show{display:flex;}
+  .card{background:#fff;border-radius:16px;max-width:760px;width:100%;padding:18px 20px;
+    max-height:92vh;overflow:auto;}
+  .card h3{margin:0 0 4px;}
+  .card .sub{color:var(--muted);font-size:13px;margin-bottom:14px;}
+  .crop-layout{display:flex;gap:22px;flex-wrap:wrap;}
+  .crop-left{flex:0 0 auto;}
+  .crop-right{flex:1 1 240px;min-width:220px;}
+  .crop-src{position:relative;width:240px;height:320px;background:#ccc;border-radius:8px;overflow:hidden;user-select:none;}
+  .crop-src img{width:100%;height:100%;display:block;pointer-events:none;}
+  /* 4:3 取景框，只能上下移动 */
+  .frame{position:absolute;left:0;width:240px;height:180px;top:0;cursor:grab;
+    border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);}
+  .frame:active{cursor:grabbing;}
+  .frame::after{content:"";position:absolute;inset:0;outline:1px dashed rgba(255,255,255,.7);}
+  .crop-right .prev{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:10px;background:#222;}
+  .crop-right .prev img{width:100%;height:100%;object-fit:cover;}
+  .crop-right .label{font-size:13px;color:var(--muted);margin:10px 0 6px;}
+  .crop-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;}
+  .btn{border:0;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer;}
+  .btn.ghost{background:var(--bg);color:var(--ink);}
+  .btn.primary{background:var(--primary);color:#fff;font-weight:600;}
+  .hint-fixed{font-size:12px;color:var(--muted);margin-top:8px;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><span class="mark">S</span><span>山水S酒店</span></div>
+  <span class="demo-tag">v6 设计原型（可交互）</span>
+  <div class="modeswitch">
+    <button data-mode="order" class="on" id="mOrder">点菜</button>
+    <button data-mode="manage" id="mManage">管理</button>
+  </div>
+</div>
+
+<!-- 点菜页 -->
+<section id="orderScreen">
+  <div class="pkgbar" id="pkgbar"></div>
+  <div class="banner">提示：点任意菜品图片即弹出「框选展示区域」，可直接调整上下取景位置。</div>
+  <div class="grid" id="grid"></div>
+</section>
+
+<!-- 管理页 -->
+<section id="manageScreen" style="display:none">
+  <div class="mg-toolbar">
+    <div class="mg-tabs">
+      <button data-tab="lib" class="on">菜品库</button>
+      <button data-tab="menu">菜单</button>
+    </div>
+    <div class="setwrap">
+      <button class="setbtn" id="setBtn">⚙ 设置</button>
+      <div class="setmenu" id="setMenu" style="display:none">
+        <button class="row" id="setBatch"><b>批量新建菜品</b><i>选择多张图片，自动建立若干「待命名」菜品</i></button>
+        <button class="row"><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></button>
+        <button class="row"><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></button>
+        <button class="row"><b>恢复默认</b><i>清空本设备所有修改</i></button>
+      </div>
+    </div>
+  </div>
+  <div class="libgrid" id="libgrid"></div>
+</section>
+
+<!-- 框选弹窗 -->
+<div class="modal" id="cropModal">
+  <div class="card">
+    <h3>调整图片展示区域</h3>
+    <div class="sub">框只可上下移动 · 比例固定 4:3 · 所有菜品统一展示比例</div>
+    <div class="crop-layout">
+      <div class="crop-left">
+        <div class="crop-src" id="cropSrc">
+          <img id="cropImg" alt="">
+          <div class="frame" id="frame"></div>
+        </div>
+        <div class="hint-fixed">拖动白色取景框上下移动，选择要展示的部位</div>
+      </div>
+      <div class="crop-right">
+        <div class="label">点菜界面实际效果预览</div>
+        <div class="prev"><img id="prevImg" alt=""></div>
+        <div class="label">当前展示位置：<span id="posVal">50%</span></div>
+      </div>
+    </div>
+    <div class="crop-actions">
+      <button class="btn ghost" id="cropCancel">取消</button>
+      <button class="btn primary" id="cropApply">应用</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Mock 数据 ----------
+function makeImg(t,m,b,label){
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400'>
+    <rect width='300' height='133' fill='${t}'/>
+    <rect y='133' width='300' height='134' fill='${m}'/>
+    <rect y='267' width='300' height='133' fill='${b}'/>
+    <text x='150' y='72' font-size='26' fill='#fff' text-anchor='middle' font-family='sans-serif'>${label}·上</text>
+    <text x='150' y='210' font-size='26' fill='#333' text-anchor='middle' font-family='sans-serif'>${label}·中</text>
+    <text x='150' y='348' font-size='26' fill='#fff' text-anchor='middle' font-family='sans-serif'>${label}·下</text>
+  </svg>`;
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
+}
+const dishes = [
+  {id:'lib01', name:'迎宾四彩碟', en:'Welcome Four Delicacies', price:0, cropY:50, img:makeImg('#c0392b','#e67e22','#27ae60','碟')},
+  {id:'lib02', name:'鸿运乳猪拼盘', en:'Roast Pig Platter', price:0, cropY:50, img:makeImg('#8e44ad','#2980b9','#16a085','猪')},
+  {id:'lib03', name:'玫瑰豉油三黄鸡', en:'Soy Sauce Chicken', price:0, cropY:50, img:makeImg('#d35400','#f39c12','#7f8c8d','鸡')},
+  {id:'lib04', name:'金沙避风塘青龙', en:'Typhoon Shelter Lobster', price:0, cropY:50, img:makeImg('#2980b9','#1abc9c','#c0392b','虾')},
+  {id:'lib05', name:'清蒸龙趸鱼', en:'Steamed Grouper', price:0, cropY:50, img:makeImg('#16a085','#27ae60','#8e44ad','鱼')},
+  {id:'lib06', name:'金蒜银丝元贝', en:'Steamed Scallops', price:0, cropY:50, img:makeImg('#f1c40f','#e67e22','#34495e','贝')},
+];
+const packages = [
+  {id:'A', name:'天作之合宴', price:3999},
+  {id:'B', name:'佳偶天成宴', price:2899},
+  {id:'C', name:'龙凤呈祥宴', price:2299},
+  {id:'D', name:'花好月圆宴', price:1888},
+];
+let curPkg = 'A';
+
+// ---------- 渲染：点菜页 ----------
+function renderOrder(){
+  const bar = document.getElementById('pkgbar');
+  bar.innerHTML = packages.map(p=>`<div class="pk ${p.id===curPkg?'on':''}" data-pk="${p.id}">${p.name} <span style="opacity:.6">¥${p.price}</span></div>`).join('');
+  bar.querySelectorAll('.pk').forEach(el=>el.onclick=()=>{curPkg=el.dataset.pk;renderOrder();});
+  const grid = document.getElementById('grid');
+  grid.innerHTML = dishes.map(d=>`
+    <div class="dish">
+      <div class="shot" data-id="${d.id}">
+        <img src="${d.img}" style="object-position:50% ${d.cropY}%">
+        <span class="edit-hint">点击调整展示位置</span>
+      </div>
+      <div class="meta">
+        <div class="name">${d.name}</div>
+        <div class="en">${d.en}</div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('.shot').forEach(el=>el.onclick=()=>openCrop(el.dataset.id));
+}
+
+// ---------- 渲染：管理页（点名字即编辑） ----------
+function renderLib(){
+  const g = document.getElementById('libgrid');
+  g.innerHTML = dishes.map(d=>`
+    <div class="libcard">
+      <div class="thumb"><img src="${d.img}"></div>
+      <div class="row2">
+        <input class="name-edit" data-id="${d.id}" value="${d.name}">
+      </div>
+    </div>`).join('');
+  g.querySelectorAll('.name-edit').forEach(inp=>{
+    inp.onchange = ()=>{
+      const d = dishes.find(x=>x.id===inp.dataset.id);
+      d.name = inp.value.trim()||d.name;
+      renderLib(); renderOrder();
+    };
+  });
+}
+
+// ---------- 框选弹窗 ----------
+const SRC_W=240, SRC_H=320, FRAME_H=180; // 框 4:3 -> 240 x 180
+let curDish=null, frameTop=0;
+function openCrop(id){
+  curDish = dishes.find(d=>d.id===id);
+  document.getElementById('cropImg').src = curDish.img;
+  document.getElementById('prevImg').src = curDish.img;
+  const ratio = (curDish.cropY-50)/50; // -1..1
+  frameTop = Math.round((SRC_H-FRAME_H)/2 + ratio*(SRC_H-FRAME_H)/2);
+  positionFrame();
+  document.getElementById('cropModal').classList.add('show');
+}
+function positionFrame(){
+  frameTop = Math.max(0, Math.min(SRC_H-FRAME_H, frameTop));
+  const f = document.getElementById('frame');
+  f.style.top = frameTop+'px';
+  const pct = Math.round(frameTop/(SRC_H-FRAME_H)*100);
+  document.getElementById('prevImg').style.objectPosition = '50% '+pct+'%';
+  document.getElementById('posVal').textContent = pct+'%';
+  f._pct = pct;
+}
+(function initFrameDrag(){
+  const f=document.getElementById('frame'); const src=document.getElementById('cropSrc');
+  let drag=false, startY=0, startTop=0;
+  f.addEventListener('mousedown',e=>{drag=true;startY=e.clientY;startTop=frameTop;e.preventDefault();});
+  window.addEventListener('mousemove',e=>{if(!drag)return; frameTop=startTop+(e.clientY-startY); positionFrame();});
+  window.addEventListener('mouseup',()=>drag=false);
+  // 触摸
+  f.addEventListener('touchstart',e=>{drag=true;startY=e.touches[0].clientY;startTop=frameTop;},{passive:true});
+  window.addEventListener('touchmove',e=>{if(!drag)return; frameTop=startTop+(e.touches[0].clientY-startY); positionFrame();},{passive:true});
+  window.addEventListener('touchend',()=>drag=false);
+})();
+document.getElementById('cropApply').onclick=()=>{
+  if(curDish){ curDish.cropY = parseInt(document.getElementById('posVal').textContent); }
+  document.getElementById('cropModal').classList.remove('show');
+  renderOrder();
+};
+document.getElementById('cropCancel').onclick=()=>document.getElementById('cropModal').classList.remove('show');
+
+// ---------- 模式 / tab / 设置 ----------
+document.querySelectorAll('.modeswitch button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.modeswitch button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  const order = b.dataset.mode==='order';
+  document.getElementById('orderScreen').style.display = order?'block':'none';
+  document.getElementById('manageScreen').style.display = order?'none':'block';
+  if(!order) renderLib();
+});
+document.getElementById('setBtn').onclick=()=>{
+  const m=document.getElementById('setMenu');
+  m.style.display = m.style.display==='none'?'block':'none';
+};
+document.getElementById('setBatch').onclick=()=>{
+  document.getElementById('setMenu').style.display='none';
+  alert('「批量新建菜品」：选择多张图片后，系统会自动为每张图建立一道「待命名」菜品，之后在菜品库中逐个点击名称改名即可。\n（原型演示，实际文件选择交互在正式版实现）');
+};
+window.onclick=(e)=>{ if(!e.target.closest('.setwrap')) document.getElementById('setMenu').style.display='none'; };
+
+renderOrder();
+</script>
+</body>
+</html>
