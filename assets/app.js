@@ -1067,7 +1067,7 @@
     const brandBtn = $('#brandBtn');
     const brandMenu = $('#brandMenu');
     const toggleBrandMenu = (show) => {
-      const open = (show === undefined) ? brandMenu.hidden : !show;
+      const open = (show === undefined) ? brandMenu.hidden : !!show;
       brandMenu.hidden = !open;
       brandBtn.setAttribute('aria-expanded', String(open));
     };
