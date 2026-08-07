@@ -271,10 +271,37 @@ const Store = (function () {
     return { ok: true };
   }
   // 解析套餐的菜品引用为菜品主数据（供渲染）
+  // 若套餐含 nameOverrides[libId]，则显示名以覆盖名为准（仅影响展示，不改菜品库主数据）
   function resolvePackage(banquetId, pkgId) {
     const p = getPackage(banquetId, pkgId);
     if (!p || !Array.isArray(p.dishes)) return [];
-    return p.dishes.map((id) => getLibDish(id)).filter(Boolean);
+    const ov = (p.nameOverrides) || {};
+    return p.dishes.map((id) => {
+      const d = getLibDish(id);
+      if (!d) return null;
+      const o = ov[id];
+      if (o === undefined || o === null || o === '') return d;
+      return Object.assign({}, d, { cn: o, _overridden: true });
+    }).filter(Boolean);
+  }
+
+  // 菜单内菜品改名：仅覆盖「当前套餐」展示名，不影响菜品库主数据
+  // name 为空或等于菜品库原名时，视为清除覆盖（恢复原名）
+  async function setDishNameOverride(banquetId, pkgId, libId, name) {
+    const p = getPackage(banquetId, pkgId);
+    if (!p) return { ok: false, msg: '套餐不存在' };
+    const lib = getLibDish(libId);
+    if (!p.nameOverrides) p.nameOverrides = {};
+    const v = (name || '').trim();
+    if (!v || (lib && v === lib.cn)) delete p.nameOverrides[libId];
+    else p.nameOverrides[libId] = v;
+    await save();
+    return { ok: true };
+  }
+  async function clearDishNameOverride(banquetId, pkgId, libId) {
+    const p = getPackage(banquetId, pkgId);
+    if (p && p.nameOverrides) { delete p.nameOverrides[libId]; await save(); }
+    return { ok: true };
   }
 
   // ================= 图片上传 =================
@@ -345,6 +372,7 @@ const Store = (function () {
     getPackage, addPackage, updatePackage, removePackage, movePackage, reorderPackages,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
+    setDishNameOverride, clearDishNameOverride,
     uploadImage, importConfig, reset,
   };
 })();

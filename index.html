@@ -13,12 +13,15 @@
   <div class="app">
     <!-- 顶栏 -->
     <header class="topbar">
-      <div class="brand"><span class="mark">S</span><span>山水S酒店</span></div>
-
-      <!-- 模式切换 -->
-      <div class="mode-switch" id="modeSwitch">
-        <button data-mode="order" class="on">点菜</button>
-        <button data-mode="manage">管理</button>
+      <!-- 品牌 + 模式切换（折叠进品牌下拉） -->
+      <div class="brand" id="brandBtn" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+        <span class="mark">S</span>
+        <span class="brand-name">山水S酒店</span>
+        <svg class="brand-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        <div class="brand-menu" id="brandMenu" hidden>
+          <button class="brand-item on" data-mode="order" type="button">点菜</button>
+          <button class="brand-item" data-mode="manage" type="button">管理</button>
+        </div>
       </div>
 
       <div class="banquet-select" id="banquetSelect">
@@ -236,6 +239,30 @@
       <div class="edit-actions">
         <button class="mg-btn" id="resetCancel">取消</button>
         <button class="mg-btn danger" id="resetConfirm">确认恢复</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 菜单内菜品改名弹窗（覆盖显示名，不影响菜品库主数据） -->
+  <div class="modal" id="menuDishModal" hidden>
+    <div class="modal-card edit-card">
+      <button class="modal-close" aria-label="关闭" data-close="menuDishModal">✕</button>
+      <h3>本菜单菜品名称</h3>
+      <p class="md-note">此名称仅用于<strong>当前套餐</strong>展示，不影响「菜品库」主数据（同一张图片可在不同菜单显示不同菜名）。</p>
+      <div class="md-prev" id="mdPrev"></div>
+      <div class="field">
+        <label>显示菜名</label>
+        <div class="md-name-row">
+          <input id="mdName" autocomplete="off">
+          <button type="button" class="mg-btn small restore-btn" id="mdRestore">恢复原名</button>
+        </div>
+      </div>
+      <div class="md-orig" id="mdOrig"></div>
+      <div class="edit-actions">
+        <button type="button" class="mg-btn ghost" id="mdEditLib">编辑菜品库主数据</button>
+        <span class="spacer"></span>
+        <button type="button" class="mg-btn" data-close="menuDishModal">取消</button>
+        <button type="button" class="mg-btn primary" id="mdSave">保存</button>
       </div>
     </div>
   </div>

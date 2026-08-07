@@ -31,7 +31,23 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; white-space: nowrap; }
+.brand { position: relative; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; cursor: pointer; user-select: none; }
+.brand .brand-name { white-space: nowrap; }
+.brand-caret { width: 16px; height: 16px; opacity: .7; transition: transform .15s ease; flex: 0 0 auto; }
+.brand[aria-expanded="true"] .brand-caret { transform: rotate(180deg); }
+/* 模式切换折叠进品牌下拉 */
+.brand-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 45; min-width: 120px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.14); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.brand-menu[hidden] { display: none; }
+.brand-item {
+  border: 0; background: transparent; text-align: left; padding: 10px 14px; border-radius: 8px;
+  font-size: 14px; color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+.brand-item:hover { background: var(--bg); }
+.brand-item.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 .brand .mark {
   width: 30px; height: 30px; border-radius: 50%;
   background: var(--primary-soft); color: var(--primary);
@@ -64,18 +80,19 @@ body {
 }
 .search input:focus { border-color: var(--primary); }
 
-/* 图钉按钮：嵌入红色菜单条右上角，半透明 SVG 图标 */
+/* 图钉按钮：嵌入红色菜单条右上角，半透明 SVG 图标；固定态仅旋转图标作提示，不提高不透明度 */
 .hero-card { position: relative; }
 .pin-hero-btn {
-  position: absolute; top: 10px; right: 10px; z-index: 3;
-  width: 32px; height: 32px; border-radius: 8px;
+  position: absolute; top: clamp(8px, 2vw, 12px); right: clamp(8px, 2vw, 12px); z-index: 3;
+  width: clamp(24px, 4vw, 30px); height: clamp(24px, 4vw, 30px); border-radius: 8px;
   border: 0; background: rgba(255,255,255,.12); color: #fff;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  opacity: .35; transition: opacity .15s ease, background .15s ease;
+  opacity: .32; transition: opacity .15s ease, background .15s ease;
 }
-.pin-hero-btn:hover, .pin-hero-btn.on { opacity: .9; }
-.pin-hero-btn.on { background: rgba(255,255,255,.25); }
-.pin-icon { width: 18px; height: 18px; }
+.pin-hero-btn:hover { opacity: .85; background: rgba(255,255,255,.24); }
+.pin-hero-btn.on { opacity: .32; background: rgba(255,255,255,.16); }
+.pin-icon { width: 56%; height: 56%; transition: transform .15s ease; }
+.pin-hero-btn.on .pin-icon { transform: rotate(45deg); }
 
 /* ---------- 套餐档位条 ---------- */
 .pkgbar {
@@ -265,19 +282,9 @@ body {
   .en { font-size: 9px; }
 }
 
-/* ---------- 模式切换（点菜 / 管理） ---------- */
+/* ---------- 模式切换（折叠进品牌下拉，样式见 .brand-menu） ---------- */
 .screen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .screen[hidden] { display: none; }
-
-.mode-switch {
-  display: flex; gap: 0; background: var(--bg); padding: 3px; border-radius: 999px; margin-right: 6px;
-  border: 1px solid var(--line);
-}
-.mode-switch button {
-  border: 0; background: transparent; padding: 7px 18px; border-radius: 999px;
-  font-size: 14px; color: var(--muted); cursor: pointer;
-}
-.mode-switch button.on { background: var(--primary); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
 /* ---------- 管理模式 ---------- */
 /* 顶部操作区：标签 + 上下文控件 + 设置，尽量压在同一行 */
@@ -492,6 +499,21 @@ body {
   outline: none; box-sizing: border-box;
 }
 .mg-cn-edit:focus { box-shadow: 0 0 0 2px var(--primary-soft); }
+
+/* 菜单内覆盖名标记（管理列表菜名后小角标） */
+.ov-tag {
+  display: inline-block; margin-left: 4px; font-size: 10px; font-weight: 600; line-height: 1;
+  color: var(--primary); background: var(--primary-soft); border-radius: 4px; padding: 2px 5px; vertical-align: middle;
+}
+/* 菜单内菜品改名弹窗 */
+.md-note { font-size: 12.5px; color: var(--muted); line-height: 1.6; padding: 0 24px; margin-top: 8px; }
+.md-note strong { color: var(--primary); }
+.md-prev { padding: 0 24px; margin-top: 12px; }
+.md-prev .cropimg { width: 100%; aspect-ratio: 4 / 3; max-width: 280px; border-radius: 12px; border: 1px solid var(--line); }
+.md-name-row { display: flex; align-items: center; gap: 10px; }
+.md-name-row input { flex: 1; }
+.restore-btn { flex: 0 0 auto; color: var(--muted); }
+.md-orig { font-size: 12px; color: var(--muted); padding: 0 24px; margin-top: 6px; }
 
 /* 表单校验：重名等错误 */
 .field-err { color: #B23A2E; font-size: 12px; margin-top: 6px; line-height: 1.4; }

@@ -210,11 +210,9 @@
   function initImmersive() {
     const app = document.querySelector('.app');
     if (!app) return;
-    const mq = window.matchMedia('(max-width: 820px)');
     let lastOrderY = 0, lastMgY = 0;
 
     function onOrderScroll(el) {
-      if (!mq.matches) { app.classList.remove('chrome-hidden'); lastOrderY = el.scrollTop; return; }
       const y = el.scrollTop;
       if (y <= 4) app.classList.remove('chrome-hidden');
       else if (y > lastOrderY + 4) app.classList.add('chrome-hidden');
@@ -232,9 +230,9 @@
       if (hide === null) return;
       // 拖动套餐 / 设置菜单展开时不收起，避免操作被打断
       if (hide && (pkgDrag || !$('#mgSetMenu').hidden)) return;
+      // 上滑（向下滚动）时收起顶部区域，腾出查看/编辑空间（平板/手机一致生效）
       app.classList.toggle('mg-chrome-hidden', hide);
-      if (mq.matches) app.classList.toggle('chrome-hidden', hide);
-      else app.classList.remove('chrome-hidden');
+      app.classList.toggle('chrome-hidden', hide);
     }
 
     const c = $('#content'), mb = $('#mgBody');
@@ -303,7 +301,7 @@
     const order = mode === 'order';
     $('#orderScreen').hidden = !order;
     $('#manageScreen').hidden = order;
-    document.querySelectorAll('#modeSwitch button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+    document.querySelectorAll('#brandMenu .brand-item').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
     if (app) app.classList.toggle('mode-manage', mode === 'manage');
 
     if (order) {
@@ -464,13 +462,17 @@
       list.innerHTML = '<div class="mg-empty">该宴席/套餐暂无数据。点击「+ 新增套餐」开始配置，再用「从菜品库添加」勾选菜品。</div>';
       return;
     }
+    const resolved = Store.resolvePackage(mg.banquet, mg.pkg);
+    const byId = {};
+    resolved.forEach((d) => { byId[d.id] = d; });
     const cards = (p.dishes || []).map((id) => {
-      const d = Store.getLibDish(id);
+      const d = byId[id];
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
         ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
-      // 一卡一交互：点卡片=编辑菜品，右上 ✕=移出本菜单，左上 ⠿=拖动排序
+      // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单，左上 ⠿=拖动排序
+      const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : '';
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
         <div class="mg-handle" title="按住拖动排序" data-handle>⠿</div>
         <div class="mg-thumb">
@@ -478,7 +480,7 @@
           <button class="lib-del" data-ref="${id}" title="移出本菜单" aria-label="移出本菜单">✕</button>
         </div>
         <div class="mg-info">
-          <div class="mg-cn" data-name="${id}" title="点击直接改名">${d.num} · ${d.cn}</div>
+          <div class="mg-cn" data-name="${id}" title="点击改名（仅本菜单）">${d.num} · ${d.cn}${ovTag}</div>
           <div class="mg-en">${d.en || ''}</div>
           <span class="cat-tag">${d.cat}</span>
         </div>
@@ -498,6 +500,36 @@
       </div>
       <div class="mg-grid" id="mgGrid">${cards}</div>
       <p class="mg-footnote">点卡片编辑菜品 · 右上「✕」移出本菜单 · 按住「⠿」拖动排序</p>`;
+  }
+
+  // ---------- 菜单内菜品改名（覆盖显示名，不改动菜品库主数据） ----------
+  let mdCtx = null; // { banquetId, pkgId, libId }
+  function openMenuDishEditor(banquetId, pkgId, libId) {
+    const p = Store.getPackage(banquetId, pkgId);
+    const lib = Store.getLibDish(libId);
+    if (!p || !lib) return;
+    mdCtx = { banquetId, pkgId, libId };
+    const ov = (p.nameOverrides && p.nameOverrides[libId] !== undefined) ? p.nameOverrides[libId] : '';
+    $('#mdPrev').innerHTML = lib.image
+      ? `<div class="cropimg" style="${cropBg({ image: lib.image, crop: lib.crop })}"></div>`
+      : '';
+    $('#mdName').value = ov || lib.cn;
+    $('#mdOrig').textContent = '菜品库原名：' + lib.cn;
+    $('#mdRestore').hidden = !ov;
+    $('#menuDishModal').hidden = false;
+    setTimeout(() => { const i = $('#mdName'); if (i) { i.focus(); i.select(); } }, 30);
+  }
+  function saveMenuDishName() {
+    if (!mdCtx) return;
+    const v = $('#mdName').value.trim();
+    if (!v) { toast('名称不能为空'); return; }
+    (async () => {
+      await Store.setDishNameOverride(mdCtx.banquetId, mdCtx.pkgId, mdCtx.libId, v);
+      $('#menuDishModal').hidden = true;
+      mdCtx = null;
+      renderMenuTab();
+      toast('已更新本菜单菜名');
+    })();
   }
 
   // ---------- 套餐内菜品排序（拖拽） ----------
@@ -968,13 +1000,44 @@
   }
 
   // ---------- 管理端：点击菜品名直接改名（内联编辑） ----------
-  function inlineEditName(id, el) {
+  // overrideCtx 存在时 → 菜单内覆盖名（仅当前套餐展示，不校验重名）；否则 → 编辑菜品库主数据
+  function inlineEditName(id, el, overrideCtx) {
     if (!el || el.querySelector('input')) return;
-    const cur = Store.getLibDish(id);
-    if (!cur) return;
+    const lib = Store.getLibDish(id);
+    if (!lib) return;
+
+    // —— 菜单内覆盖名（仅当前套餐） ——
+    if (overrideCtx) {
+      const p = Store.getPackage(overrideCtx.banquetId, overrideCtx.pkgId);
+      const ov = (p && p.nameOverrides) ? p.nameOverrides[id] : undefined;
+      const cur = (ov !== undefined && ov !== '') ? ov : lib.cn;
+      const input = document.createElement('input');
+      input.className = 'mg-cn-edit';
+      input.value = cur;
+      el.textContent = ''; el.appendChild(input);
+      input.focus(); input.select();
+      let done = false;
+      const commit = async () => {
+        if (done) return; done = true;
+        const v = input.value.trim();
+        if (!v) { toast('名称不能为空'); renderMgList(); return; }
+        await Store.setDishNameOverride(overrideCtx.banquetId, overrideCtx.pkgId, id, v);
+        toast('已更新本菜单菜名');
+        renderMgList();
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { done = true; renderMgList(); }
+      });
+      input.addEventListener('blur', commit);
+      return;
+    }
+
+    // —— 菜品库主数据改名（原逻辑） ——
+    const cur = lib.cn;
     const input = document.createElement('input');
     input.className = 'mg-cn-edit';
-    input.value = cur.cn;
+    input.value = cur;
     el.textContent = '';
     el.appendChild(input);
     input.focus(); input.select();
@@ -983,7 +1046,7 @@
       if (done) return; done = true;
       const v = input.value.trim();
       if (!v) { toast('名称不能为空'); renderLibList(); renderMgList(); return; }
-      if (v !== cur.cn) {
+      if (v !== cur) {
         const dup = Store.LIBRARY.find((d) => d.cn === v && d.id !== id);
         if (dup) { toast(`已存在同名菜品「${v}」`); renderLibList(); renderMgList(); return; }
         await Store.updateLibDish(id, { cn: v });
@@ -1000,11 +1063,29 @@
 
   // ---------- 事件绑定 ----------
   function bindStatic() {
-    // 模式切换
-    $('#modeSwitch').addEventListener('click', (e) => {
-      const t = e.target.closest('button'); if (!t) return;
-      setMode(t.dataset.mode);
-    });
+    // 模式切换：折叠进「山水S酒店」品牌下拉
+    const brandBtn = $('#brandBtn');
+    const brandMenu = $('#brandMenu');
+    const toggleBrandMenu = (show) => {
+      const open = (show === undefined) ? brandMenu.hidden : !show;
+      brandMenu.hidden = !open;
+      brandBtn.setAttribute('aria-expanded', String(open));
+    };
+    if (brandBtn) {
+      brandBtn.addEventListener('click', (e) => {
+        if (e.target.closest('.brand-item')) return; // 菜单项点击交给下面处理
+        toggleBrandMenu();
+      });
+      brandMenu.addEventListener('click', (e) => {
+        const t = e.target.closest('.brand-item'); if (!t) return;
+        toggleBrandMenu(false);
+        setMode(t.dataset.mode);
+      });
+      document.addEventListener('click', (e) => {
+        if (brandMenu.hidden) return;
+        if (!e.target.closest('#brandBtn')) toggleBrandMenu(false);
+      });
+    }
 
     // 红色菜单条固定（图钉按钮，通过事件委托挂在 hero 上，因为 hero 会重新渲染）
     $('#hero').addEventListener('click', (e) => {
@@ -1013,6 +1094,24 @@
       heroPinned = !heroPinned;
       try { localStorage.setItem('ss_pinhdr', heroPinned ? '1' : '0'); } catch (_) {}
       applyHeroPin();
+    });
+
+    // 菜单内菜品改名弹窗
+    $('#mdSave').addEventListener('click', saveMenuDishName);
+    $('#mdName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveMenuDishName(); } });
+    $('#mdRestore').addEventListener('click', () => {
+      if (!mdCtx) return;
+      const lib = Store.getLibDish(mdCtx.libId);
+      if (lib) $('#mdName').value = lib.cn;
+      $('#mdRestore').hidden = true;
+      $('#mdName').focus();
+    });
+    $('#mdEditLib').addEventListener('click', () => {
+      if (!mdCtx) return;
+      const id = mdCtx.libId;
+      $('#menuDishModal').hidden = true;
+      mdCtx = null;
+      openLibEditor(id);
     });
 
     // 点菜模式：宴席折叠下拉（默认只显示当前宴席，避免客人看到其他宴席）
@@ -1055,7 +1154,7 @@
         if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
         if (e.key === 'ArrowRight') { viewerGo(1); return; }
       }
-      if (e.key === 'Escape') { closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; }
+      if (e.key === 'Escape') { closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; $('#menuDishModal').hidden = true; }
     });
     // 详情弹窗：左右滑动循环切换菜品（横向位移明显大于纵向才算滑动）
     const mEl = $('#modal');
@@ -1141,7 +1240,7 @@
     $('#mgList').addEventListener('click', (e) => {
       if (e.target.closest('[data-handle]')) return;          // 拖动手柄不触发编辑
       const nm = e.target.closest('[data-name]');
-      if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm); return; }
+      if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm, { banquetId: mg.banquet, pkgId: mg.pkg }); return; }
       const rf = e.target.closest('[data-ref]');              // 先判删除，再判编辑
       if (rf) {
         const id = rf.dataset.ref;
@@ -1150,7 +1249,7 @@
       }
       if (e.target.closest('#mgEditPkg')) { mg.pkgMode = 'edit'; openPkgEditor(); return; }
       const ed = e.target.closest('[data-libedit]');
-      if (ed) openLibEditor(ed.dataset.libedit);
+      if (ed) { openMenuDishEditor(mg.banquet, mg.pkg, ed.dataset.libedit); return; }
     });
     // 拖拽排序：在网格上委托 pointerdown，手柄触发
     $('#mgList').addEventListener('pointerdown', onMgPointerDown);
@@ -1277,7 +1376,7 @@
       btn.addEventListener('click', () => { $('#' + btn.dataset.close).hidden = true; });
     });
     // 「恢复默认」确认框刻意不加点遮罩关闭，必须显式选择，防误触
-    ['editModal', 'pkgModal', 'cropModal', 'pickModal'].forEach((id) => {
+    ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'menuDishModal'].forEach((id) => {
       $('#' + id).addEventListener('click', (e) => { if (e.target.id === id) $('#' + id).hidden = true; });
     });
   }
