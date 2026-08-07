@@ -33,8 +33,6 @@ body {
 }
 .brand { position: relative; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; cursor: pointer; user-select: none; }
 .brand .brand-name { white-space: nowrap; }
-.brand-caret { width: 16px; height: 16px; opacity: .7; transition: transform .15s ease; flex: 0 0 auto; }
-.brand[aria-expanded="true"] .brand-caret { transform: rotate(180deg); }
 /* 模式切换折叠进品牌下拉 */
 .brand-menu {
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 45; min-width: 120px;
