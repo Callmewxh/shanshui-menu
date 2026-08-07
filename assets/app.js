@@ -54,6 +54,7 @@
 
   // ---------- 状态 ----------
   let state = { banquet: 'wedding', pkg: 'B', search: '', mode: 'order' };
+  let heroPinned = localStorage.getItem('ss_pinhdr') !== '0';  // 红色菜单条是否固定（默认固定）
   let viewList = [];      // 当前点菜页可见菜品的展示顺序（大图循环浏览用）
   let cropTemp = null; // 图片展示位置临时值 {x,y,w,h}
   let cropAspect = 1;  // 当前编辑图片宽高比（IW/IH），用于把 4:3 裁剪框换算成图片归一化高度
@@ -137,16 +138,27 @@
     if (!p) { h.hidden = true; return; }
     h.hidden = false;
     h.innerHTML = `<div class="hero-card">
+      <button class="pin-hero-btn ${heroPinned ? 'on' : ''}" type="button" title="${heroPinned ? '取消固定' : '固定菜单条'}" aria-pressed="${heroPinned}">
+        <svg class="pin-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.17v6h1.66v-6H18v-2l-2-2z"/></svg>
+      </button>
       <div class="hero-l">
         <div class="hero-kicker">WEDDING MENU ${p.id}</div>
         <div class="hero-title">${p.name}</div>
-        <div class="hero-sub">人民币 ¥${p.price} / 桌 · 供 10 位用 · 另收 10% 服务费</div>
+        <div class="hero-sub">共 ${p.dishes.length} 道经典菜品</div>
       </div>
       <div class="hero-r">
-        <div class="hero-count">${p.dishes.length}</div>
-        <div class="hero-label">道经典菜品</div>
+        <div class="hero-price">¥${p.price}<span class="hero-unit">/桌</span></div>
+        <div class="hero-label">每桌价格</div>
       </div>
     </div>`;
+  }
+
+  // 红色菜单条固定（图钉按钮）：固定时滚动点菜列表，hero 始终可见
+  function applyHeroPin() {
+    const app = document.querySelector('.app');
+    if (app) app.classList.toggle('hero-pinned', heroPinned);
+    const btn = $('#hero .pin-hero-btn');
+    if (btn) { btn.classList.toggle('on', heroPinned); btn.setAttribute('aria-pressed', String(heroPinned)); btn.title = heroPinned ? '取消固定' : '固定菜单条'; }
   }
 
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
@@ -292,6 +304,7 @@
     $('#orderScreen').hidden = !order;
     $('#manageScreen').hidden = order;
     document.querySelectorAll('#modeSwitch button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+    if (app) app.classList.toggle('mode-manage', mode === 'manage');
 
     if (order) {
       // 切回点菜：同步管理端当前宴席/套餐，并校验合法
@@ -993,6 +1006,15 @@
       setMode(t.dataset.mode);
     });
 
+    // 红色菜单条固定（图钉按钮，通过事件委托挂在 hero 上，因为 hero 会重新渲染）
+    $('#hero').addEventListener('click', (e) => {
+      const btn = e.target.closest('.pin-hero-btn');
+      if (!btn) return;
+      heroPinned = !heroPinned;
+      try { localStorage.setItem('ss_pinhdr', heroPinned ? '1' : '0'); } catch (_) {}
+      applyHeroPin();
+    });
+
     // 点菜模式：宴席折叠下拉（默认只显示当前宴席，避免客人看到其他宴席）
     $('#bsTrigger').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1271,6 +1293,7 @@
       if (!localStorage.getItem('ss_menu_v1')) await pullFromCloud({ silent: true });
     } catch (_) {}
     renderAll();
+    applyHeroPin();
     initImmersive();
   });
 })();

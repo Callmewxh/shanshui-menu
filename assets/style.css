@@ -64,6 +64,19 @@ body {
 }
 .search input:focus { border-color: var(--primary); }
 
+/* 图钉按钮：嵌入红色菜单条右上角，半透明 SVG 图标 */
+.hero-card { position: relative; }
+.pin-hero-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 0; background: rgba(255,255,255,.12); color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  opacity: .35; transition: opacity .15s ease, background .15s ease;
+}
+.pin-hero-btn:hover, .pin-hero-btn.on { opacity: .9; }
+.pin-hero-btn.on { background: rgba(255,255,255,.25); }
+.pin-icon { width: 18px; height: 18px; }
+
 /* ---------- 套餐档位条 ---------- */
 .pkgbar {
   display: flex; gap: 10px; padding: 10px 22px;
@@ -121,8 +134,12 @@ body {
 .hero-title { font-size: 26px; font-weight: 700; margin: 4px 0; }
 .hero-sub { font-size: 13px; opacity: .9; }
 .hero-r { text-align: center; }
-.hero-count { font-size: 34px; font-weight: 700; line-height: 1; }
-.hero-label { font-size: 12px; opacity: .85; margin-top: 4px; }
+.hero-price { font-size: 36px; font-weight: 800; line-height: 1; color: #fff; }
+.hero-price .hero-unit { font-size: 14px; font-weight: 600; opacity: .9; margin-left: 3px; }
+.hero-label { font-size: 12px; opacity: .85; margin-top: 6px; }
+/* 红色菜单条固定：滚动点菜列表时 hero 始终停在顶部 */
+.app.hero-pinned .hero { position: sticky; top: 0; z-index: 6; }
+.app.hero-pinned .hero-card { box-shadow: 0 8px 20px rgba(0, 0, 0, .16); }
 
 /* 分类区块 */
 .sec { margin-bottom: 24px; }
@@ -228,7 +245,7 @@ body {
   .sec-head h3 { font-size: 15px; }
   .hero-card { padding: 16px 18px; }
   .hero-title { font-size: 21px; }
-  .hero-count { font-size: 28px; }
+  .hero-price { font-size: 30px; }
   .hero-sub { font-size: 12px; }
   .card { border-radius: 12px; }
   .thumb { border-radius: 0; }
