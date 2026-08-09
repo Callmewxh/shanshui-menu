@@ -427,11 +427,13 @@ const Store = (function () {
     await save();
     return { ok: true };
   }
-  // 撤销：把套餐重新放回宴席（保留原 id 与菜品引用）
-  async function restorePackage(banquetId, pkg) {
+  // 撤销：把套餐重新放回宴席（保留原 id 与菜品引用）；idx 指定则插回原位置，否则追加到末尾
+  async function restorePackage(banquetId, pkg, idx) {
     if (!pkg || !pkg.id) return { ok: false, msg: '无效套餐' };
     const b = ensureBanquet(banquetId);
-    if (!b.packages.some((p) => p.id === pkg.id)) b.packages.push(pkg);
+    if (b.packages.some((p) => p.id === pkg.id)) return { ok: true };
+    if (typeof idx === 'number' && idx >= 0 && idx <= b.packages.length) b.packages.splice(idx, 0, pkg);
+    else b.packages.push(pkg);
     await save();
     return { ok: true };
   }

@@ -677,23 +677,27 @@
     if (mg.viewMode !== 'text') return;   // 卡片模式不拖拽排序；排序请切到「排序」模式
     const row = e.target.closest('.mg-textrow[data-id]');
     if (!row) return;
-    e.preventDefault();
-    mgDrag = { card: row, grid: $('#mgTextList'), pointerId: e.pointerId };
-    row.classList.add('dragging');
-    try { $('#mgTextList').setPointerCapture(e.pointerId); } catch (_) {}
+    // 仅记录起点，不立即进入拖拽：位移够大才算拖拽，否则视为点击（交给内联改名）
+    mgDrag = { card: row, grid: $('#mgTextList'), pointerId: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false };
     window.addEventListener('pointermove', onMgPointerMove);
     window.addEventListener('pointerup', onMgPointerUp);
     window.addEventListener('pointercancel', onMgPointerUp);
   }
   function onMgPointerMove(e) {
     if (!mgDrag) return;
-    e.preventDefault();
-    suppressMgClick = true;
+    if (!mgDrag.moved) {
+      const dx = e.clientX - mgDrag.x0, dy = e.clientY - mgDrag.y0;
+      if (Math.hypot(dx, dy) < 6) return;   // 抖动容差：小位移仍算点击，不进入拖拽
+      mgDrag.moved = true;
+      e.preventDefault();
+      mgDrag.card.classList.add('dragging');
+      try { mgDrag.grid.setPointerCapture(mgDrag.pointerId); } catch (_) {}
+      suppressMgClick = true;               // 真正拖动后才抑制后续 click（防误触改名）
+    }
     const grid = mgDrag.grid;
     const y = e.clientY;
     const card = mgDrag.card;
-    const sel = '.mg-textrow[data-id]';
-    const siblings = Array.from(grid.querySelectorAll(sel)).filter((c) => c !== card);
+    const siblings = Array.from(grid.querySelectorAll('.mg-textrow[data-id]')).filter((c) => c !== card);
     let placed = false;
     for (const s of siblings) {
       const r = s.getBoundingClientRect();
@@ -703,18 +707,20 @@
   }
   async function onMgPointerUp() {
     if (!mgDrag) return;
-    const grid = mgDrag.grid;
-    try { grid.releasePointerCapture(mgDrag.pointerId); } catch (_) {}
     window.removeEventListener('pointermove', onMgPointerMove);
     window.removeEventListener('pointerup', onMgPointerUp);
     window.removeEventListener('pointercancel', onMgPointerUp);
-    mgDrag.card.classList.remove('dragging');
-    const ids = Array.from(grid.querySelectorAll('[data-id]')).map((c) => c.dataset.id);
+    const moved = mgDrag.moved;
+    const card = mgDrag.card, grid = mgDrag.grid;
+    try { grid.releasePointerCapture(mgDrag.pointerId); } catch (_) {}
+    card.classList.remove('dragging');
     mgDrag = null;
-    setTimeout(() => { suppressMgClick = false; }, 250);   // 拖拽后短暂抑制 click，防误触
+    if (!moved) return;                      // 纯点击：不排序、不抑制 click，正常触发内联改名
+    const ids = Array.from(grid.querySelectorAll('[data-id]')).map((c) => c.dataset.id);
     await Store.reorderPackage(mg.banquet, mg.pkg, ids);
     renderMgList();
     toast('顺序已保存');
+    setTimeout(() => { suppressMgClick = false; }, 250);   // 拖拽后短暂抑制 click，防误触
   }
 
   // ---------- 菜品库编辑（新增/编辑菜品主数据） ----------
@@ -1452,12 +1458,13 @@
           if (!p) return;
           if (!confirm(`确定删除套餐「${p.name}（${p.id}）」？\n该套餐内的菜品引用将被移除，菜品库主数据不受影响。`)) return;
           const snap = JSON.parse(JSON.stringify(p));
+          const idx = MENU()[mg.banquet].packages.findIndex((x) => x.id === id);
           await Store.removePackage(mg.banquet, id);
           const nb = MENU()[mg.banquet];
           mg.pkg = nb && nb.packages[0] ? nb.packages[0].id : null;
           renderManage();
           showUndo(`已删除套餐「${p.name}」`, async () => {
-            await Store.restorePackage(mg.banquet, snap);
+            await Store.restorePackage(mg.banquet, snap, idx);
             mg.pkg = snap.id;
             renderManage();
           });
@@ -1600,13 +1607,15 @@
       if (!p) return;
       if (confirm('删除该套餐及其所有菜品引用？')) {
         const snap = JSON.parse(JSON.stringify(p));
+        const idx = b.packages.findIndex((x) => x.id === p.id);
         await Store.removePackage(mg.banquet, mg.pkg);
         const nb = MENU()[mg.banquet];
         mg.pkg = nb && nb.packages[0] ? nb.packages[0].id : null;
         $('#pkgModal').hidden = true;
         renderManage();
         showUndo(`已删除套餐「${p.name}」`, async () => {
-          await Store.restorePackage(mg.banquet, snap);
+          await Store.restorePackage(mg.banquet, snap, idx);
+          mg.pkg = snap.id;
           renderManage();
         });
       }
