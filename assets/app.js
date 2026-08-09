@@ -85,6 +85,24 @@
     t._timer = setTimeout(() => t.classList.remove('show'), 1800);
   }
 
+  // 撤销提示：删除后短暂显示「撤销」按钮，点击可恢复（防误删）
+  function showUndo(msg, undoFn) {
+    let t = $('#undoToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'undoToast';
+      t.className = 'toast undo';
+      t.innerHTML = '<span class="undo-msg"></span><button class="undo-btn" type="button">撤销</button>';
+      document.body.appendChild(t);
+    }
+    t.querySelector('.undo-msg').textContent = msg;
+    const btn = t.querySelector('.undo-btn');
+    clearTimeout(t._timer);
+    btn.onclick = () => { clearTimeout(t._timer); t.classList.remove('show'); if (undoFn) undoFn(); toast('已撤销'); };
+    t.classList.add('show');
+    t._timer = setTimeout(() => t.classList.remove('show'), 6000);
+  }
+
   // ---------- 数据访问（统一走 Store 层） ----------
   const banquet = () => MENU()[state.banquet] || null;
   const pkg = () => { const b = banquet(); return b ? (b.packages.find((p) => p.id === state.pkg) || b.packages[0]) : null; };
@@ -472,10 +490,9 @@
       const inner = d.image
         ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
-      // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单，左上 ⠿=拖动排序
+      // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单（排序请切到「排序」模式）
       const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
-        <div class="mg-handle" title="按住拖动排序" data-handle>⠿</div>
         <div class="mg-thumb">
           ${inner}
           <button class="lib-del" data-ref="${id}" title="移出本菜单" aria-label="移出本菜单">✕</button>
@@ -519,7 +536,7 @@
         </div>
       </div>
       ${body}
-      <p class="mg-footnote">${mg.viewMode === 'text' ? '按住任意一行上下拖动排序（更灵敏）· 点菜名可改本菜单显示名' : '点卡片编辑菜品 · 右上「✕」移出本菜单 · 按住「⠿」拖动排序'}</p>`;
+      <p class="mg-footnote">${mg.viewMode === 'text' ? '按住任意一行上下拖动排序（更灵敏）· 点菜名可改本菜单显示名' : '点卡片编辑菜品 · 右上「✕」移出本菜单（调整顺序请切到「排序」模式）'}</p>`;
   }
 
   // ---------- 菜单内菜品改名（覆盖显示名，不改动菜品库主数据） ----------
@@ -563,22 +580,13 @@
   let mgDrag = null;
   let suppressMgClick = false;   // 拖拽刚结束时抑制一次 click，避免误触打开弹窗
   function onMgPointerDown(e) {
-    let card, grid;
-    if (mg.viewMode === 'text') {
-      const row = e.target.closest('.mg-textrow[data-id]');
-      if (!row) return;
-      card = row; grid = $('#mgTextList');
-    } else {
-      const handle = e.target.closest('[data-handle]');
-      if (!handle) return;
-      card = handle.closest('.mg-card[data-id]');
-      if (!card) return;
-      grid = $('#mgGrid');
-    }
+    if (mg.viewMode !== 'text') return;   // 卡片模式不拖拽排序；排序请切到「排序」模式
+    const row = e.target.closest('.mg-textrow[data-id]');
+    if (!row) return;
     e.preventDefault();
-    mgDrag = { card, grid, pointerId: e.pointerId };
-    card.classList.add('dragging');
-    try { grid.setPointerCapture(e.pointerId); } catch (_) {}
+    mgDrag = { card: row, grid: $('#mgTextList'), pointerId: e.pointerId };
+    row.classList.add('dragging');
+    try { $('#mgTextList').setPointerCapture(e.pointerId); } catch (_) {}
     window.addEventListener('pointermove', onMgPointerMove);
     window.addEventListener('pointerup', onMgPointerUp);
     window.addEventListener('pointercancel', onMgPointerUp);
@@ -590,7 +598,7 @@
     const grid = mgDrag.grid;
     const y = e.clientY;
     const card = mgDrag.card;
-    const sel = mg.viewMode === 'text' ? '.mg-textrow[data-id]' : '.mg-card[data-id]';
+    const sel = '.mg-textrow[data-id]';
     const siblings = Array.from(grid.querySelectorAll(sel)).filter((c) => c !== card);
     let placed = false;
     for (const s of siblings) {
@@ -898,7 +906,8 @@
       if (!opts.silent) toast('已从云端拉取菜单');
       return true;
     } catch (e) {
-      if (!opts.silent) toast('拉取失败：' + e.message);
+      // 云端同步失败（多为网络受限/需 VPN）：明确提示用户
+      toast('云端同步失败：请检查网络或开启 VPN 后重试「从云端拉取菜单」');
       return false;
     }
   }
@@ -1224,9 +1233,19 @@
       const dl = e.target.closest('[data-libdel]');
       if (dl) {
         const id = dl.dataset.libdel;
+        const dish = Store.getLibDish(id);
         const n = Store.usageCount(id);
-        if (n > 0 && !confirm(`该菜品正用于 ${n} 个菜单，删除后这些菜单也将移出此菜品，确定删除？`)) return;
-        (async () => { await Store.removeLibDish(id); renderLibList(); toast('已删除'); })();
+        if (!confirm(`该菜品${n > 0 ? `正用于 ${n} 个菜单，删除后这些菜单也将移出此菜品，` : ''}确定删除？`)) return;
+        (async () => {
+          const snap = { dish: JSON.parse(JSON.stringify(dish)), usages: Store.getUsages(id) };
+          await Store.removeLibDish(id);
+          renderLibList();
+          showUndo(`已删除「${dish ? dish.cn : '菜品'}」`, async () => {
+            await Store.restoreLibDish(snap.dish);
+            await Store.restoreRefs(snap.usages);
+            renderLibList(); renderMenuTab();
+          });
+        })();
         return;
       }
       const nm = e.target.closest('[data-name]');
@@ -1346,6 +1365,17 @@
     $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
+    $('#setRestore').addEventListener('click', () => {
+      closeSettings();
+      const meta = Store.getBackupMeta();
+      const when = (meta && meta.ts) ? ('（' + new Date(meta.ts).toLocaleString('zh-CN') + '）') : '';
+      if (!confirm('将从最近一次自动备份恢复菜单' + when + '，覆盖本机当前数据。确定继续？')) return;
+      Store.restoreBackup().then((res) => {
+        if (!res.ok) { alert(res.msg); return; }
+        if (state.mode === 'order') renderAll(); else renderManage();
+        toast('已从自动备份恢复');
+      });
+    });
     $('#setReset').addEventListener('click', openResetConfirm);
     $('#setPull').addEventListener('click', async () => {
       closeSettings();
@@ -1395,25 +1425,38 @@
     $('#eCn').addEventListener('input', checkCnDuplicate);
     $('#editDelete').addEventListener('click', async () => {
       if (mg.libEditId) {
+        const dish = Store.getLibDish(mg.libEditId);
         const n = Store.usageCount(mg.libEditId);
-        if (n > 0 && !confirm(`该菜品正用于 ${n} 个菜单，删除后这些菜单也将移出此菜品，确定删除？`)) return;
+        if (!confirm(`该菜品${n > 0 ? `正用于 ${n} 个菜单，删除后这些菜单也将移出此菜品，` : ''}确定删除？`)) return;
+        const snap = { dish: JSON.parse(JSON.stringify(dish)), usages: Store.getUsages(mg.libEditId) };
         await Store.removeLibDish(mg.libEditId);
+        $('#editModal').hidden = true;
+        if (mg.tab === 'lib') renderLibList(); else renderMenuTab();
+        showUndo(`已删除「${dish ? dish.cn : '菜品'}」`, async () => {
+          await Store.restoreLibDish(snap.dish);
+          await Store.restoreRefs(snap.usages);
+          if (mg.tab === 'lib') renderLibList(); else renderMenuTab();
+        });
       }
-      $('#editModal').hidden = true;
-      if (mg.tab === 'lib') renderLibList(); else renderMenuTab();
-      toast('已删除');
     });
 
     // 套餐表单
     $('#pkgForm').addEventListener('submit', savePkg);
     $('#pkgDelete').addEventListener('click', async () => {
+      const b = MENU()[mg.banquet];
+      const p = b && b.packages.find((x) => x.id === mg.pkg);
+      if (!p) return;
       if (confirm('删除该套餐及其所有菜品引用？')) {
+        const snap = JSON.parse(JSON.stringify(p));
         await Store.removePackage(mg.banquet, mg.pkg);
-        const b = MENU()[mg.banquet];
-        mg.pkg = b && b.packages[0] ? b.packages[0].id : null;
+        const nb = MENU()[mg.banquet];
+        mg.pkg = nb && nb.packages[0] ? nb.packages[0].id : null;
         $('#pkgModal').hidden = true;
         renderManage();
-        toast('已删除');
+        showUndo(`已删除套餐「${p.name}」`, async () => {
+          await Store.restorePackage(mg.banquet, snap);
+          renderManage();
+        });
       }
     });
 
@@ -1441,6 +1484,8 @@
     try {
       if (!localStorage.getItem('ss_menu_v1')) await pullFromCloud({ silent: true });
     } catch (_) {}
+    // 初始化自动备份：若本机尚无备份副本，先用当前数据建一份，保证「恢复自动备份」可用
+    try { if (!localStorage.getItem('ss_menu_v1_backup')) Store.save(); } catch (_) {}
     renderAll();
     applyHeroPin();
     initImmersive();

@@ -81,10 +81,11 @@
         <div class="mg-setwrap" id="mgSetWrap">
           <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置</button>
           <div class="mg-setmenu" id="mgSetMenu" hidden>
-            <div class="set-menu-head">菜单数据各设备独立存储，以下用于备份与迁移</div>
+            <div class="set-menu-head">菜单数据各设备独立存储。优先用「云端拉取」同步，导入/导出作备份与离线兜底</div>
+            <button class="set-row primary-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
+            <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>离线兜底：从本地文件整体替换</i></span></button>
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
-            <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>整体替换为备份文件内容</i></span></button>
-            <button class="set-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>拉取已发布的 menu-config.json</i></span></button>
+            <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
             <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
             <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>

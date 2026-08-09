@@ -12,6 +12,7 @@ const Store = (function () {
   'use strict';
 
   const LS_KEY = 'ss_menu_v1'; // 沿用 v1 键名，load 时自动把旧版内嵌数据迁移为菜品库
+  const BACKUP_KEY = 'ss_menu_v1_backup'; // 自动备份（防丢）：每次保存后同步一份带时间戳的副本到独立键
 
   function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -120,9 +121,13 @@ const Store = (function () {
       localStorage.setItem(LS_KEY, JSON.stringify(STATE));
     } catch (e) {
       const shrunk = await shrinkImages();
-      if (shrunk) { localStorage.setItem(LS_KEY, JSON.stringify(STATE)); return; }
-      throw new Error('本地存储已满（图片过多/过大）。建议接入服务端保存大图，或删除部分菜品图片。');
+      if (shrunk) { localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }
+      else throw new Error('本地存储已满（图片过多/过大）。建议接入服务端保存大图，或删除部分菜品图片。');
     }
+    // 自动备份（防丢）：每次保存后同步一份带时间戳的副本到独立键，便于一键恢复
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ ts: Date.now(), library: STATE.library, menu: STATE.menu }));
+    } catch (_) { /* 备份失败不影响主流程 */ }
   }
 
   // 配额超限兜底：把菜品库图片重新压缩到更小尺寸
@@ -375,6 +380,62 @@ const Store = (function () {
     });
   }
 
+  // 自动备份：读取备份元信息（时间戳），用于「恢复自动备份」前展示时间
+  function getBackupMeta() {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      return { ts: (typeof o.ts === 'number') ? o.ts : null, has: Array.isArray(o.library) && typeof o.menu === 'object' };
+    } catch (_) { return null; }
+  }
+  // 一键恢复最近一次自动备份
+  async function restoreBackup() {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      if (!raw) return { ok: false, msg: '没有可用的自动备份' };
+      const o = JSON.parse(raw);
+      if (!o || !Array.isArray(o.library) || typeof o.menu !== 'object') return { ok: false, msg: '自动备份格式不正确' };
+      STATE.library = o.library; STATE.menu = o.menu;
+      await save();
+      return { ok: true, ts: (typeof o.ts === 'number') ? o.ts : null };
+    } catch (e) { return { ok: false, msg: e.message || '恢复失败' }; }
+  }
+  // 删除撤销：查询某菜品被哪些套餐引用（用于删除后「撤销」恢复引用）
+  function getUsages(id) {
+    const arr = [];
+    for (const bid in STATE.menu) {
+      const b = STATE.menu[bid];
+      if (!b || !b.packages) continue;
+      b.packages.forEach((p) => { if (Array.isArray(p.dishes) && p.dishes.includes(id)) arr.push({ banquetId: bid, pkgId: p.id, id }); });
+    }
+    return arr;
+  }
+  // 撤销：按原 id 把菜品重新放回菜品库（不改编号/id）
+  async function restoreLibDish(dish) {
+    if (!dish || !dish.id) return { ok: false, msg: '无效菜品' };
+    if (!STATE.library.find((d) => d.id === dish.id)) STATE.library.push(dish);
+    await save();
+    return { ok: true };
+  }
+  // 撤销：恢复菜品被套餐的引用
+  async function restoreRefs(usages) {
+    for (const u of (usages || [])) {
+      const p = getPackage(u.banquetId, u.pkgId);
+      if (p && Array.isArray(p.dishes) && !p.dishes.includes(u.id)) p.dishes.push(u.id);
+    }
+    await save();
+    return { ok: true };
+  }
+  // 撤销：把套餐重新放回宴席（保留原 id 与菜品引用）
+  async function restorePackage(banquetId, pkg) {
+    if (!pkg || !pkg.id) return { ok: false, msg: '无效套餐' };
+    const b = ensureBanquet(banquetId);
+    if (!b.packages.some((p) => p.id === pkg.id)) b.packages.push(pkg);
+    await save();
+    return { ok: true };
+  }
+
   function reset() {
     localStorage.removeItem(LS_KEY);
     STATE = seed();
@@ -403,5 +464,6 @@ const Store = (function () {
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,
     uploadImage, importConfig, reset,
+    getBackupMeta, restoreBackup, getUsages, restoreLibDish, restoreRefs, restorePackage,
   };
 })();

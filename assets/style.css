@@ -326,6 +326,10 @@ body {
 .set-row i { font-style: normal; display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .set-row.danger .set-ic, .set-row.danger b { color: #B23A2E; }
 .set-row.danger:hover { background: #FBEDEB; }
+/* 云端拉取作为推荐主路径：浅红高亮，引导优先使用 */
+.set-row.primary-row { background: var(--primary-soft); }
+.set-row.primary-row .set-ic, .set-row.primary-row b { color: var(--primary); }
+.set-row.primary-row:hover { background: #f4d8d2; }
 
 .mg-btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
@@ -413,18 +417,8 @@ body {
 .mg-pkgrow.dragging-row .mg-pkgchip:not(.dragging) { transition: transform .12s ease; }
 .mg-pkgrow-empty { font-size: 12.5px; color: var(--muted); }
 
-/* 拖拽排序手柄 + 拖拽态 */
-.mg-handle {
-  position: absolute; top: 8px; left: 8px; z-index: 3;
-  width: 26px; height: 26px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(43,38,34,.5); color: #fff; font-size: 15px; cursor: grab;
-  touch-action: none; user-select: none;
-}
-.mg-handle:active { cursor: grabbing; }
+/* 菜品卡片容器（用于删除按钮等绝对定位） */
 .mg-card { position: relative; }
-.mg-card.dragging { opacity: .65; box-shadow: 0 10px 26px rgba(0,0,0,.18); outline: 2px solid var(--primary); }
-.mg-grid.mode-drag { cursor: grabbing; }
 
 /* ---------- 编辑弹窗 ---------- */
 .edit-card { max-width: 520px; }
@@ -540,6 +534,14 @@ body {
   font-size: 13px; z-index: 90; opacity: 0; pointer-events: none; transition: .22s; box-shadow: 0 8px 24px rgba(0,0,0,.2);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* 撤销提示：删除后短暂显示「撤销」按钮 */
+.toast.undo { display: flex; align-items: center; gap: 12px; }
+.toast.undo .undo-msg { white-space: nowrap; }
+.toast.undo .undo-btn {
+  flex: 0 0 auto; border: 0; background: var(--primary); color: #fff;
+  border-radius: 999px; padding: 6px 16px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.toast.undo .undo-btn:hover { filter: brightness(1.08); }
 
 /* 管理模式子标签：菜品库 / 菜单 */
 .mg-tabs { display: flex; gap: 0; background: var(--bg); padding: 3px; border-radius: 999px; border: 1px solid var(--line); }
