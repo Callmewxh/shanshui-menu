@@ -468,12 +468,23 @@
     const ids = new Set((b && b.packages || []).map((p) => p.id));
     let nid = pkgId + '_c', n = 2;       // 生成不冲突的新编号
     while (ids.has(nid)) { nid = pkgId + '_c' + n; n++; }
+    // 深拷贝 nameOverrides：副本中各菜的覆盖名独立，后续修改副本不影响原套餐
+    const rawOverrides = src.nameOverrides || {};
+    const nameOverrides = {};
+    (src.dishes || []).forEach((id) => {
+      const ov = rawOverrides[id];
+      if (ov === undefined) return;
+      nameOverrides[id] = (typeof ov === 'object' && ov)
+        ? { cn: ov.cn || '', en: ov.en || '' }
+        : ov;
+    });
     const copy = {
       id: nid,
       name: src.name + ' 副本',
       price: src.price || 0,
       demo: !!src.demo,
       dishes: (src.dishes || []).slice(),   // 复制菜品引用（只存 id，不复制菜品库主数据）
+      nameOverrides,
     };
     const res = await Store.addPackage(banquetId, copy);
     if (!res.ok) { alert(res.msg || '创建副本失败'); return; }
@@ -560,7 +571,7 @@
       const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
       return `<div class="mg-textrow" data-id="${id}">
         <span class="mg-idx">${i + 1}</span>
-        <span class="mg-tname">${d.cn}${ovTag}</span>
+        <span class="mg-tname" data-name="${id}" title="点击直接改名（仅本菜单）">${d.cn}${ovTag}</span>
         <span class="mg-ten">${d.en || ''}</span>
         <span class="mg-grip" aria-hidden="true">⠿</span>
       </div>`;
@@ -606,6 +617,9 @@
     $('#mdOrig').textContent = '菜品库原名：' + lib.cn;
     $('#mdEnOrig').textContent = lib.en ? ('菜品库原英文名：' + lib.en) : '';
     $('#mdRestore').hidden = !(ovCn || ovEn);
+    const other = collectOtherNames(libId, banquetId, pkgId);
+    setDatalist('mdNameOptions', other.cn);
+    setDatalist('mdEnOptions', other.en);
     $('#menuDishModal').hidden = false;
     setTimeout(() => { const i = $('#mdName'); if (i) { i.focus(); i.select(); } }, 30);
   }
@@ -622,6 +636,37 @@
       renderMenuTab();
       toast('已更新本菜单菜名');
     })();
+  }
+
+  // 收集全系统某道菜的其他命名（含菜品库原名 + 其他菜单的覆盖名），用于改名弹窗下拉快速选择
+  function collectOtherNames(libId, excludeBanquetId, excludePkgId) {
+    const lib = Store.getLibDish(libId);
+    const cnSet = new Set();
+    const enSet = new Set();
+    if (lib && lib.cn) cnSet.add(lib.cn);
+    if (lib && lib.en) enSet.add(lib.en);
+    for (const bid in MENU()) {
+      const b = MENU()[bid];
+      if (!b || !Array.isArray(b.packages)) continue;
+      for (const pkg of b.packages) {
+        if (bid === excludeBanquetId && pkg.id === excludePkgId) continue;
+        const ov = pkg.nameOverrides && pkg.nameOverrides[libId];
+        if (ov === undefined) continue;
+        if (typeof ov === 'object' && ov) {
+          if (ov.cn) cnSet.add(ov.cn);
+          if (ov.en) enSet.add(ov.en);
+        } else if (typeof ov === 'string') {
+          cnSet.add(ov);
+        }
+      }
+    }
+    return { cn: Array.from(cnSet).filter(Boolean), en: Array.from(enSet).filter(Boolean) };
+  }
+  function setDatalist(id, values) {
+    const dl = $('#' + id);
+    if (!dl) return;
+    dl.innerHTML = '';
+    values.forEach((v) => { const opt = document.createElement('option'); opt.value = v; dl.appendChild(opt); });
   }
 
   // ---------- 套餐内菜品排序（拖拽） ----------
@@ -1369,10 +1414,12 @@
       const vt = e.target.closest('[data-view]');
       if (vt) { mg.viewMode = vt.dataset.view; renderMgList(); return; }
       if (e.target.closest('[data-handle]')) return;          // 拖动手柄不触发编辑
-      // 文字排序模式：点菜名行直接打开改名弹窗
+      // 文字排序模式：点菜名直接内联改名；点行空白/英文/序号打开弹窗；抓手只用于拖拽
       if (mg.viewMode === 'text') {
+        const nm = e.target.closest('[data-name]');
+        if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm, { banquetId: mg.banquet, pkgId: mg.pkg }); return; }
         const tr = e.target.closest('.mg-textrow[data-id]');
-        if (tr) { openMenuDishEditor(mg.banquet, mg.pkg, tr.dataset.id); return; }
+        if (tr && !e.target.closest('.mg-grip')) { openMenuDishEditor(mg.banquet, mg.pkg, tr.dataset.id); return; }
         return;
       }
       const nm = e.target.closest('[data-name]');
@@ -1398,7 +1445,24 @@
       if (!item) return;
       const act = item.dataset.act, id = pkgCtxId;
       closePkgCtx();
-      if (act === 'dup' && id) duplicatePackage(mg.banquet, id);
+      if (act === 'dup' && id) { duplicatePackage(mg.banquet, id); return; }
+      if (act === 'del' && id) {
+        (async () => {
+          const p = Store.getPackage(mg.banquet, id);
+          if (!p) return;
+          if (!confirm(`确定删除套餐「${p.name}（${p.id}）」？\n该套餐内的菜品引用将被移除，菜品库主数据不受影响。`)) return;
+          const snap = JSON.parse(JSON.stringify(p));
+          await Store.removePackage(mg.banquet, id);
+          const nb = MENU()[mg.banquet];
+          mg.pkg = nb && nb.packages[0] ? nb.packages[0].id : null;
+          renderManage();
+          showUndo(`已删除套餐「${p.name}」`, async () => {
+            await Store.restorePackage(mg.banquet, snap);
+            mg.pkg = snap.id;
+            renderManage();
+          });
+        })();
+      }
     });
     // 点击空白处 / 滚动 / 切换标签时收起右键菜单
     document.addEventListener('click', (e) => {

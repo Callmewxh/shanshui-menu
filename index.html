@@ -104,6 +104,7 @@
       <!-- 套餐条右键菜单（在菜单 tab 右键某套餐弹出） -->
       <div class="ctx-menu" id="pkgCtxMenu" hidden>
         <button class="ctx-item" data-act="dup" type="button">创建副本</button>
+        <button class="ctx-item danger" data-act="del" type="button">删除</button>
       </div>
     </div>
   </div>
@@ -257,14 +258,18 @@
       <div class="field">
         <label>中文显示名</label>
         <div class="md-name-row">
-          <input id="mdName" autocomplete="off">
+          <input id="mdName" list="mdNameOptions" autocomplete="off" placeholder="输入或选择其他命名">
+          <datalist id="mdNameOptions"></datalist>
           <button type="button" class="mg-btn small restore-btn" id="mdRestore">恢复原名</button>
         </div>
       </div>
       <div class="md-orig" id="mdOrig"></div>
       <div class="field">
         <label>英文显示名</label>
-        <input id="mdEn" autocomplete="off">
+        <div class="md-name-row">
+          <input id="mdEn" list="mdEnOptions" autocomplete="off" placeholder="输入或选择其他命名">
+          <datalist id="mdEnOptions"></datalist>
+        </div>
       </div>
       <div class="md-orig" id="mdEnOrig"></div>
       <div class="edit-actions">
