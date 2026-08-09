@@ -112,6 +112,18 @@
     const p = pkg();
     return p ? Store.resolvePackage(state.banquet, p.id) : [];
   }
+  // 菜品在点菜端的显示编号：优先用当前套餐内自定义编号（pkg.numbers），否则按菜单内真实顺序
+  function dishNo(libId, fallbackIdx) {
+    const p = pkg();
+    if (p && p.numbers && typeof p.numbers[libId] === 'number') return p.numbers[libId];
+    let i = (typeof fallbackIdx === 'number') ? fallbackIdx : 0;
+    if (p && Array.isArray(p.dishes)) { const k = p.dishes.indexOf(libId); if (k >= 0) i = k; }
+    return i + 1;
+  }
+  // 是否显示菜品简介（点菜详情）：默认显示，可在设置关闭
+  function showDesc() {
+    try { const v = localStorage.getItem('ss_showdesc'); return v === null ? true : v === '1'; } catch (_) { return true; }
+  }
 
   // ---------- 点菜模式渲染 ----------
   function renderTopTabs() {
@@ -182,17 +194,17 @@
   }
 
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
-  function thumbHTML(d) {
+  function thumbHTML(d, idx) {
     if (d.image) {
       return `<div class="thumb">${dishCropThumb(d)}</div>`;
     }
     const col = CAT_COLORS[d.cat] || '#eee';
-    return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${d.num}</span></div>`;
+    return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${dishNo(d.id, idx)}</span></div>`;
   }
 
-  function cardHTML(d) {
-    return `<article class="card" data-num="${d.num}">
-      ${thumbHTML(d)}
+  function cardHTML(d, idx) {
+    return `<article class="card" data-idx="${idx}">
+      ${thumbHTML(d, idx)}
       <div class="info">
         <div class="cn">${d.cn}</div>
         <div class="en">${d.en}</div>
@@ -211,7 +223,7 @@
 
     // 点菜页不再分类，全部菜品直接铺满一个网格（跨菜品打通循环浏览）
     viewList = ds.slice();
-    list.innerHTML = `<div class="grid">${ds.map(cardHTML).join('')}</div>`;
+    list.innerHTML = `<div class="grid">${ds.map((d, i) => cardHTML(d, i)).join('')}</div>`;
   }
 
   function renderAll() {
@@ -262,10 +274,11 @@
 
   // ---------- 详情弹窗（整份菜单打通、循环左右切换） ----------
   const viewer = { list: [], index: 0 };
-  function openModal(num, list) {
+  function openModal(idx, list) {
     viewer.list = (list && list.length) ? list : (viewList.length ? viewList : resolvedDishes());
-    const i = viewer.list.findIndex((x) => x.num === num);
-    viewer.index = i < 0 ? 0 : i;
+    let i = (typeof idx === 'number') ? idx : 0;
+    if (i < 0 || i >= viewer.list.length) i = 0;
+    viewer.index = i;
     renderModal();
     $('#modal').hidden = false;
   }
@@ -278,11 +291,12 @@
       thumb.style.background = 'transparent';
       thumb.innerHTML = dishCropThumb(d);
     } else { thumb.style.background = CAT_COLORS[d.cat] || '#eee'; thumb.innerHTML = ICONS[d.icon] || ''; }
-    m.querySelector('.m-num').textContent = 'NO. ' + d.num;
+    m.querySelector('.m-num').textContent = 'NO. ' + dishNo(d.id, viewer.index);
     m.querySelector('.m-cn').textContent = d.cn;
     m.querySelector('.m-en').textContent = d.en;
     m.querySelector('.m-cat').textContent = d.cat;
     m.querySelector('.m-desc').textContent = d.desc || '介绍待补充';
+    m.querySelector('.m-desc').style.display = showDesc() ? '' : 'none';
     // 循环浏览：仅当只有 1 道菜时才禁用左右键
     const only = viewer.list.length <= 1;
     const prev = m.querySelector('.m-prev'); const next = m.querySelector('.m-next');
@@ -558,7 +572,7 @@
           <button class="lib-del" data-ref="${id}" title="移出本菜单" aria-label="移出本菜单">✕</button>
         </div>
         <div class="mg-info">
-          <div class="mg-cn" data-name="${id}" title="点击改名（仅本菜单）">${d.num} · ${d.cn}${ovTag}</div>
+          <div class="mg-cn" data-name="${id}" title="点击改名（仅本菜单）">${d.cn}${ovTag}</div>
           <div class="mg-en">${d.en || ''}</div>
           <span class="cat-tag">${d.cat}</span>
         </div>
@@ -570,7 +584,6 @@
       if (!d) return '';
       const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
       return `<div class="mg-textrow" data-id="${id}">
-        <span class="mg-idx">${i + 1}</span>
         <span class="mg-tname" data-name="${id}" title="点击直接改名（仅本菜单）">${d.cn}${ovTag}</span>
         <span class="mg-ten">${d.en || ''}</span>
         <span class="mg-grip" aria-hidden="true" title="按住拖动排序">⠿</span>
@@ -866,6 +879,7 @@
       $('#pkgForm').reset();
       $('#pId').disabled = false;
       $('#pkgDelete').hidden = true;
+      $('#pkgNumList').innerHTML = '<div class="pkg-num-empty">新增套餐暂无菜品，保存后再去「+ 菜品」添加并设置编号</div>';
     } else {
       const b = MENU()[mg.banquet];
       const p = b && b.packages.find((x) => x.id === mg.pkg);
@@ -875,6 +889,18 @@
       $('#pName').value = p.name;
       $('#pPrice').value = p.price;
       $('#pDemo').checked = !!p.demo;
+      const nl = $('#pkgNumList');
+      if (p && Array.isArray(p.dishes) && p.dishes.length) {
+        const resolved = Store.resolvePackage(mg.banquet, p.id);
+        nl.innerHTML = p.dishes.map((id, i) => {
+          const d = resolved[i];
+          const cn = d ? d.cn : id;
+          const cur = (p.numbers && typeof p.numbers[id] === 'number') ? p.numbers[id] : (i + 1);
+          return `<div class="pkg-num-row"><span class="pkg-num-name" title="${cn.replace(/"/g, '&quot;')}">${cn}</span><input class="pkg-num-input" type="number" min="0" step="1" data-libid="${id}" data-default="${i + 1}" value="${cur}"></div>`;
+        }).join('');
+      } else {
+        nl.innerHTML = '<div class="pkg-num-empty">该套餐暂无菜品，先去「+ 菜品」添加后即可设置编号</div>';
+      }
       $('#pkgDelete').hidden = false;
     }
     $('#pkgModal').hidden = false;
@@ -887,13 +913,20 @@
     const price = parseFloat($('#pPrice').value) || 0;
     const demo = $('#pDemo').checked;
     if (!id || !name) { alert('请填写编号与名称'); return; }
+    // 菜品编号：仅保存与默认顺序不同的值（numbers[libId] = 自定义编号）
+    const numbers = {};
+    document.querySelectorAll('#pkgNumList .pkg-num-input').forEach((inp) => {
+      const def = parseInt(inp.dataset.default, 10);
+      const v = parseInt(inp.value, 10);
+      if (!isNaN(v) && v !== def) numbers[inp.dataset.libid] = v;
+    });
     try {
       if (mg.pkgMode === 'new') {
-        const res = await Store.addPackage(mg.banquet, { id, name, price, demo, dishes: [] });
+        const res = await Store.addPackage(mg.banquet, { id, name, price, demo, dishes: [], numbers });
         if (!res.ok) { alert(res.msg); return; }
         mg.pkg = id;
       } else {
-        await Store.updatePackage(mg.banquet, id, { name, price, demo });
+        await Store.updatePackage(mg.banquet, id, { name, price, demo, numbers });
       }
     } catch (err) { alert(err.message || '保存失败'); return; }
     mg.pkgMode = 'edit';
@@ -1034,7 +1067,21 @@
   // ---------- 设置：折叠菜单（不弹独立窗口） ----------
   function toggleSettings(force) {
     const m = $('#mgSetMenu');
-    m.hidden = (typeof force === 'boolean') ? !force : !m.hidden;
+    const show = (typeof force === 'boolean') ? force : m.hidden;
+    if (show) {
+      m.hidden = false;
+      // 锚定到 ⚙ 按钮，并约束在视口内（手机端设置键在左侧也不溢出）
+      const r = $('#mgSettings').getBoundingClientRect();
+      const mw = Math.min(m.offsetWidth || 268, window.innerWidth - 16);
+      let left = r.right - mw;                 // 默认右对齐按钮右缘
+      if (left < 8) left = r.left + r.width - mw;  // 右空间不足：在按钮左侧展开
+      if (left < 8) left = 8;                   // 仍不足：贴视口左
+      m.style.top = (r.bottom + 8) + 'px';
+      m.style.left = left + 'px';
+      m.style.right = 'auto';
+    } else {
+      m.hidden = true;
+    }
   }
   function closeSettings() { $('#mgSetMenu').hidden = true; }
 
@@ -1229,6 +1276,18 @@
 
   // ---------- 事件绑定 ----------
   function bindStatic() {
+    // 红条左右滑动切换套餐（同一宴席下不同套餐）
+    function switchPkg(dir) {
+      const b = banquet();
+      if (!b || b.packages.length < 2) return;
+      const ids = b.packages.map((x) => x.id);
+      let i = ids.indexOf(state.pkg);
+      if (i < 0) i = 0;
+      i = (i + dir + ids.length) % ids.length;
+      state.pkg = ids[i];
+      renderHero(); renderPkg(); renderBanner(); renderList();
+      toast('已切换：' + b.packages[i].name);
+    }
     // 模式切换：折叠进「山水S酒店」品牌下拉
     const brandBtn = $('#brandBtn');
     const brandMenu = $('#brandMenu');
@@ -1253,8 +1312,26 @@
       });
     }
 
+    // 红条左右滑动切换套餐（同一宴席下不同套餐）
+    const heroEl = $('#hero');
+    let heroSX = 0, heroSY = 0, heroSwiped = false;
+    heroEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { heroSX = 0; return; }
+      heroSX = e.touches[0].clientX; heroSY = e.touches[0].clientY; heroSwiped = false;
+    }, { passive: true });
+    heroEl.addEventListener('touchend', (e) => {
+      if (!heroSX || !e.changedTouches.length) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - heroSX, dy = t.clientY - heroSY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        switchPkg(dx < 0 ? 1 : -1);   // 左滑→下一套餐，右滑→上一套餐
+        heroSwiped = true;
+      }
+      heroSX = 0;
+    }, { passive: true });
     // 红色菜单条固定（图钉按钮，通过事件委托挂在 hero 上，因为 hero 会重新渲染）
-    $('#hero').addEventListener('click', (e) => {
+    heroEl.addEventListener('click', (e) => {
+      if (heroSwiped) { heroSwiped = false; return; }   // 刚滑动过：本次 click 不当作点按
       const btn = e.target.closest('.pin-hero-btn');
       if (!btn) return;
       heroPinned = !heroPinned;
@@ -1311,7 +1388,7 @@
     $('#list').addEventListener('click', (e) => {
       const c = e.target.closest('.card'); if (!c) return;
       // 打通整份菜单：不再按分类切片，大图里可循环浏览本套餐全部菜品
-      openModal(c.dataset.num, viewList);
+      openModal(+c.dataset.idx, viewList);
     });
     $('#modal').addEventListener('click', (e) => {
       if (e.target.closest('.m-prev')) { viewerGo(-1); return; }
@@ -1453,6 +1530,7 @@
       if (!item) return;
       const act = item.dataset.act, id = pkgCtxId;
       closePkgCtx();
+      if (act === 'edit' && id) { mg.pkg = id; mg.pkgMode = 'edit'; openPkgEditor(); return; }
       if (act === 'dup' && id) { duplicatePackage(mg.banquet, id); return; }
       if (act === 'del' && id) {
         (async () => {
@@ -1533,6 +1611,16 @@
       });
     });
     $('#setReset').addEventListener('click', openResetConfirm);
+    // 显示菜品简介开关
+    const sdCb = $('#setShowDescCb');
+    if (sdCb) { sdCb.checked = showDesc(); sdCb.addEventListener('click', (e) => e.stopPropagation()); }
+    $('#setShowDesc').addEventListener('click', (e) => {
+      const cb = $('#setShowDescCb');
+      if (e.target !== cb) cb.checked = !cb.checked;   // 点整行手动翻转；点 checkbox 用浏览器默认
+      try { localStorage.setItem('ss_showdesc', cb.checked ? '1' : '0'); } catch (_) {}
+      toast(cb.checked ? '已开启菜品简介' : '已关闭菜品简介');
+      if (!$('#modal').hidden) renderModal();
+    });
     $('#setPull').addEventListener('click', async () => {
       closeSettings();
       if (!confirm('将从云端拉取已发布的菜单，并覆盖本设备当前菜单。确定继续？')) return;

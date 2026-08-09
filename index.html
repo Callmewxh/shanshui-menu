@@ -87,6 +87,7 @@
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
             <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
             <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
+            <button class="set-row set-toggle" id="setShowDesc" type="button" style="justify-content: space-between; align-items: center;"><span class="set-ic">☰</span><span><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></button>
             <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>
         </div>
@@ -103,6 +104,7 @@
       </div>
       <!-- 套餐条右键菜单（在菜单 tab 右键某套餐弹出） -->
       <div class="ctx-menu" id="pkgCtxMenu" hidden>
+        <button class="ctx-item" data-act="edit" type="button">编辑套餐</button>
         <button class="ctx-item" data-act="dup" type="button">创建副本</button>
         <button class="ctx-item danger" data-act="del" type="button">删除</button>
       </div>
@@ -173,6 +175,10 @@
         <div class="field"><label>名称</label><input id="pName" name="name" placeholder="套餐名称"></div>
         <div class="field"><label>价格（元/桌）</label><input id="pPrice" name="price" type="number" min="0" step="1" placeholder="0"></div>
         <div class="field field-inline"><label>示例餐</label><input id="pDemo" name="demo" type="checkbox"></div>
+        <div class="field">
+          <label>菜品编号（默认按菜单顺序，可改）</label>
+          <div class="pkg-num-list" id="pkgNumList"></div>
+        </div>
         <div class="edit-actions">
           <button type="button" class="mg-btn danger" id="pkgDelete">删除</button>
           <span class="spacer"></span>

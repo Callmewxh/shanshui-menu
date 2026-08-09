@@ -310,7 +310,7 @@ body {
 /* 设置：折叠菜单（锚定在 ⚙ 按钮下方） */
 .mg-setwrap { position: relative; flex: 0 0 auto; }
 .mg-setmenu {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 46; width: 268px; max-width: 84vw;
+  position: fixed; z-index: 46; width: 268px; max-width: calc(100vw - 16px);
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 14px 34px rgba(0,0,0,.16); padding: 6px; display: flex; flex-direction: column; gap: 2px;
 }
@@ -538,7 +538,7 @@ body {
   background: rgba(43,38,34,.92); color: #fff; padding: 10px 20px; border-radius: 999px;
   font-size: 13px; z-index: 90; opacity: 0; pointer-events: none; transition: .22s; box-shadow: 0 8px 24px rgba(0,0,0,.2);
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 /* 撤销提示：删除后短暂显示「撤销」按钮 */
 .toast.undo { display: flex; align-items: center; gap: 12px; }
 .toast.undo .undo-msg { white-space: nowrap; }
@@ -547,6 +547,14 @@ body {
   border-radius: 999px; padding: 6px 16px; font-size: 13px; cursor: pointer; white-space: nowrap;
 }
 .toast.undo .undo-btn:hover { filter: brightness(1.08); }
+
+/* 编辑套餐：菜品编号列表（默认按菜单顺序，可改） */
+.pkg-num-list { display: flex; flex-direction: column; gap: 6px; max-height: 230px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--bg); }
+.pkg-num-empty { font-size: 12px; color: var(--muted); padding: 6px 2px; }
+.pkg-num-row { display: flex; align-items: center; gap: 10px; }
+.pkg-num-name { flex: 1 1 auto; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkg-num-input { flex: 0 0 64px; width: 64px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; text-align: center; outline: none; }
+.pkg-num-input:focus { border-color: var(--primary); }
 
 /* 管理模式子标签：菜品库 / 菜单 */
 .mg-tabs { display: flex; gap: 0; background: var(--bg); padding: 3px; border-radius: 999px; border: 1px solid var(--line); }
