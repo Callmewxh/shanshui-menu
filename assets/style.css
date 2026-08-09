@@ -330,6 +330,10 @@ body {
 .set-row.primary-row { background: var(--primary-soft); }
 .set-row.primary-row .set-ic, .set-row.primary-row b { color: var(--primary); }
 .set-row.primary-row:hover { background: #f4d8d2; }
+/* 开关行：整行可点（label 原生联动 checkbox），勾选框靠右 */
+.set-toggle { align-items: center; justify-content: space-between; }
+.set-toggle .set-txt { flex: 1 1 auto; }
+.set-toggle input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; margin: 0 2px 0 8px; accent-color: var(--primary); cursor: pointer; }
 
 .mg-btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
@@ -548,13 +552,8 @@ body {
 }
 .toast.undo .undo-btn:hover { filter: brightness(1.08); }
 
-/* 编辑套餐：菜品编号列表（默认按菜单顺序，可改） */
-.pkg-num-list { display: flex; flex-direction: column; gap: 6px; max-height: 230px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--bg); }
-.pkg-num-empty { font-size: 12px; color: var(--muted); padding: 6px 2px; }
-.pkg-num-row { display: flex; align-items: center; gap: 10px; }
-.pkg-num-name { flex: 1 1 auto; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pkg-num-input { flex: 0 0 64px; width: 64px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; text-align: center; outline: none; }
-.pkg-num-input:focus { border-color: var(--primary); }
+/* 表单字段说明文字（如：套餐编号默认按字母生成） */
+.field-hint { color: var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.5; }
 
 /* 管理模式子标签：菜品库 / 菜单 */
 .mg-tabs { display: flex; gap: 0; background: var(--bg); padding: 3px; border-radius: 999px; border: 1px solid var(--line); }

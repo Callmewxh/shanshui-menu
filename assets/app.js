@@ -112,10 +112,9 @@
     const p = pkg();
     return p ? Store.resolvePackage(state.banquet, p.id) : [];
   }
-  // 菜品在点菜端的显示编号：优先用当前套餐内自定义编号（pkg.numbers），否则按菜单内真实顺序
+  // 菜品在点菜端的显示编号：一律按「本菜单内的真实顺序」自动排（1,2,3…），不可自定义
   function dishNo(libId, fallbackIdx) {
     const p = pkg();
-    if (p && p.numbers && typeof p.numbers[libId] === 'number') return p.numbers[libId];
     let i = (typeof fallbackIdx === 'number') ? fallbackIdx : 0;
     if (p && Array.isArray(p.dishes)) { const k = p.dishes.indexOf(libId); if (k >= 0) i = k; }
     return i + 1;
@@ -390,7 +389,7 @@
       row.innerHTML = '<span class="mg-pkgrow-empty">该宴席暂无套餐，点右上「+ 新增套餐」开始配置</span>';
       return;
     }
-    row.innerHTML = pkgs.map((p) => `<div class="mg-pkgchip ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}" title="${p.name} · ¥${p.price}/桌 · ${(p.dishes || []).length} 道（按住可拖动排序）">
+    row.innerHTML = pkgs.map((p) => `<div class="mg-pkgchip ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}" title="${p.name} · ¥${p.price}/桌 · ${(p.dishes || []).length} 道（拖动排序 · 长按或右键：编辑/副本/删除）">
       <span class="pc-grip" aria-hidden="true">⠿</span>
       <span class="pc-name">${p.name}</span>
       <span class="pc-meta">¥${p.price}·${(p.dishes || []).length}道</span>
@@ -411,10 +410,27 @@
   }
 
   let pkgDrag = null;
+  function detachPkgDrag() {
+    if (pkgDrag && pkgDrag.lp) clearTimeout(pkgDrag.lp);
+    window.removeEventListener('pointermove', onPkgPointerMove);
+    window.removeEventListener('pointerup', onPkgPointerUp);
+    window.removeEventListener('pointercancel', onPkgPointerUp);
+    pkgDrag = null;
+  }
   function onPkgPointerDown(e) {
     const chip = e.target.closest('.mg-pkgchip');
     if (!chip) return;
-    pkgDrag = { chip, id: chip.dataset.pkg, x: e.clientX, y: e.clientY, moved: false };
+    pkgDrag = { chip, id: chip.dataset.pkg, x: e.clientX, y: e.clientY, moved: false, lp: null };
+    // 触摸端没有右键：长按 550ms 弹出同一套操作菜单（编辑套餐/创建副本/删除）
+    const px = e.clientX, py = e.clientY;
+    pkgDrag.lp = setTimeout(() => {
+      if (!pkgDrag || pkgDrag.moved) return;
+      const c = pkgDrag.chip;
+      detachPkgDrag();
+      c.classList.remove('dragging');
+      $('#mgPkgRow').classList.remove('dragging-row');
+      openPkgCtx(c, px, py);
+    }, 550);
     window.addEventListener('pointermove', onPkgPointerMove);
     window.addEventListener('pointerup', onPkgPointerUp);
     window.addEventListener('pointercancel', onPkgPointerUp);
@@ -423,6 +439,7 @@
     if (!pkgDrag) return;
     if (!pkgDrag.moved) {
       if (Math.hypot(e.clientX - pkgDrag.x, e.clientY - pkgDrag.y) < 8) return; // 抖动容差：小位移仍算点击
+      if (pkgDrag.lp) { clearTimeout(pkgDrag.lp); pkgDrag.lp = null; }          // 手指移动 → 取消长按
       pkgDrag.moved = true;
       pkgDrag.chip.classList.add('dragging');
       $('#mgPkgRow').classList.add('dragging-row');
@@ -436,6 +453,7 @@
   }
   async function onPkgPointerUp() {
     if (!pkgDrag) return;
+    if (pkgDrag.lp) clearTimeout(pkgDrag.lp);
     window.removeEventListener('pointermove', onPkgPointerMove);
     window.removeEventListener('pointerup', onPkgPointerUp);
     window.removeEventListener('pointercancel', onPkgPointerUp);
@@ -454,26 +472,33 @@
     toast('套餐顺序已保存');
   }
 
-  // ---------- 套餐条右键：创建副本（快速建菜单） ----------
+  // ---------- 套餐条右键 / 长按：编辑套餐、创建副本、删除 ----------
   let pkgCtxId = null;
+  let pkgCtxJustOpened = false;     // 长按弹出后紧跟的那次 click 不要立刻关掉菜单
   function closePkgCtx() {
     const m = $('#pkgCtxMenu');
     if (m) m.hidden = true;
     pkgCtxId = null;
   }
-  function onPkgContextMenu(e) {
-    const chip = e.target.closest('.mg-pkgchip');
-    if (!chip) return;                 // 仅在套餐条目上右键才弹出
-    e.preventDefault();
+  function openPkgCtx(chip, cx, cy) {
+    if (!chip) return;
     pkgCtxId = chip.dataset.pkg;
     const m = $('#pkgCtxMenu');
     m.hidden = false;
     // 先显示再测尺寸，避免被视口裁切
     const w = m.offsetWidth || 140, h = m.offsetHeight || 40;
-    const x = Math.min(e.clientX, window.innerWidth - w - 8);
-    const y = Math.min(e.clientY, window.innerHeight - h - 8);
+    const x = Math.max(8, Math.min(cx, window.innerWidth - w - 8));
+    const y = Math.max(8, Math.min(cy, window.innerHeight - h - 8));
     m.style.left = x + 'px';
     m.style.top = y + 'px';
+    pkgCtxJustOpened = true;
+    setTimeout(() => { pkgCtxJustOpened = false; }, 400);
+  }
+  function onPkgContextMenu(e) {
+    const chip = e.target.closest('.mg-pkgchip');
+    if (!chip) return;                 // 仅在套餐条目上右键才弹出
+    e.preventDefault();
+    openPkgCtx(chip, e.clientX, e.clientY);
   }
   async function duplicatePackage(banquetId, pkgId) {
     const src = Store.getPackage(banquetId, pkgId);
@@ -605,7 +630,6 @@
             <button class="mg-view-btn ${mg.viewMode === 'card' ? 'on' : ''}" data-view="card" type="button">卡片</button>
             <button class="mg-view-btn ${mg.viewMode === 'text' ? 'on' : ''}" data-view="text" type="button">排序</button>
           </div>
-          <button class="mg-btn" id="mgEditPkg">编辑套餐</button>
         </div>
       </div>
       ${body}
@@ -873,34 +897,38 @@
   }
 
   // ---------- 套餐编辑 ----------
+  // 新增套餐时的默认编号：按字母顺序取第一个未被占用的 A~Z，用完再退化为 P1、P2…
+  function nextPkgId(banquetId) {
+    const b = MENU()[banquetId];
+    const used = new Set((b && b.packages ? b.packages : []).map((p) => String(p.id).toUpperCase()));
+    for (let c = 65; c <= 90; c++) {
+      const ch = String.fromCharCode(c);
+      if (!used.has(ch)) return ch;
+    }
+    let n = 1;
+    while (used.has('P' + n)) n++;
+    return 'P' + n;
+  }
+
   function openPkgEditor() {
+    const err = $('#pIdErr'); if (err) { err.hidden = true; err.textContent = ''; }
+    $('#pId').disabled = false;                       // 套餐编号始终可改
     if (mg.pkgMode === 'new') {
       $('#pkgTitle').textContent = '新增套餐';
       $('#pkgForm').reset();
-      $('#pId').disabled = false;
+      $('#pId').value = nextPkgId(mg.banquet);        // 默认按字母顺序给下一个编号
+      $('#pId').dataset.orig = '';
       $('#pkgDelete').hidden = true;
-      $('#pkgNumList').innerHTML = '<div class="pkg-num-empty">新增套餐暂无菜品，保存后再去「+ 菜品」添加并设置编号</div>';
     } else {
       const b = MENU()[mg.banquet];
       const p = b && b.packages.find((x) => x.id === mg.pkg);
       if (!p) { mg.pkgMode = 'new'; return openPkgEditor(); }
       $('#pkgTitle').textContent = '编辑套餐';
-      $('#pId').value = p.id; $('#pId').disabled = true;
+      $('#pId').value = p.id;
+      $('#pId').dataset.orig = p.id;                  // 记录原编号，保存时判断是否改号
       $('#pName').value = p.name;
       $('#pPrice').value = p.price;
       $('#pDemo').checked = !!p.demo;
-      const nl = $('#pkgNumList');
-      if (p && Array.isArray(p.dishes) && p.dishes.length) {
-        const resolved = Store.resolvePackage(mg.banquet, p.id);
-        nl.innerHTML = p.dishes.map((id, i) => {
-          const d = resolved[i];
-          const cn = d ? d.cn : id;
-          const cur = (p.numbers && typeof p.numbers[id] === 'number') ? p.numbers[id] : (i + 1);
-          return `<div class="pkg-num-row"><span class="pkg-num-name" title="${cn.replace(/"/g, '&quot;')}">${cn}</span><input class="pkg-num-input" type="number" min="0" step="1" data-libid="${id}" data-default="${i + 1}" value="${cur}"></div>`;
-        }).join('');
-      } else {
-        nl.innerHTML = '<div class="pkg-num-empty">该套餐暂无菜品，先去「+ 菜品」添加后即可设置编号</div>';
-      }
       $('#pkgDelete').hidden = false;
     }
     $('#pkgModal').hidden = false;
@@ -909,26 +937,29 @@
   async function savePkg(e) {
     e.preventDefault();
     const id = $('#pId').value.trim();
+    const orig = $('#pId').dataset.orig || '';
     const name = $('#pName').value.trim();
     const price = parseFloat($('#pPrice').value) || 0;
     const demo = $('#pDemo').checked;
+    const err = $('#pIdErr');
+    const showIdErr = (msg) => { if (err) { err.textContent = msg; err.hidden = false; } else alert(msg); };
+    if (err) { err.hidden = true; err.textContent = ''; }
     if (!id || !name) { alert('请填写编号与名称'); return; }
-    // 菜品编号：仅保存与默认顺序不同的值（numbers[libId] = 自定义编号）
-    const numbers = {};
-    document.querySelectorAll('#pkgNumList .pkg-num-input').forEach((inp) => {
-      const def = parseInt(inp.dataset.default, 10);
-      const v = parseInt(inp.value, 10);
-      if (!isNaN(v) && v !== def) numbers[inp.dataset.libid] = v;
-    });
     try {
       if (mg.pkgMode === 'new') {
-        const res = await Store.addPackage(mg.banquet, { id, name, price, demo, dishes: [], numbers });
-        if (!res.ok) { alert(res.msg); return; }
+        const res = await Store.addPackage(mg.banquet, { id, name, price, demo, dishes: [] });
+        if (!res.ok) { showIdErr(res.msg); return; }
         mg.pkg = id;
       } else {
-        await Store.updatePackage(mg.banquet, id, { name, price, demo, numbers });
+        if (orig && id !== orig) {                    // 改了套餐编号：先改号（保持原位置与菜品不变）
+          const r = await Store.renamePackage(mg.banquet, orig, id);
+          if (!r.ok) { showIdErr(r.msg); return; }
+          if (mg.pkg === orig) mg.pkg = id;
+          if (state.pkg === orig) state.pkg = id;
+        }
+        await Store.updatePackage(mg.banquet, id, { name, price, demo });
       }
-    } catch (err) { alert(err.message || '保存失败'); return; }
+    } catch (err2) { alert(err2.message || '保存失败'); return; }
     mg.pkgMode = 'edit';
     $('#pkgModal').hidden = true;
     renderManage();
@@ -1515,7 +1546,6 @@
         (async () => { await Store.removeDishRef(mg.banquet, mg.pkg, id); renderMenuTab(); toast('已移出本菜单'); })();
         return;
       }
-      if (e.target.closest('#mgEditPkg')) { mg.pkgMode = 'edit'; openPkgEditor(); return; }
       const ed = e.target.closest('[data-libedit]');
       if (ed) { openMenuDishEditor(mg.banquet, mg.pkg, ed.dataset.libedit); return; }
     });
@@ -1554,7 +1584,9 @@
     // 点击空白处 / 滚动 / 切换标签时收起右键菜单
     document.addEventListener('click', (e) => {
       const m = $('#pkgCtxMenu');
-      if (m && !m.hidden && !m.contains(e.target)) closePkgCtx();
+      if (!m || m.hidden) return;
+      if (pkgCtxJustOpened) { pkgCtxJustOpened = false; return; }   // 长按刚弹出，忽略这次 click
+      if (!m.contains(e.target)) closePkgCtx();
     });
     document.addEventListener('scroll', closePkgCtx, true);
     $('#mgTabs').addEventListener('click', closePkgCtx);
@@ -1611,16 +1643,22 @@
       });
     });
     $('#setReset').addEventListener('click', openResetConfirm);
-    // 显示菜品简介开关
+    // 显示菜品简介开关（点行、点勾选框都要能存下来）
+    const applyShowDesc = (on) => {
+      try { localStorage.setItem('ss_showdesc', on ? '1' : '0'); } catch (_) {}
+      const cb = $('#setShowDescCb'); if (cb) cb.checked = on;
+      toast(on ? '已开启菜品简介' : '已关闭菜品简介');
+      if (!$('#modal').hidden) renderModal();          // 详情开着就立刻刷新
+    };
     const sdCb = $('#setShowDescCb');
-    if (sdCb) { sdCb.checked = showDesc(); sdCb.addEventListener('click', (e) => e.stopPropagation()); }
-    $('#setShowDesc').addEventListener('click', (e) => {
-      const cb = $('#setShowDescCb');
-      if (e.target !== cb) cb.checked = !cb.checked;   // 点整行手动翻转；点 checkbox 用浏览器默认
-      try { localStorage.setItem('ss_showdesc', cb.checked ? '1' : '0'); } catch (_) {}
-      toast(cb.checked ? '已开启菜品简介' : '已关闭菜品简介');
-      if (!$('#modal').hidden) renderModal();
-    });
+    if (sdCb) {
+      sdCb.checked = showDesc();
+      // 整行是 <label>，点行/点勾选框都由浏览器原生联动到同一个 change，只需在这里落盘
+      sdCb.addEventListener('change', () => applyShowDesc(sdCb.checked));
+    }
+    // 点开关行不要顺手把设置面板关掉
+    const sdRow = $('#setShowDesc');
+    if (sdRow) sdRow.addEventListener('click', (e) => e.stopPropagation());
     $('#setPull').addEventListener('click', async () => {
       closeSettings();
       if (!confirm('将从云端拉取已发布的菜单，并覆盖本设备当前菜单。确定继续？')) return;

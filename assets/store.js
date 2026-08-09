@@ -24,7 +24,7 @@ const Store = (function () {
   }
 
   // 载入：优先读取已保存副本；旧版（菜品内嵌）自动迁移；否则以种子数据初始化
-  let STATE = load();
+  let STATE = stripLegacyFields(load());
 
   const BANQUET_LIST = deepClone(typeof BANQUETS !== 'undefined' ? BANQUETS : []);
 
@@ -42,6 +42,18 @@ const Store = (function () {
       }
     } catch (e) { /* 忽略损坏数据 */ }
     return seed();
+  }
+
+  // 清理历史遗留字段：pkg.numbers（自定义菜品编号，已废弃——编号一律按菜单内顺序自动排）
+  function stripLegacyFields(state) {
+    const menu = state && state.menu;
+    if (!menu) return state;
+    for (const bid in menu) {
+      const b = menu[bid];
+      if (!b || !Array.isArray(b.packages)) continue;
+      b.packages.forEach((p) => { if (p && p.numbers) delete p.numbers; });
+    }
+    return state;
   }
 
   // 判断是否需要迁移：任一套餐的 dishes 元素是对象（而非 libId 字符串）
@@ -204,7 +216,9 @@ const Store = (function () {
   }
   async function addPackage(banquetId, pkg) {
     const b = ensureBanquet(banquetId);
-    if (b.packages.some((p) => p.id === pkg.id)) return { ok: false, msg: '套餐编号已存在' };
+    if (b.packages.some((p) => String(p.id).toUpperCase() === String(pkg.id).toUpperCase())) {
+      return { ok: false, msg: '套餐编号「' + pkg.id + '」已存在，请换一个' };
+    }
     b.packages.push(pkg);
     await save();
     return { ok: true };
@@ -215,6 +229,22 @@ const Store = (function () {
     Object.assign(p, patch);
     await save();
     return { ok: true };
+  }
+  // 修改套餐编号（id）：保持列表位置、菜品引用、菜单内改名（nameOverrides）全部不变
+  async function renamePackage(banquetId, oldId, newId) {
+    const b = getBanquet(banquetId);
+    if (!b || !Array.isArray(b.packages)) return { ok: false, msg: '宴席不存在' };
+    const id = String(newId || '').trim();
+    if (!id) return { ok: false, msg: '套餐编号不能为空' };
+    if (id === oldId) return { ok: true };
+    if (b.packages.some((p) => String(p.id).toUpperCase() === id.toUpperCase())) {
+      return { ok: false, msg: '套餐编号「' + id + '」已存在，请换一个' };
+    }
+    const p = b.packages.find((x) => x.id === oldId);
+    if (!p) return { ok: false, msg: '套餐不存在' };
+    p.id = id;                       // 就地改号，数组位置不动
+    await save();
+    return { ok: true, id };
   }
   async function removePackage(banquetId, pkgId) {
     const b = getBanquet(banquetId);
@@ -450,6 +480,7 @@ const Store = (function () {
     }
     STATE.library = data.library;
     STATE.menu = data.menu;
+    stripLegacyFields(STATE);
     await save();
     return { ok: true };
   }
@@ -461,7 +492,7 @@ const Store = (function () {
     get BANQUETS() { return BANQUET_LIST; },
     save,
     getBanquet, ensureBanquet, nextNum,
-    getPackage, addPackage, updatePackage, removePackage, movePackage, reorderPackages,
+    getPackage, addPackage, updatePackage, renamePackage, removePackage, movePackage, reorderPackages,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,
