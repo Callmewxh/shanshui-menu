@@ -272,6 +272,9 @@ const Store = (function () {
   }
   // 解析套餐的菜品引用为菜品主数据（供渲染）
   // 若套餐含 nameOverrides[libId]，则显示名以覆盖名为准（仅影响展示，不改菜品库主数据）
+  // nameOverrides[libId] 兼容两种形态：
+  //   - 旧数据：字符串（仅中文名覆盖）
+  //   - 新数据：对象 { cn, en }（中文名 + 英文名分别覆盖）
   function resolvePackage(banquetId, pkgId) {
     const p = getPackage(banquetId, pkgId);
     if (!p || !Array.isArray(p.dishes)) return [];
@@ -281,20 +284,46 @@ const Store = (function () {
       if (!d) return null;
       const o = ov[id];
       if (o === undefined || o === null || o === '') return d;
-      return Object.assign({}, d, { cn: o, _overridden: true });
+      const merged = Object.assign({}, d);
+      if (typeof o === 'string') {
+        merged.cn = o; merged._overridden = true;
+      } else {
+        if (o.cn !== undefined && o.cn !== null && o.cn !== '') { merged.cn = o.cn; merged._overridden = true; }
+        if (o.en !== undefined && o.en !== null && o.en !== '') { merged.en = o.en; merged._enOverridden = true; }
+      }
+      return merged;
     }).filter(Boolean);
   }
 
-  // 菜单内菜品改名：仅覆盖「当前套餐」展示名，不影响菜品库主数据
-  // name 为空或等于菜品库原名时，视为清除覆盖（恢复原名）
+  // 写入某个菜在某套餐内的覆盖名（cn 或 en），保留另一字段；空值/等于菜品库原名则剔除该字段
+  // nameOverrides[libId] 统一存对象 { cn, en }
+  function applyOverride(p, libId, lib, field, name) {
+    if (!p.nameOverrides) p.nameOverrides = {};
+    const cur = (typeof p.nameOverrides[libId] === 'object' && p.nameOverrides[libId] !== null)
+      ? Object.assign({}, p.nameOverrides[libId]) : {};
+    const libVal = field === 'cn' ? (lib && lib.cn) : (lib && lib.en);
+    const v = (name || '').trim();
+    if (!v || (libVal !== undefined && v === libVal)) delete cur[field];
+    else cur[field] = v;
+    if (!Object.keys(cur).length) delete p.nameOverrides[libId];
+    else p.nameOverrides[libId] = cur;
+  }
+
+  // 菜单内菜品改中文名：仅覆盖「当前套餐」展示名，不影响菜品库主数据
   async function setDishNameOverride(banquetId, pkgId, libId, name) {
     const p = getPackage(banquetId, pkgId);
     if (!p) return { ok: false, msg: '套餐不存在' };
     const lib = getLibDish(libId);
-    if (!p.nameOverrides) p.nameOverrides = {};
-    const v = (name || '').trim();
-    if (!v || (lib && v === lib.cn)) delete p.nameOverrides[libId];
-    else p.nameOverrides[libId] = v;
+    applyOverride(p, libId, lib, 'cn', name);
+    await save();
+    return { ok: true };
+  }
+  // 菜单内菜品改英文名：同上，仅覆盖当前套餐英文名，不影响菜品库主数据
+  async function setDishEnOverride(banquetId, pkgId, libId, name) {
+    const p = getPackage(banquetId, pkgId);
+    if (!p) return { ok: false, msg: '套餐不存在' };
+    const lib = getLibDish(libId);
+    applyOverride(p, libId, lib, 'en', name);
     await save();
     return { ok: true };
   }
@@ -372,7 +401,7 @@ const Store = (function () {
     getPackage, addPackage, updatePackage, removePackage, movePackage, reorderPackages,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
-    setDishNameOverride, clearDishNameOverride,
+    setDishNameOverride, setDishEnOverride, clearDishNameOverride,
     uploadImage, importConfig, reset,
   };
 })();

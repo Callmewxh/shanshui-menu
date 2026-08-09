@@ -64,6 +64,7 @@
     banquet: 'wedding',
     pkg: 'B',
     pkgMode: 'edit',
+    viewMode: 'card',      // 菜单板块视图：'card' 卡片 | 'text' 文字排序
     libEditId: null,       // 正在编辑的菜品库 id（null=新增）
     libIsNew: false,
     pendingImage: null,
@@ -472,7 +473,7 @@
         ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单，左上 ⠿=拖动排序
-      const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : '';
+      const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
         <div class="mg-handle" title="按住拖动排序" data-handle>⠿</div>
         <div class="mg-thumb">
@@ -486,6 +487,21 @@
         </div>
       </div>`;
     }).join('');
+    // 文字排序模式：仅列菜名（含英文名），整行可拖拽，比卡片手柄灵敏
+    const textRows = (p.dishes || []).map((id, i) => {
+      const d = byId[id];
+      if (!d) return '';
+      const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
+      return `<div class="mg-textrow" data-id="${id}">
+        <span class="mg-idx">${i + 1}</span>
+        <span class="mg-tname">${d.cn}${ovTag}</span>
+        <span class="mg-ten">${d.en || ''}</span>
+        <span class="mg-grip" aria-hidden="true">⠿</span>
+      </div>`;
+    }).join('');
+    const body = (mg.viewMode === 'text')
+      ? `<div class="mg-textlist" id="mgTextList">${textRows}</div>`
+      : `<div class="mg-grid" id="mgGrid">${cards}</div>`;
     list.innerHTML = `
       <div class="mg-pkghead">
         <div class="mg-pkg-meta">
@@ -495,11 +511,15 @@
           <span class="mg-pkg-count">${p.dishes.length} 道（引用菜品库）</span>
         </div>
         <div class="mg-pkg-ops">
+          <div class="mg-view-toggle" title="切换菜单板块显示方式">
+            <button class="mg-view-btn ${mg.viewMode === 'card' ? 'on' : ''}" data-view="card" type="button">卡片</button>
+            <button class="mg-view-btn ${mg.viewMode === 'text' ? 'on' : ''}" data-view="text" type="button">排序</button>
+          </div>
           <button class="mg-btn" id="mgEditPkg">编辑套餐</button>
         </div>
       </div>
-      <div class="mg-grid" id="mgGrid">${cards}</div>
-      <p class="mg-footnote">点卡片编辑菜品 · 右上「✕」移出本菜单 · 按住「⠿」拖动排序</p>`;
+      ${body}
+      <p class="mg-footnote">${mg.viewMode === 'text' ? '按住任意一行上下拖动排序（更灵敏）· 点菜名可改本菜单显示名' : '点卡片编辑菜品 · 右上「✕」移出本菜单 · 按住「⠿」拖动排序'}</p>`;
   }
 
   // ---------- 菜单内菜品改名（覆盖显示名，不改动菜品库主数据） ----------
@@ -509,13 +529,17 @@
     const lib = Store.getLibDish(libId);
     if (!p || !lib) return;
     mdCtx = { banquetId, pkgId, libId };
-    const ov = (p.nameOverrides && p.nameOverrides[libId] !== undefined) ? p.nameOverrides[libId] : '';
+    const rawOv = (p.nameOverrides && p.nameOverrides[libId] !== undefined) ? p.nameOverrides[libId] : null;
+    const ovCn = (typeof rawOv === 'object' && rawOv) ? (rawOv.cn || '') : (typeof rawOv === 'string' ? rawOv : '');
+    const ovEn = (typeof rawOv === 'object' && rawOv) ? (rawOv.en || '') : '';
     $('#mdPrev').innerHTML = lib.image
       ? `<div class="cropimg" style="${cropBg({ image: lib.image, crop: lib.crop })}"></div>`
       : '';
-    $('#mdName').value = ov || lib.cn;
+    $('#mdName').value = ovCn || lib.cn;
+    $('#mdEn').value = ovEn || lib.en || '';
     $('#mdOrig').textContent = '菜品库原名：' + lib.cn;
-    $('#mdRestore').hidden = !ov;
+    $('#mdEnOrig').textContent = lib.en ? ('菜品库原英文名：' + lib.en) : '';
+    $('#mdRestore').hidden = !(ovCn || ovEn);
     $('#menuDishModal').hidden = false;
     setTimeout(() => { const i = $('#mdName'); if (i) { i.focus(); i.select(); } }, 30);
   }
@@ -523,8 +547,10 @@
     if (!mdCtx) return;
     const v = $('#mdName').value.trim();
     if (!v) { toast('名称不能为空'); return; }
+    const en = $('#mdEn').value.trim();
     (async () => {
       await Store.setDishNameOverride(mdCtx.banquetId, mdCtx.pkgId, mdCtx.libId, v);
+      await Store.setDishEnOverride(mdCtx.banquetId, mdCtx.pkgId, mdCtx.libId, en);
       $('#menuDishModal').hidden = true;
       mdCtx = null;
       renderMenuTab();
@@ -535,14 +561,22 @@
   // ---------- 套餐内菜品排序（拖拽） ----------
   // 拖拽排序：基于 Pointer Events，按住手柄在网格内拖动即可重排
   let mgDrag = null;
+  let suppressMgClick = false;   // 拖拽刚结束时抑制一次 click，避免误触打开弹窗
   function onMgPointerDown(e) {
-    const handle = e.target.closest('[data-handle]');
-    if (!handle) return;
-    const card = handle.closest('.mg-card[data-id]');
-    if (!card) return;
+    let card, grid;
+    if (mg.viewMode === 'text') {
+      const row = e.target.closest('.mg-textrow[data-id]');
+      if (!row) return;
+      card = row; grid = $('#mgTextList');
+    } else {
+      const handle = e.target.closest('[data-handle]');
+      if (!handle) return;
+      card = handle.closest('.mg-card[data-id]');
+      if (!card) return;
+      grid = $('#mgGrid');
+    }
     e.preventDefault();
-    const grid = $('#mgGrid');
-    mgDrag = { card, pointerId: e.pointerId };
+    mgDrag = { card, grid, pointerId: e.pointerId };
     card.classList.add('dragging');
     try { grid.setPointerCapture(e.pointerId); } catch (_) {}
     window.addEventListener('pointermove', onMgPointerMove);
@@ -552,10 +586,12 @@
   function onMgPointerMove(e) {
     if (!mgDrag) return;
     e.preventDefault();
-    const grid = $('#mgGrid');
+    suppressMgClick = true;
+    const grid = mgDrag.grid;
     const y = e.clientY;
     const card = mgDrag.card;
-    const siblings = Array.from(grid.querySelectorAll('.mg-card[data-id]')).filter((c) => c !== card);
+    const sel = mg.viewMode === 'text' ? '.mg-textrow[data-id]' : '.mg-card[data-id]';
+    const siblings = Array.from(grid.querySelectorAll(sel)).filter((c) => c !== card);
     let placed = false;
     for (const s of siblings) {
       const r = s.getBoundingClientRect();
@@ -565,14 +601,15 @@
   }
   async function onMgPointerUp() {
     if (!mgDrag) return;
-    const grid = $('#mgGrid');
+    const grid = mgDrag.grid;
     try { grid.releasePointerCapture(mgDrag.pointerId); } catch (_) {}
     window.removeEventListener('pointermove', onMgPointerMove);
     window.removeEventListener('pointerup', onMgPointerUp);
     window.removeEventListener('pointercancel', onMgPointerUp);
     mgDrag.card.classList.remove('dragging');
-    const ids = Array.from(grid.querySelectorAll('.mg-card[data-id]')).map((c) => c.dataset.id);
+    const ids = Array.from(grid.querySelectorAll('[data-id]')).map((c) => c.dataset.id);
     mgDrag = null;
+    setTimeout(() => { suppressMgClick = false; }, 250);   // 拖拽后短暂抑制 click，防误触
     await Store.reorderPackage(mg.banquet, mg.pkg, ids);
     renderMgList();
     toast('顺序已保存');
@@ -1099,12 +1136,16 @@
     // 菜单内菜品改名弹窗
     $('#mdSave').addEventListener('click', saveMenuDishName);
     $('#mdName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveMenuDishName(); } });
+    $('#mdEn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveMenuDishName(); } });
     $('#mdRestore').addEventListener('click', () => {
       if (!mdCtx) return;
-      const lib = Store.getLibDish(mdCtx.libId);
-      if (lib) $('#mdName').value = lib.cn;
-      $('#mdRestore').hidden = true;
-      $('#mdName').focus();
+      (async () => {
+        await Store.clearDishNameOverride(mdCtx.banquetId, mdCtx.pkgId, mdCtx.libId); // 清除本菜单全部覆盖（中+英恢复）
+        $('#menuDishModal').hidden = true;
+        mdCtx = null;
+        renderMenuTab();
+        toast('已恢复菜品库原名');
+      })();
     });
     $('#mdEditLib').addEventListener('click', () => {
       if (!mdCtx) return;
@@ -1238,7 +1279,16 @@
     $('#mgAddPkg').addEventListener('click', () => { mg.pkgMode = 'new'; openPkgEditor(); });
     $('#mgAddFromLib').addEventListener('click', openPicker);
     $('#mgList').addEventListener('click', (e) => {
+      if (suppressMgClick) return;                             // 刚拖拽完，抑制误触点击
+      const vt = e.target.closest('[data-view]');
+      if (vt) { mg.viewMode = vt.dataset.view; renderMgList(); return; }
       if (e.target.closest('[data-handle]')) return;          // 拖动手柄不触发编辑
+      // 文字排序模式：点菜名行直接打开改名弹窗
+      if (mg.viewMode === 'text') {
+        const tr = e.target.closest('.mg-textrow[data-id]');
+        if (tr) { openMenuDishEditor(mg.banquet, mg.pkg, tr.dataset.id); return; }
+        return;
+      }
       const nm = e.target.closest('[data-name]');
       if (nm) { e.stopPropagation(); inlineEditName(nm.dataset.name, nm, { banquetId: mg.banquet, pkgId: mg.pkg }); return; }
       const rf = e.target.closest('[data-ref]');              // 先判删除，再判编辑
