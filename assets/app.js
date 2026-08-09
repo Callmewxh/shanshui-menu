@@ -573,7 +573,7 @@
         <span class="mg-idx">${i + 1}</span>
         <span class="mg-tname" data-name="${id}" title="点击直接改名（仅本菜单）">${d.cn}${ovTag}</span>
         <span class="mg-ten">${d.en || ''}</span>
-        <span class="mg-grip" aria-hidden="true">⠿</span>
+        <span class="mg-grip" aria-hidden="true" title="按住拖动排序">⠿</span>
       </div>`;
     }).join('');
     const body = (mg.viewMode === 'text')
@@ -596,7 +596,7 @@
         </div>
       </div>
       ${body}
-      <p class="mg-footnote">${mg.viewMode === 'text' ? '按住任意一行上下拖动排序（更灵敏）· 点菜名可改本菜单显示名' : '点卡片编辑菜品 · 右上「✕」移出本菜单（调整顺序请切到「排序」模式）'}</p>`;
+      <p class="mg-footnote">${mg.viewMode === 'text' ? '拖动右侧把手上下排序 · 点菜名可改本菜单显示名' : '点卡片编辑菜品 · 右上「✕」移出本菜单（调整顺序请切到「排序」模式）'}</p>`;
   }
 
   // ---------- 菜单内菜品改名（覆盖显示名，不改动菜品库主数据） ----------
@@ -675,6 +675,8 @@
   let suppressMgClick = false;   // 拖拽刚结束时抑制一次 click，避免误触打开弹窗
   function onMgPointerDown(e) {
     if (mg.viewMode !== 'text') return;   // 卡片模式不拖拽排序；排序请切到「排序」模式
+    // 只有按住右侧把手（.mg-grip）才发起拖拽；点行其它位置交给浏览器滚动 / 点击改名
+    if (!e.target.closest('.mg-grip')) return;
     const row = e.target.closest('.mg-textrow[data-id]');
     if (!row) return;
     // 仅记录起点，不立即进入拖拽：位移够大才算拖拽，否则视为点击（交给内联改名）
