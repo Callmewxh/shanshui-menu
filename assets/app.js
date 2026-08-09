@@ -70,6 +70,7 @@
     pendingImage: null,
     pendingCrop: { y: 50 },
     pendingAddToPkg: null, // {banquet, pkg}：从选择器“新建并加入”时暂存
+    pickSel: [],           // 选择器点选顺序（菜品库 id，按点击先后），决定添加顺序与序号
   };
 
   const $ = (s) => document.querySelector(s);
@@ -322,6 +323,12 @@
     $('#manageScreen').hidden = order;
     document.querySelectorAll('#brandMenu .brand-item').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
     if (app) app.classList.toggle('mode-manage', mode === 'manage');
+    // 顶部栏的「宴席切换」与「搜索」是控制前端点菜页的控件，进入后台不需要出现
+    const top = document.querySelector('.topbar');
+    if (top) {
+      const bs = $('#banquetSelect'); if (bs) bs.hidden = (mode === 'manage');
+      const sb = top.querySelector('.search'); if (sb) sb.hidden = (mode === 'manage');
+    }
 
     if (order) {
       // 切回点菜：同步管理端当前宴席/套餐，并校验合法
@@ -431,6 +438,48 @@
     await Store.reorderPackages(mg.banquet, ids);
     renderPkgRow();
     toast('套餐顺序已保存');
+  }
+
+  // ---------- 套餐条右键：创建副本（快速建菜单） ----------
+  let pkgCtxId = null;
+  function closePkgCtx() {
+    const m = $('#pkgCtxMenu');
+    if (m) m.hidden = true;
+    pkgCtxId = null;
+  }
+  function onPkgContextMenu(e) {
+    const chip = e.target.closest('.mg-pkgchip');
+    if (!chip) return;                 // 仅在套餐条目上右键才弹出
+    e.preventDefault();
+    pkgCtxId = chip.dataset.pkg;
+    const m = $('#pkgCtxMenu');
+    m.hidden = false;
+    // 先显示再测尺寸，避免被视口裁切
+    const w = m.offsetWidth || 140, h = m.offsetHeight || 40;
+    const x = Math.min(e.clientX, window.innerWidth - w - 8);
+    const y = Math.min(e.clientY, window.innerHeight - h - 8);
+    m.style.left = x + 'px';
+    m.style.top = y + 'px';
+  }
+  async function duplicatePackage(banquetId, pkgId) {
+    const src = Store.getPackage(banquetId, pkgId);
+    if (!src) return;
+    const b = MENU()[banquetId];
+    const ids = new Set((b && b.packages || []).map((p) => p.id));
+    let nid = pkgId + '_c', n = 2;       // 生成不冲突的新编号
+    while (ids.has(nid)) { nid = pkgId + '_c' + n; n++; }
+    const copy = {
+      id: nid,
+      name: src.name + ' 副本',
+      price: src.price || 0,
+      demo: !!src.demo,
+      dishes: (src.dishes || []).slice(),   // 复制菜品引用（只存 id，不复制菜品库主数据）
+    };
+    const res = await Store.addPackage(banquetId, copy);
+    if (!res.ok) { alert(res.msg || '创建副本失败'); return; }
+    mg.pkg = nid;
+    renderManage();
+    toast('已创建副本：' + copy.name);
   }
 
   // ---------- 菜品库视图 ----------
@@ -805,6 +854,7 @@
     const b = MENU()[mg.banquet];
     const p = b && b.packages.find((x) => x.id === mg.pkg);
     if (!p) { alert('请先新增或选择套餐'); return; }
+    mg.pickSel = [];          // 每次打开清空上次点选顺序
     $('#pickCat').value = '';
     $('#pickSearch').value = '';
     renderPickTargets();
@@ -848,36 +898,52 @@
     const list = Store.LIBRARY.filter((d) => (!cat || d.cat === cat) && (!q || (d.cn + d.en).toLowerCase().includes(q)));
     const grid = $('#pickGrid');
     if (!list.length) { grid.innerHTML = '<div class="pick-empty">菜品库暂无菜品，请先到「菜品库」录入。</div>'; return; }
+    // 点选顺序：pickSel 是全局有序数组（按点击先后），搜索/筛选只改变显示哪些卡，
+    // 已选菜品的序号 = 其在 pickSel 中的位置 +1，因此筛选后重新出现仍连续不断连。
     grid.innerHTML = list.map((d) => {
       const inner = d.image
         ? dishCropThumb(d)
         : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
-      return `<label class="pick-card ${inPkg.has(d.id) ? 'in' : ''}">
-        <input type="checkbox" value="${d.id}" ${inPkg.has(d.id) ? 'checked' : ''}>
+      const order = mg.pickSel.indexOf(d.id);
+      const selCls = order >= 0 ? ' sel' : '';
+      const badge = order >= 0
+        ? `<span class="pick-order">${order + 1}</span>`
+        : (inPkg.has(d.id) ? '<span class="pick-badge">已在菜单</span>' : '');
+      return `<div class="pick-card ${inPkg.has(d.id) ? 'in' : ''}${selCls}" data-id="${d.id}">
+        ${badge}
         <div class="pick-thumb">${inner}</div>
         <div class="pick-cn">${d.num} · ${d.cn}</div>
-        ${inPkg.has(d.id) ? '<span class="pick-badge">已在菜单</span>' : ''}
-      </label>`;
+      </div>`;
     }).join('');
   }
 
+  // 点选 / 取消：按点击先后维护 pickSel（有序），决定添加顺序与序号
+  function togglePick(id) {
+    const i = mg.pickSel.indexOf(id);
+    if (i >= 0) mg.pickSel.splice(i, 1);
+    else mg.pickSel.push(id);
+    renderPickGrid();   // 重渲染（保留搜索词），序号即时刷新
+  }
+
   async function confirmPicker() {
-    const ids = Array.from(document.querySelectorAll('#pickGrid input:checked')).map((i) => i.value);
     const targets = pickTargets();
     if (!targets.length) { alert('请至少勾选一个目标套餐'); return; }
-    for (const t of targets) await Store.addDishesToPackage(t.banquet, t.pkg, ids);
+    if (!mg.pickSel.length) { alert('请先点选要加入的菜品'); return; }
+    // 按点选顺序加入（addDishesToPackage 内部去重，已存在不会重复）
+    for (const t of targets) await Store.addDishesToPackage(t.banquet, t.pkg, mg.pickSel.slice());
     $('#pickModal').hidden = true;
+    mg.pickSel = [];
     renderMenuTab();
-    toast(`已加入 ${targets.length} 个套餐`);
+    toast(`已按选择顺序加入 ${targets.length} 个套餐`);
   }
 
   async function removeFromTargets() {
-    const ids = Array.from(document.querySelectorAll('#pickGrid input:checked')).map((i) => i.value);
-    if (!ids.length) { alert('请先勾选要移除的菜品'); return; }
     const targets = pickTargets();
     if (!targets.length) { alert('请至少勾选一个目标套餐'); return; }
-    for (const t of targets) for (const id of ids) await Store.removeDishRef(t.banquet, t.pkg, id);
+    if (!mg.pickSel.length) { alert('请先点选要移除的菜品'); return; }
+    for (const t of targets) for (const id of mg.pickSel) await Store.removeDishRef(t.banquet, t.pkg, id);
     $('#pickModal').hidden = true;
+    mg.pickSel = [];
     renderMenuTab();
     toast(`已从 ${targets.length} 个套餐移除`);
   }
@@ -1056,7 +1122,8 @@
     if (overrideCtx) {
       const p = Store.getPackage(overrideCtx.banquetId, overrideCtx.pkgId);
       const ov = (p && p.nameOverrides) ? p.nameOverrides[id] : undefined;
-      const cur = (ov !== undefined && ov !== '') ? ov : lib.cn;
+      // nameOverrides 已升级为对象 { cn, en }：取中文覆盖名，避免把整个对象塞进 input 变成 [object Object]
+      const cur = (typeof ov === 'object' && ov) ? (ov.cn || '') : (ov !== undefined && ov !== '' ? ov : lib.cn);
       const input = document.createElement('input');
       input.className = 'mg-cn-edit';
       input.value = cur;
@@ -1324,6 +1391,22 @@
     $('#mgList').addEventListener('pointerdown', onMgPointerDown);
     // 套餐条：点击切换套餐、按住拖动排序
     $('#mgPkgRow').addEventListener('pointerdown', onPkgPointerDown);
+    // 套餐条右键 → 创建副本（快速建菜单）
+    $('#mgPkgRow').addEventListener('contextmenu', onPkgContextMenu);
+    $('#pkgCtxMenu').addEventListener('click', (e) => {
+      const item = e.target.closest('.ctx-item');
+      if (!item) return;
+      const act = item.dataset.act, id = pkgCtxId;
+      closePkgCtx();
+      if (act === 'dup' && id) duplicatePackage(mg.banquet, id);
+    });
+    // 点击空白处 / 滚动 / 切换标签时收起右键菜单
+    document.addEventListener('click', (e) => {
+      const m = $('#pkgCtxMenu');
+      if (m && !m.hidden && !m.contains(e.target)) closePkgCtx();
+    });
+    document.addEventListener('scroll', closePkgCtx, true);
+    $('#mgTabs').addEventListener('click', closePkgCtx);
 
     // 导入配置（JSON）：由「设置 → 导入配置」触发
     $('#importFile').addEventListener('change', (e) => {
@@ -1394,6 +1477,11 @@
     // —— 选择器弹窗 ——
     $('#pickCat').addEventListener('change', renderPickGrid);
     $('#pickSearch').addEventListener('input', renderPickGrid);
+    // 点选 / 取消：按点击先后维护有序选择（序号替代 ✅，搜索后不断连）
+    $('#pickGrid').addEventListener('click', (e) => {
+      const card = e.target.closest('.pick-card'); if (!card) return;
+      togglePick(card.dataset.id);
+    });
     $('#pickTargets').addEventListener('change', (e) => {
       const l = e.target.closest('.pick-target');
       if (l && e.target.matches('input')) l.classList.toggle('on', e.target.checked);
