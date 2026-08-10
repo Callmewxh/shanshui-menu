@@ -223,6 +223,27 @@ const Store = (function () {
     await save();
     return { ok: true };
   }
+  // 构建套餐副本对象（仅数据层，不写入）：菜品引用用 slice 复制（不复制菜品库主数据），
+  // nameOverrides 深拷贝并兼容字符串/对象两形态（保证副本改名独立），拷贝 price/demo，写入新 id/name。
+  function buildPackageCopy(srcPkg, name, id) {
+    const rawOverrides = (srcPkg && srcPkg.nameOverrides) || {};
+    const nameOverrides = {};
+    ((srcPkg && srcPkg.dishes) || []).forEach((libId) => {
+      const ov = rawOverrides[libId];
+      if (ov === undefined) return;
+      nameOverrides[libId] = (typeof ov === 'object' && ov)
+        ? { cn: ov.cn || '', en: ov.en || '' }
+        : ov;
+    });
+    return {
+      id: id,
+      name: name,
+      price: (srcPkg && srcPkg.price) || 0,
+      demo: !!(srcPkg && srcPkg.demo),
+      dishes: ((srcPkg && srcPkg.dishes) || []).slice(),
+      nameOverrides,
+    };
+  }
   async function updatePackage(banquetId, pkgId, patch) {
     const p = getPackage(banquetId, pkgId);
     if (!p) return { ok: false, msg: '套餐不存在' };
@@ -492,7 +513,7 @@ const Store = (function () {
     get BANQUETS() { return BANQUET_LIST; },
     save,
     getBanquet, ensureBanquet, nextNum,
-    getPackage, addPackage, updatePackage, renamePackage, removePackage, movePackage, reorderPackages,
+    getPackage, addPackage, buildPackageCopy, updatePackage, renamePackage, removePackage, movePackage, reorderPackages,
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,

@@ -516,36 +516,73 @@
     e.preventDefault();
     openPkgCtx(chip, e.clientX, e.clientY);
   }
-  async function duplicatePackage(banquetId, pkgId) {
-    const src = Store.getPackage(banquetId, pkgId);
+  // 通用复制：把 (srcBanquetId/srcPkgId) 复制到 dstBanquetId，支持自定义名字与编号。
+  // 同宴席复制（duplicatePackage）也走这里；跨宴席复制由套餐条右键「复制到其他宴席...」触发。
+  async function copyPackageTo(srcBanquetId, srcPkgId, dstBanquetId, overrideName, overrideId) {
+    const src = Store.getPackage(srcBanquetId, srcPkgId);
     if (!src) return;
-    const b = MENU()[banquetId];
-    const ids = new Set((b && b.packages || []).map((p) => p.id));
-    let nid = pkgId + '_c', n = 2;       // 生成不冲突的新编号
-    while (ids.has(nid)) { nid = pkgId + '_c' + n; n++; }
-    // 深拷贝 nameOverrides：副本中各菜的覆盖名独立，后续修改副本不影响原套餐
-    const rawOverrides = src.nameOverrides || {};
-    const nameOverrides = {};
-    (src.dishes || []).forEach((id) => {
-      const ov = rawOverrides[id];
-      if (ov === undefined) return;
-      nameOverrides[id] = (typeof ov === 'object' && ov)
-        ? { cn: ov.cn || '', en: ov.en || '' }
-        : ov;
-    });
-    const copy = {
-      id: nid,
-      name: src.name + ' 副本',
-      price: src.price || 0,
-      demo: !!src.demo,
-      dishes: (src.dishes || []).slice(),   // 复制菜品引用（只存 id，不复制菜品库主数据）
-      nameOverrides,
-    };
-    const res = await Store.addPackage(banquetId, copy);
+    // 不指定编号时，自动编一个不冲突的新编号（如 A_c / A_c2 ...）
+    let nid = overrideId;
+    if (!nid) {
+      const dst = Store.getBanquet(dstBanquetId) || { packages: [] };
+      const ids = new Set((dst.packages || []).map((p) => p.id));
+      nid = srcPkgId + '_c'; let n = 2;
+      while (ids.has(nid)) { nid = srcPkgId + '_c' + n; n++; }
+    }
+    const name = overrideName || (src.name + ' 副本');
+    const copy = Store.buildPackageCopy(src, name, nid);
+    const res = await Store.addPackage(dstBanquetId, copy);
     if (!res.ok) { alert(res.msg || '创建副本失败'); return; }
+    // 跨宴席时切到目标宴席，便于直接查看结果；同宴席则停留原地
+    mg.banquet = dstBanquetId;
     mg.pkg = nid;
     renderManage();
-    toast('已创建副本：' + copy.name);
+    toast('已复制 ' + (src.dishes || []).length + ' 道菜品到 ' + banquetName(dstBanquetId) + '·' + name);
+  }
+  async function duplicatePackage(banquetId, pkgId) {
+    await copyPackageTo(banquetId, pkgId, banquetId);  // 同宴席、自动编号与命名（向后兼容）
+  }
+
+  // ---------- 复制套餐到其他宴席（弹窗：选目标宴席 + 填名字/编号） ----------
+  function banquetName(id) {
+    const b = Store.BANQUETS.find((x) => x.id === id);
+    return b ? b.name : id;
+  }
+  function openCopyPkgModal(srcBanquetId, srcPkgId) {
+    const src = Store.getPackage(srcBanquetId, srcPkgId);
+    if (!src) return;
+    const dstSel = $('#copyPkgDst');
+    dstSel.innerHTML = Store.BANQUETS
+      .filter((b) => b.id !== srcBanquetId)
+      .map((b) => `<option value="${b.id}">${b.name}</option>`).join('');
+    $('#copyPkgSrc').textContent = '从「' + banquetName(srcBanquetId) + '·' + src.name + '」复制';
+    $('#copyPkgName').value = src.name + ' 副本';
+    $('#copyPkgId').value = srcPkgId + '_c';
+    const hint = $('#copyPkgIdHint'); hint.textContent = ''; hint.classList.remove('err');
+    const updateHint = () => {
+      const dst = dstSel.value;
+      const id = $('#copyPkgId').value.trim().toUpperCase();
+      const dstBanq = Store.getBanquet(dst) || { packages: [] };
+      const exists = dst && (dstBanq.packages || [])
+        .some((p) => String(p.id).toUpperCase() === id);
+      hint.textContent = exists ? '⚠ 该编号在目标宴席已存在' : '';
+      hint.classList.toggle('err', !!exists);
+    };
+    dstSel.onchange = updateHint;
+    $('#copyPkgId').oninput = updateHint;
+    updateHint();
+    $('#copyPkgModal')._src = { banquet: srcBanquetId, pkg: srcPkgId };
+    $('#copyPkgModal').hidden = false;
+  }
+  async function confirmCopyPkg() {
+    const m = $('#copyPkgModal');
+    const src = m._src || {};
+    const dst = $('#copyPkgDst').value;
+    const name = $('#copyPkgName').value.trim();
+    const id = $('#copyPkgId').value.trim();
+    if (!dst || !name || !id) { alert('请填写目标宴席、名称与编号'); return; }
+    await copyPackageTo(src.banquet, src.pkg, dst, name, id);
+    m.hidden = true;
   }
 
   // ---------- 菜品库视图 ----------
@@ -1578,6 +1615,7 @@
       closePkgCtx();
       if (act === 'edit' && id) { mg.pkg = id; mg.pkgMode = 'edit'; openPkgEditor(); return; }
       if (act === 'dup' && id) { duplicatePackage(mg.banquet, id); return; }
+      if (act === 'copyTo' && id) { openCopyPkgModal(mg.banquet, id); return; }
       if (act === 'del' && id) {
         (async () => {
           const p = Store.getPackage(mg.banquet, id);
@@ -1765,6 +1803,8 @@
       }
     });
 
+    // 复制套餐到其他宴席：确认按钮
+    $('#copyPkgConfirm').addEventListener('click', confirmCopyPkg);
     // 图片展示位置编辑器
     $('#cropApply').addEventListener('click', applyCrop);
     initCrop();
@@ -1774,7 +1814,7 @@
       btn.addEventListener('click', () => { $('#' + btn.dataset.close).hidden = true; });
     });
     // 「恢复默认」确认框刻意不加点遮罩关闭，必须显式选择，防误触
-    ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'menuDishModal'].forEach((id) => {
+    ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'menuDishModal', 'copyPkgModal'].forEach((id) => {
       $('#' + id).addEventListener('click', (e) => { if (e.target.id === id) $('#' + id).hidden = true; });
     });
   }
