@@ -40,11 +40,11 @@
       const sizeW = (100 / w).toFixed(3), sizeH = (100 / h).toFixed(3);
       const posX = (1 - w < 1e-4) ? '0' : (x / (1 - w) * 100).toFixed(2);
       const posY = (1 - h < 1e-4) ? '0' : (y / (1 - h) * 100).toFixed(2);
-      return `background-image:url('${d.image}');background-size:${sizeW}% ${sizeH}%;background-position:${posX}% ${posY}%;background-repeat:no-repeat;background-color:#efe8dc;`;
+      return `background-image:url('${d.image}');background-size:${sizeW}% ${sizeH}%;background-position:${posX}% ${posY}%;background-repeat:no-repeat;background-color:#EDE4D3;`;
     }
     // 旧模型 {y} / 无 crop：cover + 垂直平移（向后兼容）
     const y = (c && typeof c.y === 'number') ? c.y : 50;
-    return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:#efe8dc;`;
+    return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:#EDE4D3;`;
   };
   // 统一展示：所有有图窗口（点菜页/详情/菜品库/菜单/选择器）共用同一裁剪渲染，保证所见一致
   const dishCropThumb = (d) => `<div class="cropimg" style="${cropBg(d)}"></div>`;
@@ -220,9 +220,23 @@
 
     if (!ds.length) { list.innerHTML = '<div class="empty-state">未找到相关菜品</div>'; viewList = []; return; }
 
-    // 点菜页不再分类，全部菜品直接铺满一个网格（跨菜品打通循环浏览）
+    // 点菜页按分类分组展示（凉菜 / 主菜 / 主食点心），各区块独立标题 + 金色细线
+    const CAT_ORDER = ['凉菜', '主菜', '主食点心'];
+    const CN_NUM = ['壹', '贰', '叁'];
     viewList = ds.slice();
-    list.innerHTML = `<div class="grid">${ds.map((d, i) => cardHTML(d, i)).join('')}</div>`;
+    const sections = CAT_ORDER.map((cat, ci) => {
+      const items = ds.filter((d) => d.cat === cat);
+      if (!items.length) return '';
+      const cards = items.map((d) => cardHTML(d, ds.indexOf(d))).join('');
+      return `<section class="sec">
+        <div class="sec-head">
+          <h3><span class="sec-num">${CN_NUM[ci] || (ci + 1)}</span>${cat}</h3>
+          <span>${items.length} 道</span>
+        </div>
+        <div class="grid">${cards}</div>
+      </section>`;
+    }).join('');
+    list.innerHTML = sections || '<div class="empty-state">未找到相关菜品</div>';
   }
 
   function renderAll() {
