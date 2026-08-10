@@ -7,6 +7,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="theme-color" content="#B23A2E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -28,7 +31,7 @@
         <div class="bs-menu" id="bsMenu" hidden></div>
       </div>
       <div class="search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2B2622" stroke-width="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A2E26" stroke-width="2">
           <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line>
         </svg>
         <input id="search" type="search" placeholder="搜索菜品…" autocomplete="off">
@@ -105,6 +108,7 @@
       <!-- 套餐条右键菜单（在菜单 tab 右键某套餐弹出） -->
       <div class="ctx-menu" id="pkgCtxMenu" hidden>
         <button class="ctx-item" data-act="edit" type="button">编辑套餐</button>
+        <button class="ctx-item" data-act="copyTo" type="button">复制到其他宴席...</button>
         <button class="ctx-item" data-act="dup" type="button">创建副本</button>
         <button class="ctx-item danger" data-act="del" type="button">删除</button>
       </div>
@@ -187,6 +191,32 @@
           <button type="submit" class="mg-btn primary">保存</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 复制套餐到其他宴席 -->
+  <div class="modal" id="copyPkgModal" hidden>
+    <div class="modal-card copy-pkg-card">
+      <button class="modal-close" aria-label="关闭" data-close="copyPkgModal">✕</button>
+      <h3 class="copy-pkg-title">复制套餐到其他宴席</h3>
+      <p class="copy-pkg-sub" id="copyPkgSrc"></p>
+      <div class="field">
+        <label>目标宴席</label>
+        <select id="copyPkgDst" class="form-input"></select>
+      </div>
+      <div class="field">
+        <label>套餐名</label>
+        <input id="copyPkgName" class="form-input" type="text" maxlength="40" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>套餐编号</label>
+        <input id="copyPkgId" class="form-input" type="text" maxlength="20" autocomplete="off">
+        <div class="field-err" id="copyPkgIdHint"></div>
+      </div>
+      <div class="edit-actions">
+        <button type="button" class="mg-btn ghost" data-close="copyPkgModal">取消</button>
+        <button type="submit" class="mg-btn primary" id="copyPkgConfirm">复制</button>
+      </div>
     </div>
   </div>
 

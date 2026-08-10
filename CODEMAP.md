@@ -39,7 +39,7 @@ STATE = {
 **三条铁律：**
 1. 图片只存在 `library` 里一份，菜单只存 id → 一处改，处处同步。
 2. `nameOverrides` 有两种形态：旧数据是字符串（仅中文名），新数据是 `{cn,en}` 对象。取值时**永远不要直接把对象塞进 input**（历史 bug：显示 `[object Object]`）。
-3. `crop` = `{x,y,w,h}` 归一化矩形 + `cropAspect`（图片宽/高）。展示端用 `cropBg()` 输出 background-size/position，管理端缩略图用 `objPosFixed()` 固定居中。
+3. `crop` = `{x,y,w,h}` 归一化矩形 + `cropAspect`（图片宽/高）。展示端**与管理端缩略图统一用 `cropBg()`** 输出 background-size/position（WYSIWYG 一致）；旧版 `objPos`/`objPosFixed` 已移除，勿再调用。
 
 **持久化键：** `ss_menu_v1`（主数据）· `ss_menu_v1_backup`（每次保存自动备份）· `ss_pinhdr`（红条固定）· `ss_showdesc`（简介开关）
 
