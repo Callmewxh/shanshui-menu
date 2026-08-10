@@ -21,14 +21,6 @@
     '主菜': '#F0B8A0',
     '主食点心': '#E6C58F',
   };
-  // 缩略图定位样式：仅垂直方向（crop.y，0-100），固定比例 4:3，不变形
-  const objPos = (d) => {
-    const c = (d && d.crop) ? d.crop : null;
-    const y = (c && typeof c.y === 'number') ? c.y : 50;
-    return `object-position:50% ${y}%;`;
-  };
-  // 管理端缩略图：统一居中裁切，不随展示位置调整而变
-  const objPosFixed = () => `object-position:50% 50%;`;
   // 展示裁剪：支持 2D 平移 + 缩放的 4:3 截图框（方案 B：完整图上拖 4:3 框 + 缩放）。
   // 新模型 crop = {x,y,w,h}（图片归一化裁剪矩形：x/y=左上角占宽/高比例，w=宽比例，h=高比例；h=w*0.75*图片宽高比 以保证 4:3）。
   // 用 background-size/position 精确还原，保证编辑框与展示端所见即所得。
@@ -125,13 +117,23 @@
   }
 
   // ---------- 点菜模式渲染 ----------
+  // 客人端只列出「已配置套餐」的宴席；未配置的（null / 空 packages）不暴露给客人，避免点进空态
+  function guestBanquets() {
+    return Store.BANQUETS.filter((b) => {
+      const banq = MENU()[b.id];
+      return banq && Array.isArray(banq.packages) && banq.packages.length > 0;
+    });
+  }
   function renderTopTabs() {
+    const list = guestBanquets();
+    // 当前宴席若已不可见（被清空/未配置），回落到第一个可见宴席，避免客人停在空态
+    if (!list.some((b) => b.id === state.banquet) && list.length) state.banquet = list[0].id;
     const cur = Store.BANQUETS.find((b) => b.id === state.banquet);
     const name = cur ? cur.name : '婚宴';
     const trig = $('#bsCurrentName'); if (trig) trig.textContent = name;
     const menu = $('#bsMenu');
     if (menu) {
-      menu.innerHTML = Store.BANQUETS.map(
+      menu.innerHTML = list.map(
         (b) => `<button class="bs-item ${b.id === state.banquet ? 'on' : ''}" data-b="${b.id}">${b.name}</button>`
       ).join('');
       menu.hidden = true;
@@ -1784,12 +1786,14 @@
     } catch (_) {}
     bindStatic();
     // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子
+    // 拉取成功时 pullFromCloud 内部已渲染，避免首屏重复渲染；拉取失败再统一渲染种子
+    let pulled = false;
     try {
-      if (!localStorage.getItem('ss_menu_v1')) await pullFromCloud({ silent: true });
-    } catch (_) {}
+      if (!localStorage.getItem('ss_menu_v1')) pulled = await pullFromCloud({ silent: true });
+    } catch (_) { pulled = false; }
     // 初始化自动备份：若本机尚无备份副本，先用当前数据建一份，保证「恢复自动备份」可用
-    try { if (!localStorage.getItem('ss_menu_v1_backup')) Store.save(); } catch (_) {}
-    renderAll();
+    try { if (!localStorage.getItem('ss_menu_v1_backup')) await Store.save().catch(() => {}); } catch (_) {}
+    if (!pulled) renderAll();
     applyHeroPin();
     initImmersive();
   });
