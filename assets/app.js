@@ -1727,33 +1727,86 @@
       await pullFromCloud();
     });
 
-    // —— 品牌设置（LOGO 标记 + 酒店名称）——
+    // —— 品牌设置（LOGO 图片 + 酒店名称）——
     var BrandConfig = {
-      KEY_MARK: 'ss_brand_mark',
+      KEY_LOGO: 'ss_brand_logo',   // base64 dataURL of uploaded logo PNG
       KEY_NAME: 'ss_brand_name',
-      DEF_MARK: 'S',
       DEF_NAME: '山水S酒店',
-      get mark() { try { return localStorage.getItem(this.KEY_MARK) || this.DEF_MARK; } catch(e){return this.DEF_MARK;} },
+      DEF_MARK: 'S',
+      get logo() { try { return localStorage.getItem(this.KEY_LOGO) || ''; } catch(e){return '';} },
       get name() { try { return localStorage.getItem(this.KEY_NAME) || this.DEF_NAME; } catch(e){return this.DEF_NAME;} },
-      set mark(v) { try { localStorage.setItem(this.KEY_MARK, (v||'').trim() || this.DEF_MARK); } catch(_) {} },
+      set logo(v) { try { localStorage.setItem(this.KEY_LOGO, v||''); } catch(_) {} },
       set name(v) { try { localStorage.setItem(this.KEY_NAME, (v||'').trim() || this.DEF_NAME); } catch(_) {} },
-      // 应用到 DOM（品牌栏 + title）
+      hasLogo: function() { return !!this.logo; },
       apply: function() {
-        var m = $('.mark'); if (m) m.textContent = this.mark;
+        var m = $('.mark');
+        if (m) {
+          if (this.hasLogo()) {
+            m.style.backgroundImage = 'url(' + this.logo + ')';
+            m.style.backgroundSize = 'contain';
+            m.style.backgroundRepeat = 'no-repeat';
+            m.style.backgroundPosition = 'center';
+            m.textContent = '';
+            m.classList.add('has-logo');
+          } else {
+            m.style.backgroundImage = '';
+            m.classList.remove('has-logo');
+            m.textContent = this.DEF_MARK;
+          }
+        }
         var n = $('.brand-name'); if (n) n.textContent = this.name;
         document.title = this.name + ' · 婚宴菜单';
+        // 同步设置面板预览
+        var prev = $('#brandLogoPreview');
+        if (prev) {
+          if (this.hasLogo()) {
+            prev.style.backgroundImage = 'url(' + this.logo + ')';
+            prev.style.backgroundSize = 'contain';
+            prev.style.backgroundRepeat = 'no-repeat';
+            prev.style.backgroundPosition = 'center';
+            prev.style.backgroundColor = '#fff';
+            prev.textContent = '';
+            var wrap = $('#brandLogoWrap');
+            if (wrap) wrap.classList.add('has-img');
+          } else {
+            prev.style.backgroundImage = '';
+            prev.style.backgroundColor = '';
+            prev.textContent = this.DEF_MARK;
+            var wrap = $('#brandLogoWrap');
+            if (wrap) wrap.classList.remove('has-img');
+          }
+        }
       }
     };
     // 页面加载时应用已存储的品牌设置
     BrandConfig.apply();
-    // 输入框回显当前值
-    var bmInput = $('#setBrandMark');
-    if (bmInput) { bmInput.value = BrandConfig.mark; }
+    // 名称输入框回显+实时保存
     var bnInput = $('#setBrandName');
     if (bnInput) { bnInput.value = BrandConfig.name; }
-    // 用户修改时实时保存并应用
-    if (bmInput) bmInput.addEventListener('input', function() { BrandConfig.mark = bmInput.value; BrandConfig.apply(); });
     if (bnInput) bnInput.addEventListener('input', function() { BrandConfig.name = bnInput.value; BrandConfig.apply(); });
+    // LOGO 图片上传
+    var logoInput = $('#brandLogoInput');
+    var logoBtn = $('#setBrandLogoBtn');
+    var logoClear = $('#setBrandLogoClear');
+    if (logoBtn && logoInput) logoBtn.addEventListener('click', function() { logoInput.click(); });
+    if (logoInput) logoInput.addEventListener('change', function() {
+      var f = logoInput.files && logoInput.files[0];
+      if (!f) return;
+      if (!f.type.match(/^image\/(png|gif|jpeg|webp)$/)) { alert('请上传 PNG/GIF/JPG/WebP 格式的图片'); return; }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        BrandConfig.logo = e.target.result;
+        BrandConfig.apply();
+        toast('LOGO 已更新');
+      };
+      reader.readAsDataURL(f);
+      logoInput.value = ''; // 允许重复选同一文件
+    });
+    if (logoClear) logoClear.addEventListener('click', function() {
+      BrandConfig.logo = '';
+      BrandConfig.apply();
+      toast('已清除 LOGO，恢复默认标记');
+    });
     // 阻止点击品牌设置行时关闭面板
     var brandRows = document.querySelectorAll('.set-brand');
     brandRows.forEach(function(r) { r.addEventListener('click', function(e) { e.stopPropagation(); }); });

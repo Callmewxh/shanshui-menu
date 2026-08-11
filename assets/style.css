@@ -372,6 +372,21 @@ body {
 }
 .set-input:focus { border-color: var(--primary); }
 
+/* 品牌 LOGO 上传预览 */
+.brand-logo-wrap {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--primary-soft); border: 2px dashed var(--gold-hair);
+  display: flex; align-items: center; justify-content: center;
+  margin: 6px 0 8px; overflow: hidden;
+  transition: border-color .15s, background .15s;
+}
+.brand-logo-wrap.has-img { border-style: solid; border-color: var(--line); background: #fff; }
+.brand-logo-preview {
+  font-weight: 700; font-size: 18px; color: var(--primary);
+  max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 50%;
+}
+#setBrandLogoBtn, #setBrandLogoClear { margin-top: 0; font-size: 12px; padding: 5px 10px; }
+
 .mg-btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 10px; padding: 9px 16px; font-size: 14px; cursor: pointer; transition: .15s;
@@ -921,3 +936,22 @@ body {
   .cs-input { font-size: 16px; }
   .cs-client { width: 96px; } .cs-type { width: 120px; }
 }
+
+/* ===== 全局：隐藏滚动条（保持可滚动） ===== */
+::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ===== 价格未填提醒：红字晃动动画 ===== */
+@keyframes priceShake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-5px); }
+  30% { transform: translateX(4px); }
+  45% { transform: translateX(-3px); }
+  60% { transform: translateX(2px); }
+  75% { transform: translateX(-1px); }
+}
+.cs-total-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.cs-price-hint { font-size: 12px; color: var(--primary); font-weight: 600; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .3s; }
+.cs-price-hint.show { opacity: 1; animation: priceShake .55s ease-in-out 2; }
+.cs-total.shaking { border-color: var(--primary) !important; box-shadow: 0 0 0 2px var(--primary-soft) !important; }

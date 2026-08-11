@@ -311,7 +311,10 @@
             bodyParts.push('<text x="' + (tx + tw / 2) + '" y="' + (ty + th / 2 + 6 * k) + '" text-anchor="middle" font-family="sans-serif" font-size="' + fNoImg + '" fill="#A88A5E">无图</text>');
           }
           var cnY = cy + thumbH + 36 * k;
-          bodyParts.push('<text x="' + (cx + 14 * k) + '" y="' + cnY + '" font-family="serif" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + esc(l.cn || '未命名菜品') + '</text>');
+          // 菜名：超长时截断（保留中文字符可见宽度）
+          var maxCnW = tw - 4 * k; // 最大文字宽度略小于图片区宽
+          var cnText = esc(l.cn || '未命名菜品');
+          bodyParts.push('<text x="' + (cx + 10 * k) + '" y="' + cnY + '" font-family="serif" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + cnText + '</text>');
           if (l.note) {
             // 备注紧跟菜名下方，左对齐，有足够内边距
             bodyParts.push('<text x="' + (cx + 14 * k) + '" y="' + (cnY + 26 * k) + '" font-family="sans-serif" font-size="' + fNote + '" fill="#B23A2E">' + esc(l.note) + '</text>');
@@ -445,14 +448,30 @@
     return out;
   }
 
+  // 价格未填提醒：红字晃动 + 输入框高亮，并返回是否需要拦截
+  function triggerPriceHint() {
+    var csTotal = $('#csTotal');
+    var hint = $('#csPriceHint');
+    if (csTotal) {
+      csTotal.classList.add('shaking');
+      setTimeout(function () { csTotal.classList.remove('shaking'); }, 1200);
+      csTotal.focus(); csTotal.select();
+    }
+    if (hint) {
+      hint.classList.remove('show');
+      // 强制重排以重启动画
+      void hint.offsetWidth;
+      hint.classList.add('show');
+      setTimeout(function () { hint.classList.remove('show'); }, 1600);
+    }
+  }
+
   function doExport() {
     if (!draft) return;
     // 校验：必须填写总价才能导出
     var total = (draft.total || '').toString().trim();
     if (!total || total === '0') {
-      alert('请先填写「本单总价」再导出报价单。');
-      var csTotal = $('#csTotal');
-      if (csTotal) { csTotal.focus(); csTotal.select(); }
+      triggerPriceHint();
       return;
     }
     var ver = getExpVer();
@@ -477,7 +496,12 @@
 
   function openExport() {
     if (!draft) return;
-    // 允许打开弹窗预览（价格校验延后到真正点「生成图片」时）
+    // 未填总价：在价格旁红字晃动提醒（不打开弹窗）
+    var total = (draft.total || '').toString().trim();
+    if (!total || total === '0') {
+      triggerPriceHint();
+      return;
+    }
     var m = $('#exportModal');
     if (m) { m.hidden = false; renderExpPreview(); }
   }
@@ -505,7 +529,7 @@
     var csType = $('#csType'), csClient = $('#csClient'), csTotal = $('#csTotal');
     if (csType) csType.addEventListener('input', function () { if (draft) draft.type = csType.value; });
     if (csClient) csClient.addEventListener('input', function () { if (draft) draft.client = csClient.value; });
-    if (csTotal) csTotal.addEventListener('input', function () { if (draft) draft.total = csTotal.value; });
+    if (csTotal) csTotal.addEventListener('input', function () { if (draft) draft.total = csTotal.value; var hint = $('#csPriceHint'); if (hint) hint.classList.remove('show'); csTotal.classList.remove('shaking'); });
 
     // 草案内交互（事件委托）
     var body = $('#csBody');

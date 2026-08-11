@@ -94,7 +94,8 @@
             <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
             <!-- 品牌设置 -->
             <div class="set-section-title">品牌信息</div>
-            <div class="set-row set-brand"><span class="set-ic">🏨</span><span class="set-txt"><label for="setBrandMark">LOGO 标记</label><i>左上角品牌标识（建议 1–2 个字符）</i><input type="text" id="setBrandMark" maxlength="4" placeholder="S" class="set-input"></span></div>
+            <div class="set-row set-brand"><span class="set-ic">🖼</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 无背景图（建议 120×120 以上）</i><div class="brand-logo-wrap" id="brandLogoWrap"><div class="brand-logo-preview" id="brandLogoPreview">S</div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="清除恢复默认">✕ 清除</button></span></div>
+            <input type="file" id="brandLogoInput" accept="image/png,image/*" hidden>
             <div class="set-row set-brand"><span class="set-ic">✎</span><span class="set-txt"><label for="setBrandName">酒店/品牌名称</label><i>用于标题栏、导出报价单等</i><input type="text" id="setBrandName" maxlength="20" placeholder="山水S酒店" class="set-input"></span></div>
             <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>
@@ -136,9 +137,12 @@
       <div class="cs-body" id="csBody"></div>
       <div class="cs-foot">
         <button class="mg-btn" id="csAddBtn" type="button">＋ 添加菜品</button>
-        <div class="cs-total">
-          <label>本单总价（元 / 桌）</label>
-          <input id="csTotal" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+        <div class="cs-total-wrap">
+          <div class="cs-total">
+            <label>本单总价（元 / 桌）</label>
+            <input id="csTotal" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+          </div>
+          <span class="cs-price-hint" id="csPriceHint">请先填写价格</span>
         </div>
       </div>
     </div>
