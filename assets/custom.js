@@ -231,6 +231,10 @@
 
   // —— 导出 ——
   var expFmt = 'png';
+  // 品牌名（从设置读取，fallback 默认值）
+  function getBrandName() {
+    try { return localStorage.getItem('ss_brand_name') || '山水S酒店'; } catch(e) { return '山水S酒店'; }
+  }
   function getExpVer() {
     var r = document.querySelector('input[name="expVer"]:checked');
     return r ? r.value : 'thumb';
@@ -344,14 +348,14 @@
       '<rect x="0" y="0" width="' + pageW + '" height="' + (10 * k) + '" fill="#B23A2E"/>' +
       // 抬头
       '<text x="' + M + '" y="' + (74 * k) + '" font-family="serif" font-size="' + fHead + '" font-weight="700" fill="#B23A2E">' + esc(client) + ' · ' + esc(type) + '</text>' +
-      '<text x="' + M + '" y="' + (106 * k) + '" font-family="sans-serif" font-size="' + fSub + '" fill="#A88A5E">山水S酒店 · 宴席定制单</text>' +
+      '<text x="' + M + '" y="' + (106 * k) + '" font-family="sans-serif" font-size="' + fSub + '" fill="#A88A5E">' + esc(getBrandName()) + ' · 宴席定制单</text>' +
       '<text x="' + (pageW - M) + '" y="' + (74 * k) + '" text-anchor="end" font-family="serif" font-size="' + fTotal + '" font-weight="700" fill="#8A6D1F">' + esc(totalStr) + '</text>' +
       '<text x="' + (pageW - M) + '" y="' + (104 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + fTotalLbl + '" fill="#A88A5E">本单总价（元 / 桌）</text>' +
       '<line x1="' + M + '" y1="' + (132 * k) + '" x2="' + (pageW - M) + '" y2="' + (132 * k) + '" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       bodyParts.join('') +
       // 页脚品牌线
       '<line x1="' + M + '" y1="' + (pageH - 36 * k) + '" x2="' + (pageW - M) + '" y2="' + (pageH - 36 * k) + '" stroke="#F0E8D8" stroke-width="' + (1 * k) + '"/>' +
-      '<text x="' + (pageW - M) + '" y="' + (pageH - 14 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + (11 * k) + '" fill="#C8BAA0">山水S酒店</text>' +
+      '<text x="' + (pageW - M) + '" y="' + (pageH - 14 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + (11 * k) + '" fill="#C8BAA0">' + esc(getBrandName()) + '</text>' +
       '</svg>';
     return svg;
   }
@@ -473,16 +477,9 @@
 
   function openExport() {
     if (!draft) return;
-    // 前置校验：总价未填时提示
-    var total = (draft.total || '').toString().trim();
-    if (!total || total === '0') {
-      alert('请先填写「本单总价」再导出报价单。');
-      var csTotal = $('#csTotal');
-      if (csTotal) { csTotal.focus(); csTotal.select(); }
-      return;
-    }
+    // 允许打开弹窗预览（价格校验延后到真正点「生成图片」时）
     var m = $('#exportModal');
-    renderExpPreview();
+    if (m) { m.hidden = false; renderExpPreview(); }
   }
   function closeExport() {
     var m = $('#exportModal');

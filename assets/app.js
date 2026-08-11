@@ -1726,6 +1726,37 @@
       if (!confirm('将从云端拉取已发布的菜单，并覆盖本设备当前菜单。确定继续？')) return;
       await pullFromCloud();
     });
+
+    // —— 品牌设置（LOGO 标记 + 酒店名称）——
+    var BrandConfig = {
+      KEY_MARK: 'ss_brand_mark',
+      KEY_NAME: 'ss_brand_name',
+      DEF_MARK: 'S',
+      DEF_NAME: '山水S酒店',
+      get mark() { try { return localStorage.getItem(this.KEY_MARK) || this.DEF_MARK; } catch(e){return this.DEF_MARK;} },
+      get name() { try { return localStorage.getItem(this.KEY_NAME) || this.DEF_NAME; } catch(e){return this.DEF_NAME;} },
+      set mark(v) { try { localStorage.setItem(this.KEY_MARK, (v||'').trim() || this.DEF_MARK); } catch(_) {} },
+      set name(v) { try { localStorage.setItem(this.KEY_NAME, (v||'').trim() || this.DEF_NAME); } catch(_) {} },
+      // 应用到 DOM（品牌栏 + title）
+      apply: function() {
+        var m = $('.mark'); if (m) m.textContent = this.mark;
+        var n = $('.brand-name'); if (n) n.textContent = this.name;
+        document.title = this.name + ' · 婚宴菜单';
+      }
+    };
+    // 页面加载时应用已存储的品牌设置
+    BrandConfig.apply();
+    // 输入框回显当前值
+    var bmInput = $('#setBrandMark');
+    if (bmInput) { bmInput.value = BrandConfig.mark; }
+    var bnInput = $('#setBrandName');
+    if (bnInput) { bnInput.value = BrandConfig.name; }
+    // 用户修改时实时保存并应用
+    if (bmInput) bmInput.addEventListener('input', function() { BrandConfig.mark = bmInput.value; BrandConfig.apply(); });
+    if (bnInput) bnInput.addEventListener('input', function() { BrandConfig.name = bnInput.value; BrandConfig.apply(); });
+    // 阻止点击品牌设置行时关闭面板
+    var brandRows = document.querySelectorAll('.set-brand');
+    brandRows.forEach(function(r) { r.addEventListener('click', function(e) { e.stopPropagation(); }); });
     document.addEventListener('click', (e) => {
       const w = $('#mgSetWrap');
       if (w && !w.contains(e.target)) closeSettings();
