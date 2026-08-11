@@ -737,3 +737,151 @@ body {
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
+
+/* ===================== 定制单 ===================== */
+#customScreen { background: var(--bg); }
+.cs-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 16px 24px; border-bottom: 1px solid var(--gold-hair);
+  background: var(--surface); flex-wrap: wrap;
+}
+.cs-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cs-input {
+  border: none; border-bottom: 1px solid var(--gold-hair); background: transparent;
+  font-family: var(--serif); color: var(--ink); padding: 4px 2px; font-size: 18px; line-height: 1.2;
+}
+.cs-input:focus { outline: none; border-bottom-color: var(--primary); }
+.cs-client { width: 120px; }
+.cs-type { width: 150px; }
+.cs-dot { color: var(--gold); font-family: var(--serif); font-size: 20px; }
+.cs-tag {
+  font-size: 12px; color: var(--muted); background: var(--primary-soft);
+  border: 1px solid var(--gold-hair); border-radius: var(--r-pill); padding: 3px 10px; margin-left: 4px;
+}
+.cs-head-right { display: flex; align-items: center; gap: 14px; }
+.cs-source { font-size: 13px; color: var(--muted); }
+
+.cs-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px 28px; }
+.cs-group { margin-bottom: 22px; }
+.cs-group-title {
+  font-family: var(--serif); font-size: 21px; font-weight: 700; color: var(--primary);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.cs-gt-tick { width: 5px; height: 20px; border-radius: 3px; background: var(--gold); display: inline-block; }
+.cs-rows { display: flex; flex-direction: column; gap: 10px; }
+
+.cs-row {
+  display: flex; align-items: stretch; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+.cs-thumb {
+  width: 76px; height: 57px; flex: 0 0 auto; border-radius: 8px; overflow: hidden;
+  background: var(--img-bg); position: relative;
+}
+.cs-thumb .cropimg { border-radius: 8px; }
+.cs-noimg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--muted); font-family: var(--sans);
+}
+.cs-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.cs-row-cn {
+  font-family: var(--serif); font-size: 16px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cs-row-note {
+  width: 100%; border: none; border-bottom: 1px solid var(--gold-hair); background: transparent;
+  font-family: var(--sans); font-size: 13px; color: var(--desc); padding: 2px 0;
+}
+.cs-row-note::placeholder { color: var(--muted); }
+.cs-row-note:focus { outline: none; border-bottom-color: var(--primary); }
+.cs-row-acts { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.cs-act {
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: var(--r-pill); padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: var(--sans);
+}
+.cs-act:hover { border-color: var(--primary); color: var(--primary); }
+.cs-act-del { color: var(--muted); padding: 6px 10px; }
+.cs-act-del:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.cs-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: 14px; }
+
+.cs-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px; border-top: 1px solid var(--gold-hair); background: var(--surface); flex-wrap: wrap;
+}
+.cs-total { display: flex; align-items: center; gap: 10px; }
+.cs-total label { font-size: 13px; color: var(--muted); }
+.cs-total input {
+  width: 130px; border: 1px solid var(--gold-hair); background: var(--bg);
+  border-radius: var(--r-md); padding: 8px 12px; font-family: var(--serif); font-size: 20px;
+  font-weight: 700; color: var(--primary); text-align: right;
+}
+.cs-total input:focus { outline: none; border-color: var(--primary); }
+
+/* 选择器（换菜 / 添加） */
+.pick-toolbar { display: flex; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.cs-pick-search {
+  flex: 1; border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 9px 12px; font-size: 14px; font-family: var(--sans); color: var(--ink); background: var(--bg);
+}
+.cs-pick-search:focus { outline: none; border-color: var(--primary); }
+.cs-pick-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  padding: 16px; max-height: 60vh; overflow: auto;
+}
+.cs-pick-card {
+  display: flex; flex-direction: column; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  overflow: hidden; padding: 0; font-family: var(--sans); color: var(--ink);
+}
+.cs-pick-card:hover { border-color: var(--primary); }
+.cs-pick-thumb { width: 100%; height: 96px; background: var(--img-bg); position: relative; }
+.cs-pick-thumb .cropimg { border-radius: 0; }
+.cs-pick-meta { padding: 8px 10px; }
+.cs-pick-cn { font-family: var(--serif); font-size: 15px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-pick-cat { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.cs-pick-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px; font-size: 14px; }
+
+/* 导出弹窗 */
+.exp-modal-card { max-width: 520px; width: 94vw; padding: 24px 24px 20px; }
+.exp-options { display: flex; flex-direction: column; gap: 14px; padding: 0; }
+.exp-opt {
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+  border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 16px 18px;
+  background: var(--surface); transition: border-color .15s, background .15s;
+}
+.exp-opt:hover { border-color: var(--gold-hair); }
+.exp-opt input { display: none; }
+.exp-opt.on { border-color: var(--primary); background: var(--primary-soft); }
+.exp-opt-title { font-family: var(--serif); font-size: 16px; font-weight: 600; color: var(--ink); }
+.exp-opt-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+/* 预览区 */
+.exp-preview-wrap { padding: 8px 0 14px; }
+.exp-preview-label { font-size: 13px; color: var(--muted); margin-bottom: 10px; font-family: var(--sans); }
+.exp-preview {
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: #FAF6EE; overflow: hidden;
+  max-height: 300px; display: flex; align-items: center; justify-content: center;
+}
+.exp-preview svg { display: block; width: 100%; height: auto; }
+
+/* 格式选择行 */
+.exp-format { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); margin-top: 6px; }
+.exp-format > span { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.exp-fmt-toggle { display: flex; gap: 10px; }
+.exp-fmt {
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: var(--r-pill); padding: 7px 22px; font-size: 13px; cursor: pointer; font-family: var(--sans);
+  min-width: 56px; text-align: center;
+}
+.exp-fmt.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* 导出弹窗底部按钮区：加大间距 */
+#exportModal .edit-actions { gap: 12px; margin-top: 18px; padding-top: 10px; }
+
+@media (max-width: 640px) {
+  .cs-pick-grid { grid-template-columns: repeat(2, 1fr); }
+  .cs-input { font-size: 16px; }
+  .cs-client { width: 96px; } .cs-type { width: 120px; }
+}

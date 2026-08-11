@@ -348,17 +348,25 @@
     closeSettings();
     state.mode = mode;
     const order = mode === 'order';
+    const manage = mode === 'manage';
+    const custom = mode === 'custom';
     $('#orderScreen').hidden = !order;
-    $('#manageScreen').hidden = order;
+    $('#manageScreen').hidden = !manage;
+    const cs = $('#customScreen'); if (cs) cs.hidden = !custom;
     document.querySelectorAll('#brandMenu .brand-item').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
-    if (app) app.classList.toggle('mode-manage', mode === 'manage');
+    if (app) app.classList.toggle('mode-manage', manage);
     // 顶部栏的「宴席切换」与「搜索」是控制前端点菜页的控件，进入后台不需要出现
     const top = document.querySelector('.topbar');
     if (top) {
-      const bs = $('#banquetSelect'); if (bs) bs.hidden = (mode === 'manage');
-      const sb = top.querySelector('.search'); if (sb) sb.hidden = (mode === 'manage');
+      const bs = $('#banquetSelect'); if (bs) bs.hidden = (manage || custom);
+      const sb = top.querySelector('.search'); if (sb) sb.hidden = (manage || custom);
     }
 
+    if (custom) {
+      // 进入定制单：把当前点菜端选中的宴席/套餐作为草案来源（纯内存，不回写标准菜单）
+      if (window.CustomOrder) window.CustomOrder.enter(state.banquet, state.pkg);
+      return;
+    }
     if (order) {
       // 切回点菜：同步管理端当前宴席/套餐，并校验合法
       state.banquet = mg.banquet;

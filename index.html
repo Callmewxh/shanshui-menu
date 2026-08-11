@@ -23,6 +23,7 @@
         <div class="brand-menu" id="brandMenu" hidden>
           <button class="brand-item on" data-mode="order" type="button">点菜</button>
           <button class="brand-item" data-mode="manage" type="button">管理</button>
+          <button class="brand-item" data-mode="custom" type="button">定制单</button>
         </div>
       </div>
 
@@ -111,6 +112,30 @@
         <button class="ctx-item" data-act="copyTo" type="button">复制到其他宴席...</button>
         <button class="ctx-item" data-act="dup" type="button">创建副本</button>
         <button class="ctx-item danger" data-act="del" type="button">删除</button>
+      </div>
+    </div>
+
+    <!-- 定制单模式：纯内存草案，不回写标准菜单 -->
+    <div class="screen" id="customScreen" hidden>
+      <div class="cs-head">
+        <div class="cs-title">
+          <input class="cs-input cs-client" id="csClient" type="text" placeholder="客户姓氏" maxlength="12" autocomplete="off">
+          <span class="cs-dot">·</span>
+          <input class="cs-input cs-type" id="csType" type="text" placeholder="宴席类型" maxlength="20" autocomplete="off">
+          <span class="cs-tag">宴席定制单</span>
+        </div>
+        <div class="cs-head-right">
+          <span class="cs-source" id="csSource"></span>
+          <button class="mg-btn primary" id="csExportBtn" type="button">存为图片</button>
+        </div>
+      </div>
+      <div class="cs-body" id="csBody"></div>
+      <div class="cs-foot">
+        <button class="mg-btn" id="csAddBtn" type="button">＋ 添加菜品</button>
+        <div class="cs-total">
+          <label>本单总价（元 / 桌）</label>
+          <input id="csTotal" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+        </div>
       </div>
     </div>
   </div>
@@ -318,9 +343,68 @@
     </div>
   </div>
 
+  <!-- 定制单：从菜品库选择（换菜 / 添加） -->
+  <div class="modal" id="customPickModal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" aria-label="关闭" data-close="customPickModal">✕</button>
+      <h3 id="csPickTitle">选择菜品</h3>
+      <div class="pick-toolbar">
+        <select id="csPickCat" class="mg-mini">
+          <option value="">全部分类</option>
+          <option value="凉菜">凉菜</option>
+          <option value="主菜">主菜</option>
+          <option value="主食点心">主食点心</option>
+        </select>
+        <input id="csPickSearch" class="cs-pick-search" type="search" placeholder="搜索菜品…" autocomplete="off">
+      </div>
+      <div class="cs-pick-grid" id="csPickGrid"></div>
+      <div class="edit-actions">
+        <span class="spacer"></span>
+        <button class="mg-btn" data-close="customPickModal" type="button">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 定制单：导出选项 -->
+  <div class="modal" id="exportModal" hidden>
+    <div class="modal-card exp-modal-card">
+      <button class="modal-close" aria-label="关闭" data-close="exportModal">✕</button>
+      <h3>导出宴席定制报价单</h3>
+      <div class="exp-options">
+        <label class="exp-opt on" data-exp-ver="thumb">
+          <input type="radio" name="expVer" value="thumb" checked>
+          <span class="exp-opt-title">带图版</span>
+          <span class="exp-opt-desc">每道菜配 4:3 缩略图，三列网格，适合发客户预览</span>
+        </label>
+        <label class="exp-opt" data-exp-ver="plain">
+          <input type="radio" name="expVer" value="plain">
+          <span class="exp-opt-title">无图版</span>
+          <span class="exp-opt-desc">纯文字排版，按分类排列，更紧凑正式</span>
+        </label>
+      </div>
+      <!-- 预览区 -->
+      <div class="exp-preview-wrap">
+        <div class="exp-preview-label">预览效果</div>
+        <div class="exp-preview" id="expPreview"></div>
+      </div>
+      <div class="exp-format">
+        <span>导出格式</span>
+        <div class="exp-fmt-toggle">
+          <button type="button" class="exp-fmt on" data-fmt="png">PNG</button>
+          <button type="button" class="exp-fmt" data-fmt="svg">SVG</button>
+        </div>
+      </div>
+      <div class="edit-actions">
+        <button class="mg-btn" data-close="exportModal" type="button">取消</button>
+        <button class="mg-btn primary" id="expConfirm" type="button">生成图片</button>
+      </div>
+    </div>
+  </div>
+
   <script src="assets/data.js"></script>
   <script src="assets/store.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/custom.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
