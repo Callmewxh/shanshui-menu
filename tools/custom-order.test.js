@@ -88,9 +88,20 @@ function run() {
     document.getElementById('csExportBtn').dispatchEvent(new window.Event('click', { bubbles: true }));
     const expModal = document.getElementById('exportModal');
     assert(expModal && expModal.hidden === false, '点击「存为图片」打开导出弹窗');
-    // 切到 SVG 格式
-    const svgFmtBtn = document.querySelector('.exp-fmt[data-fmt="svg"]');
-    if (svgFmtBtn) svgFmtBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
+
+    // 格式按钮为 PNG / PDF（不再有 SVG）
+    const fmtBtns = Array.from(document.querySelectorAll('.exp-fmt')).map(b => b.getAttribute('data-fmt'));
+    assert(fmtBtns.indexOf('png') >= 0 && fmtBtns.indexOf('pdf') >= 0 && fmtBtns.indexOf('svg') < 0, '导出格式为 PNG/PDF（无 SVG）：' + fmtBtns.join(','));
+
+    // 字号档位：默认标准=1，点击「特大」后=1.6
+    assert(Math.abs(window.CustomOrder._getExpScale() - 1) < 1e-6, '默认字号档位=标准(1)');
+    const xlBtn = document.querySelector('.exp-size-btn[data-scale="1.6"]');
+    assert(!!xlBtn, '存在「特大」档位按钮');
+    if (xlBtn) xlBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    assert(Math.abs(window.CustomOrder._getExpScale() - 1.6) < 1e-6, '切换特大后档位=1.6');
+    // 切回标准，便于后续断言
+    const stdBtn = document.querySelector('.exp-size-btn[data-scale="1"]');
+    if (stdBtn) stdBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
 
     // buildSVG 两种版本
     const svgThumb = window.CustomOrder._buildSVG('thumb');
@@ -103,14 +114,24 @@ function run() {
     assert(svgPlain.indexOf('<image') === -1, 'plain SVG 无图');
     assert(svgPlain.indexOf('</svg>') > -1, 'plain SVG 闭合正确');
 
-    // doExport(svg) 产出 blob
-    let captured = null;
-    window.URL.createObjectURL = function (b) { captured = b; return 'blob:x'; };
-    const origClick = window.HTMLAnchorElement.prototype.click;
-    window.HTMLAnchorElement.prototype.click = function () {};
-    window.CustomOrder._doExport();
-    assert(captured != null, 'doExport 触发下载（produced blob）');
-    window.HTMLAnchorElement.prototype.click = origClick;
+    // 档位缩放：特大档位下菜名字号应为 22*1.6=35.2
+    const svgThumbXL = window.CustomOrder._buildSVG('thumb', 1.6);
+    assert(/font-size="35.2"/.test(svgThumbXL), '特大档位菜名字号放大到 35.2（22×1.6）');
+
+    // 纯前端 PDF 生成器：构造最小 JPEG 字节，验证产出合法 PDF 头尾
+    const fakeJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9]);
+    const pdf = window.CustomOrder._buildPdfWithJpeg(fakeJpeg, 100, 80, 842, 673.6);
+    const head = String.fromCharCode.apply(null, pdf.slice(0, 8));
+    const tail = String.fromCharCode.apply(null, pdf.slice(pdf.length - 6));
+    assert(head.indexOf('%PDF-1.') === 0, 'PDF 生成器产出合法 PDF 头');
+    assert(tail.indexOf('%%EOF') >= 0, 'PDF 生成器产出合法 PDF 尾');
+    const pdfStr = String.fromCharCode.apply(null, pdf);
+    assert(/DCTDecode/.test(pdfStr) && /MediaBox/.test(pdfStr), 'PDF 内嵌 DCTDecode 图像与 MediaBox');
+
+    // doExport 为异步栅格化（依赖浏览器 canvas），此处仅确认可同步调用不抛错
+    let threw = false;
+    try { window.CustomOrder._doExport(); } catch (e) { threw = true; }
+    assert(!threw, 'doExport 可调用（栅格化在浏览器 canvas 中异步完成）');
 
     assert(consoleErrors.length === 0, '运行期无 jsdom 报错' + (consoleErrors.length ? '：' + consoleErrors.join(' | ') : ''));
   } catch (e) {

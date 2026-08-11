@@ -248,12 +248,17 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   }
 
-  // 构造导出 SVG（thumb=带缩略图三列网格；plain=无图对齐排版）
-  function buildSVG(ver) {
+  // 构造导出 SVG（thumb=带图版三列网格；plain=无图排版）
+  // k: 字号/行距缩放（三档界面大小），固定 pageW 保证手机端字号相对更大、更利于长辈阅读
+  function buildSVG(ver, k) {
+    k = k || 1;
     var pageW = ver === 'thumb' ? 1080 : 860;
-    var M = 48;
-    var headerH = 168;
+    var M = Math.round(48 * k);
+    var headerH = Math.round(168 * k);
     var contentW = pageW - M * 2;
+
+    var fHead = 44 * k, fSub = 18 * k, fTotal = 34 * k, fTotalLbl = 15 * k;
+    var fCat = 30 * k, fCn = 22 * k, fNote = 14 * k, fPlain = 20 * k, fPlainNote = 15 * k, fNoImg = 16 * k;
 
     var client = (draft.client || '').trim() || '贵宾';
     var type = (draft.type || '').trim() || '宴席';
@@ -267,23 +272,23 @@
       var lines = draft.lines.filter(function (l) { return l.cat === cat; });
       if (!lines.length) return;
       // 分类标题
-      bodyParts.push('<text x="' + M + '" y="' + (y + 30) + '" font-family="serif" font-size="30" font-weight="700" fill="#B23A2E">' + esc(cat) + '</text>');
-      bodyParts.push('<rect x="' + M + '" y="' + (y + 42) + '" width="46" height="4" rx="2" fill="#C2A15A"/>');
-      y += 64;
+      bodyParts.push('<text x="' + M + '" y="' + (y + 30 * k) + '" font-family="serif" font-size="' + fCat + '" font-weight="700" fill="#B23A2E">' + esc(cat) + '</text>');
+      bodyParts.push('<rect x="' + M + '" y="' + (y + 42 * k) + '" width="' + (46 * k) + '" height="' + (4 * k) + '" rx="' + (2 * k) + '" fill="#C2A15A"/>');
+      y += 64 * k;
 
       if (ver === 'thumb') {
-        var gap = 22;
+        var gap = Math.round(22 * k);
         var cellW = (contentW - gap * 2) / 3;
         var thumbH = Math.round(cellW * 0.75);
-        var cellTextH = 76; // 增加文字区高度，给备注留空间
+        var cellTextH = Math.round(76 * k); // 文字区高度随档位放大，给备注留空间
         var cellH = thumbH + cellTextH;
         lines.forEach(function (l, i) {
           var cx = M + (i % 3) * (cellW + gap);
           var cy = y + Math.floor(i / 3) * (cellH + gap);
-          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="14" fill="#FBF7EE" stroke="#ECE3D2"/>');
-          var tx = cx + 10, ty = cy + 10, tw = cellW - 20, th = thumbH;
-          bodyParts.push('<clipPath id="clip_' + l.id + '"><rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="10"/></clipPath>');
-          bodyParts.push('<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="10" fill="#EDE4D3"/>');
+          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="' + (14 * k) + '" fill="#FBF7EE" stroke="#ECE3D2"/>');
+          var tx = cx + 10 * k, ty = cy + 10 * k, tw = cellW - 20 * k, th = thumbH;
+          bodyParts.push('<clipPath id="clip_' + l.id + '"><rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '"/></clipPath>');
+          bodyParts.push('<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '" fill="#EDE4D3"/>');
           if (l.image) {
             var c = l.crop;
             var inner;
@@ -296,46 +301,53 @@
             }
             bodyParts.push('<g clip-path="url(#clip_' + l.id + ')">' + inner + '</g>');
           } else {
-            bodyParts.push('<text x="' + (tx + tw / 2) + '" y="' + (ty + th / 2 + 6) + '" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#A88A5E">无图</text>');
+            bodyParts.push('<text x="' + (tx + tw / 2) + '" y="' + (ty + th / 2 + 6 * k) + '" text-anchor="middle" font-family="sans-serif" font-size="' + fNoImg + '" fill="#A88A5E">无图</text>');
           }
-          var cnY = cy + thumbH + 36;
-          bodyParts.push('<text x="' + (cx + 14) + '" y="' + cnY + '" font-family="serif" font-size="22" font-weight="600" fill="#3A2E26">' + esc(l.cn || '未命名菜品') + '</text>');
+          var cnY = cy + thumbH + 36 * k;
+          bodyParts.push('<text x="' + (cx + 14 * k) + '" y="' + cnY + '" font-family="serif" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + esc(l.cn || '未命名菜品') + '</text>');
           if (l.note) {
             // 备注紧跟菜名下方，左对齐，有足够内边距
-            bodyParts.push('<text x="' + (cx + 14) + '" y="' + (cnY + 26) + '" font-family="sans-serif" font-size="14" fill="#B23A2E">' + esc(l.note) + '</text>');
+            bodyParts.push('<text x="' + (cx + 14 * k) + '" y="' + (cnY + 26 * k) + '" font-family="sans-serif" font-size="' + fNote + '" fill="#B23A2E">' + esc(l.note) + '</text>');
           }
         });
         var rows = Math.ceil(lines.length / 3);
         y += rows * (cellH + gap);
       } else {
-        var rowH = 46;
+        var rowH = Math.round(46 * k);
         lines.forEach(function (l) {
           // 文字版：菜名 + 备注在同一行，备注紧跟菜名后面
           var dishText = esc(l.cn || '未命名菜品');
-          if (l.note) dishText += '  <tspan font-family="sans-serif" font-size="15" fill="#B23A2E">（' + esc(l.note) + '）</tspan>';
-          bodyParts.push('<text x="' + M + '" y="' + (y + 28) + '" font-family="serif" font-size="20" fill="#3A2E26">' + dishText + '</text>');
-          bodyParts.push('<line x1="' + M + '" y1="' + (y + rowH - 6) + '" x2="' + (M + contentW) + '" y2="' + (y + rowH - 6) + '" stroke="#F0E8D8"/>');
+          if (l.note) dishText += '  <tspan font-family="sans-serif" font-size="' + fPlainNote + '" fill="#B23A2E">（' + esc(l.note) + '）</tspan>';
+          bodyParts.push('<text x="' + M + '" y="' + (y + 28 * k) + '" font-family="serif" font-size="' + fPlain + '" fill="#3A2E26">' + dishText + '</text>');
+          bodyParts.push('<line x1="' + M + '" y1="' + (y + rowH - 6 * k) + '" x2="' + (M + contentW) + '" y2="' + (y + rowH - 6 * k) + '" stroke="#F0E8D8"/>');
           y += rowH;
         });
-        y += 8;
+        y += 8 * k;
       }
     });
 
-    var pageH = y + 60;
+    var pageH = Math.round(y + 60 * k);
     var svg =
       '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + pageW + '" height="' + pageH + '" viewBox="0 0 ' + pageW + ' ' + pageH + '">' +
       '<rect width="' + pageW + '" height="' + pageH + '" fill="#F5F0E6"/>' +
       // 顶部品牌条
-      '<rect x="0" y="0" width="' + pageW + '" height="10" fill="#B23A2E"/>' +
+      '<rect x="0" y="0" width="' + pageW + '" height="' + (10 * k) + '" fill="#B23A2E"/>' +
       // 抬头
-      '<text x="' + M + '" y="74" font-family="serif" font-size="44" font-weight="700" fill="#B23A2E">' + esc(client) + ' · ' + esc(type) + '</text>' +
-      '<text x="' + M + '" y="106" font-family="sans-serif" font-size="18" fill="#A88A5E">山水S酒店 · 宴席定制单</text>' +
-      '<text x="' + (pageW - M) + '" y="74" text-anchor="end" font-family="serif" font-size="34" font-weight="700" fill="#8A6D1F">' + esc(totalStr) + '</text>' +
-      '<text x="' + (pageW - M) + '" y="104" text-anchor="end" font-family="sans-serif" font-size="15" fill="#A88A5E">本单总价（元 / 桌）</text>' +
-      '<line x1="' + M + '" y1="132" x2="' + (pageW - M) + '" y2="132" stroke="#D8C7A6" stroke-width="1.5"/>' +
+      '<text x="' + M + '" y="' + (74 * k) + '" font-family="serif" font-size="' + fHead + '" font-weight="700" fill="#B23A2E">' + esc(client) + ' · ' + esc(type) + '</text>' +
+      '<text x="' + M + '" y="' + (106 * k) + '" font-family="sans-serif" font-size="' + fSub + '" fill="#A88A5E">山水S酒店 · 宴席定制单</text>' +
+      '<text x="' + (pageW - M) + '" y="' + (74 * k) + '" text-anchor="end" font-family="serif" font-size="' + fTotal + '" font-weight="700" fill="#8A6D1F">' + esc(totalStr) + '</text>' +
+      '<text x="' + (pageW - M) + '" y="' + (104 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + fTotalLbl + '" fill="#A88A5E">本单总价（元 / 桌）</text>' +
+      '<line x1="' + M + '" y1="' + (132 * k) + '" x2="' + (pageW - M) + '" y2="' + (132 * k) + '" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       bodyParts.join('') +
       '</svg>';
     return svg;
+  }
+
+  // 当前字号档位（三档：标准1 / 大1.3 / 特大1.6）
+  function getExpScale() {
+    var el = $('.exp-size-btn.on');
+    var s = el ? parseFloat(el.getAttribute('data-scale')) : 1;
+    return isNaN(s) || s <= 0 ? 1 : s;
   }
 
   function downloadBlob(blob, filename) {
@@ -348,39 +360,94 @@
 
   function safeName(s) { return (s || '').replace(/[\\/:*?"<>|]/g, '_').trim() || '定制单'; }
 
+  // 高清倍率：手机端查看更清晰
+  var EXPORT_DPR = 2;
+
+  // 将 SVG 栅格化到 canvas（高清），回调 (canvas)
+  function rasterize(svg, cb) {
+    var img = new Image();
+    img.onload = function () {
+      var w = Math.round(img.width * EXPORT_DPR);
+      var h = Math.round(img.height * EXPORT_DPR);
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#F5F0E6';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      cb(canvas);
+    };
+    img.onerror = function () { cb(null); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  // 纯前端 PDF 生成：canvas → JPEG → 内嵌 DCTDecode 图像 XObject（无外部依赖）
+  function canvasToPdfBlob(canvas, filename, done) {
+    try {
+      var jpg = canvas.toDataURL('image/jpeg', 0.92);
+      var bin = atob(jpg.split(',')[1]);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var w = canvas.width, h = canvas.height;
+      // 页面尺寸：保持图片纵横比，宽度取 A4 横向/纵向尺寸
+      var PW = (w >= h) ? 842 : 595.28;
+      var PH = +(PW * h / w).toFixed(2);
+      var pdf = buildPdfWithJpeg(bytes, w, h, PW, PH);
+      done(new Blob([pdf], { type: 'application/pdf' }), filename + '.pdf');
+    } catch (e) {
+      done(null);
+    }
+  }
+
+  // 构造最小可用 PDF（1 页，内嵌 JPEG 图像）
+  function buildPdfWithJpeg(jpeg, w, h, PW, PH) {
+    var enc = function (s) { var a = []; for (var i = 0; i < s.length; i++) a.push(s.charCodeAt(i) & 0xff); return a; };
+    var chunks = [], offsets = {};
+    var push = function (arr) { chunks.push(arr); };
+    var len = function () { var n = 0; for (var i = 0; i < chunks.length; i++) n += chunks[i].length; return n; };
+    push(enc('%PDF-1.4\n'));
+    offsets[1] = len(); push(enc('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'));
+    offsets[2] = len(); push(enc('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'));
+    offsets[3] = len(); push(enc('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n'));
+    offsets[4] = len(); push(enc('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + w + ' /Height ' + h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpeg.length + ' >>\nstream\n'));
+    push(Array.prototype.slice.call(jpeg));
+    push(enc('\nendstream\nendobj\n'));
+    var content = 'q ' + PW + ' 0 0 ' + PH + ' 0 0 cm /Im0 Do Q';
+    offsets[5] = len(); push(enc('5 0 obj\n<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream\nendobj\n'));
+    var xrefStart = len();
+    var xref = 'xref\n0 6\n0000000000 65535 f \n';
+    for (var o = 1; o <= 5; o++) {
+      var s = ('0000000000' + offsets[o]).slice(-10);
+      xref += s + ' 00000 n \n';
+    }
+    push(enc(xref));
+    push(enc('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xrefStart + '\n%%EOF'));
+    var out = new Uint8Array(len());
+    var pos = 0;
+    for (var c = 0; c < chunks.length; c++) { out.set(chunks[c], pos); pos += chunks[c].length; }
+    return out;
+  }
+
   function doExport() {
     if (!draft) return;
     var ver = getExpVer();
-    var svg = buildSVG(ver);
+    var k = getExpScale();
+    var svg = buildSVG(ver, k);
     var base = safeName(draft.client) + '-' + safeName(draft.type) + '-定制单';
-    if (expFmt === 'svg') {
-      var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      downloadBlob(blob, base + '.svg');
-    } else {
-      var xml = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-      var img = new Image();
-      img.onload = function () {
-        var w = ver === 'thumb' ? 1080 : 860;
-        // 高度从 viewBox 推断
-        var vb = (img.width && img.height) ? { w: img.width, h: img.height } : { w: w, h: 600 };
-        var canvas = document.createElement('canvas');
-        canvas.width = vb.w; canvas.height = vb.h;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#F5F0E6';
-        ctx.fillRect(0, 0, vb.w, vb.h);
-        ctx.drawImage(img, 0, 0, vb.w, vb.h);
+    rasterize(svg, function (canvas) {
+      if (!canvas) { alert('导出失败，请重试'); return; }
+      if (expFmt === 'pdf') {
+        canvasToPdfBlob(canvas, base, function (blob, name) {
+          if (blob) downloadBlob(blob, name);
+          else canvas.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); }, 'image/png');
+        });
+      } else {
         canvas.toBlob(function (b) {
           if (b) downloadBlob(b, base + '.png');
-          else { // 兜底：直接下 SVG
-            downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), base + '.svg');
-          }
+          else alert('导出失败，请重试');
         }, 'image/png');
-      };
-      img.onerror = function () {
-        downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), base + '.svg');
-      };
-      img.src = xml;
-    }
+      }
+    });
   }
 
   function openExport() {
@@ -393,12 +460,13 @@
     if (m) m.hidden = true;
   }
 
-  // 预览：在导出弹窗内渲染缩小版 SVG
+  // 预览：在导出弹窗内渲染缩小版 SVG（同步版本与字号档位）
   function renderExpPreview() {
     var container = $('#expPreview');
     if (!container || !draft) return;
     var ver = getExpVer();
-    var svg = buildSVG(ver);
+    var k = getExpScale();
+    var svg = buildSVG(ver, k);
     container.innerHTML = svg;
     // 缩放预览适应容器
     var svgs = container.querySelector('svg');
@@ -498,6 +566,15 @@
       });
     });
 
+    // 字号档位切换（三档界面大小）
+    $$('.exp-size-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        $$('.exp-size-btn').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        renderExpPreview();
+      });
+    });
+
     // 弹窗关闭（data-close）
     $$('[data-close]').forEach(function (el) {
       el.addEventListener('click', function () {
@@ -514,7 +591,7 @@
     });
   }
 
-  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport };
+  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
