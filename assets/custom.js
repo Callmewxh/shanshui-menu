@@ -285,7 +285,10 @@
         lines.forEach(function (l, i) {
           var cx = M + (i % 3) * (cellW + gap);
           var cy = y + Math.floor(i / 3) * (cellH + gap);
-          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="' + (14 * k) + '" fill="#FBF7EE" stroke="#ECE3D2"/>');
+          // 卡片背景 + 细边框（新中式克制风格）
+          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="' + (14 * k) + '" fill="#FBF7EE" stroke="#E5DCC8" stroke-width="' + (1 * k) + '"/>');
+          // 微妙内高光（顶部左上角）
+          bodyParts.push('<rect x="' + (cx + 1.5 * k) + '" y="' + (cy + 1.5 * k) + '" width="' + (cellW - 3 * k) + '" height="' + (Math.round(thumbH * 0.6)) + '" rx="' + (12 * k) + '" fill="none" stroke="#FFFFFF" stroke-width="' + (0.8 * k) + '" opacity=".5"/>');
           var tx = cx + 10 * k, ty = cy + 10 * k, tw = cellW - 20 * k, th = thumbH;
           bodyParts.push('<clipPath id="clip_' + l.id + '"><rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '"/></clipPath>');
           bodyParts.push('<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '" fill="#EDE4D3"/>');
@@ -327,9 +330,16 @@
     });
 
     var pageH = Math.round(y + 60 * k);
+    // 内边距：页面内容区缩进，形成外框效果
+    var outerM = Math.round(16 * k);
+    var innerW = pageW - outerM * 2;
+    var innerH = pageH - outerM * 2;
     var svg =
       '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + pageW + '" height="' + pageH + '" viewBox="0 0 ' + pageW + ' ' + pageH + '">' +
+      // 页面底色
       '<rect width="' + pageW + '" height="' + pageH + '" fill="#F5F0E6"/>' +
+      // 外框（新中式细线）
+      '<rect x="' + outerM + '" y="' + outerM + '" width="' + innerW + '" height="' + innerH + '" rx="' + (12 * k) + '" fill="none" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       // 顶部品牌条
       '<rect x="0" y="0" width="' + pageW + '" height="' + (10 * k) + '" fill="#B23A2E"/>' +
       // 抬头
@@ -339,6 +349,9 @@
       '<text x="' + (pageW - M) + '" y="' + (104 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + fTotalLbl + '" fill="#A88A5E">本单总价（元 / 桌）</text>' +
       '<line x1="' + M + '" y1="' + (132 * k) + '" x2="' + (pageW - M) + '" y2="' + (132 * k) + '" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       bodyParts.join('') +
+      // 页脚品牌线
+      '<line x1="' + M + '" y1="' + (pageH - 36 * k) + '" x2="' + (pageW - M) + '" y2="' + (pageH - 36 * k) + '" stroke="#F0E8D8" stroke-width="' + (1 * k) + '"/>' +
+      '<text x="' + (pageW - M) + '" y="' + (pageH - 14 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + (11 * k) + '" fill="#C8BAA0">山水S酒店</text>' +
       '</svg>';
     return svg;
   }
@@ -430,6 +443,14 @@
 
   function doExport() {
     if (!draft) return;
+    // 校验：必须填写总价才能导出
+    var total = (draft.total || '').toString().trim();
+    if (!total || total === '0') {
+      alert('请先填写「本单总价」再导出报价单。');
+      var csTotal = $('#csTotal');
+      if (csTotal) { csTotal.focus(); csTotal.select(); }
+      return;
+    }
     var ver = getExpVer();
     var k = getExpScale();
     var svg = buildSVG(ver, k);
@@ -451,8 +472,16 @@
   }
 
   function openExport() {
+    if (!draft) return;
+    // 前置校验：总价未填时提示
+    var total = (draft.total || '').toString().trim();
+    if (!total || total === '0') {
+      alert('请先填写「本单总价」再导出报价单。');
+      var csTotal = $('#csTotal');
+      if (csTotal) { csTotal.focus(); csTotal.select(); }
+      return;
+    }
     var m = $('#exportModal');
-    if (m) m.hidden = false;
     renderExpPreview();
   }
   function closeExport() {
@@ -591,7 +620,7 @@
     });
   }
 
-  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg };
+  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _setTotal: function (v) { if (draft) draft.total = v; }, _openExport: openExport };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

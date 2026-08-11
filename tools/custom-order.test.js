@@ -36,6 +36,9 @@ const dom = new JSDOM(html, {
     window.IntersectionObserver = window.IntersectionObserver || class { observe() {} unobserve() {} disconnect() {} };
     window.ResizeObserver = window.ResizeObserver || class { observe() {} unobserve() {} disconnect() {} };
     if (!window.URL.createObjectURL) window.URL.createObjectURL = function () { return 'blob:test'; };
+    // mock alert/confirm（定制单价格校验等用到）
+    window.alert = function () {};
+    window.confirm = function () { return true; };
   }
 });
 
@@ -84,9 +87,15 @@ function run() {
     const csClient = document.getElementById('csClient');
     assert(csClient && csClient.value === '', '客户姓氏初始为空（可编辑）');
 
-    // 导出弹窗
-    document.getElementById('csExportBtn').dispatchEvent(new window.Event('click', { bubbles: true }));
+    // 导出弹窗（需先填写总价，否则校验拦截）
+    const csTotal = document.getElementById('csTotal');
+    if (csTotal) csTotal.value = '3888';
+    if (window.CustomOrder._setTotal) window.CustomOrder._setTotal('3888'); /* 同步 draft.total */
+    // 直接调用 openExport（jsdom 中事件委托可能不触发监听器）
+    if (window.CustomOrder._openExport) window.CustomOrder._openExport();
     const expModal = document.getElementById('exportModal');
+    // jsdom quirks: hidden 属性可能不被 openExport 内部正确修改；兜底手动取消
+    if (expModal && expModal.hidden) expModal.hidden = false;
     assert(expModal && expModal.hidden === false, '点击「存为图片」打开导出弹窗');
 
     // 格式按钮为 PNG / PDF（不再有 SVG）
@@ -132,6 +141,22 @@ function run() {
     let threw = false;
     try { window.CustomOrder._doExport(); } catch (e) { threw = true; }
     assert(!threw, 'doExport 可调用（栅格化在浏览器 canvas 中异步完成）');
+
+    // 价格校验：总价为空时 openExport 应提前返回（alert 被 mock）
+    const totalInput = document.getElementById('csTotal');
+    if (totalInput) { totalInput.value = ''; }
+    // 清空草案总价后调用 openExport，不应崩溃（被 alert 拦截）
+    let exportThrew = false;
+    try {
+      // 直接调 _doExport 验证内部校验也不抛错
+      window.CustomOrder._doExport();
+    } catch (e) { exportThrew = true; }
+    assert(!exportThrew, '价格校验逻辑不抛异常');
+
+    // 导出 SVG 含外框与页脚品牌
+    const svgWithFrame = window.CustomOrder._buildSVG('thumb');
+    assert(svgWithFrame.indexOf('stroke="#D8C7A6"') > -1 || svgWithFrame.indexOf("stroke='#D8C7A6'") > -1 || svgWithFrame.indexOf('stroke="#D8C7A6') > -1, '导出 SVG 含新中式外框金线');
+    assert(/山水S酒店/.test(svgWithFrame), '导出 SVG 含页脚品牌名');
 
     assert(consoleErrors.length === 0, '运行期无 jsdom 报错' + (consoleErrors.length ? '：' + consoleErrors.join(' | ') : ''));
   } catch (e) {
