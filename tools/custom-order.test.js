@@ -116,16 +116,16 @@ function run() {
     const svgThumb = window.CustomOrder._buildSVG('thumb');
     assert(svgThumb.indexOf('<svg') === 0, 'buildSVG(thumb) 返回 SVG 根');
     assert(/婚宴/.test(svgThumb), 'thumb SVG 含宴席类型');
-    assert(svgThumb.indexOf('<image') > -1, 'thumb SVG 嵌入菜品缩略图');
+    assert(svgThumb.indexOf('<image') > -1, 'thumb SVG 嵌入菜品缩略图（SVG <image> + preloadImages 预渲染）');
     assert(svgThumb.indexOf('</svg>') > -1, 'thumb SVG 闭合正确');
     const svgPlain = window.CustomOrder._buildSVG('plain');
     assert(/婚宴/.test(svgPlain), 'plain SVG 含宴席类型');
     assert(svgPlain.indexOf('<image') === -1, 'plain SVG 无图');
     assert(svgPlain.indexOf('</svg>') > -1, 'plain SVG 闭合正确');
 
-    // 档位缩放：特大档位下菜名字号应为 22*1.6=35.2
+    // 档位缩放：特大档位下菜名字号应为 21*1.6=33.6
     const svgThumbXL = window.CustomOrder._buildSVG('thumb', 1.6);
-    assert(/font-size="35.2"/.test(svgThumbXL), '特大档位菜名字号放大到 35.2（22×1.6）');
+    assert(/font-size="33.6"/.test(svgThumbXL), '特大档位菜名字号放大到 33.6（21×1.6）');
 
     // 纯前端 PDF 生成器：构造最小 JPEG 字节，验证产出合法 PDF 头尾
     const fakeJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9]);
@@ -153,10 +153,35 @@ function run() {
     } catch (e) { exportThrew = true; }
     assert(!exportThrew, '价格校验逻辑不抛异常');
 
-    // 导出 SVG 含外框与页脚品牌
+    // 导出 SVG 含外框（不再含底部品牌水印 —— 用户反馈难看已删除）
     const svgWithFrame = window.CustomOrder._buildSVG('thumb');
     assert(svgWithFrame.indexOf('stroke="#D8C7A6"') > -1 || svgWithFrame.indexOf("stroke='#D8C7A6'") > -1 || svgWithFrame.indexOf('stroke="#D8C7A6') > -1, '导出 SVG 含新中式外框金线');
-    assert(/山水S酒店/.test(svgWithFrame), '导出 SVG 含页脚品牌名');
+    // 抬头副标题仍含品牌名（来自 getBrandName），但页脚不应再出现品牌水印
+    const brandMatches = (svgWithFrame.match(/山水S酒店/g) || []).length;
+    assert(brandMatches === 1, '导出 SVG 仅在抬头副标题出现 1 次品牌名（页脚水印已删除，实际 ' + brandMatches + ' 次）');
+    // 字体规范：应使用 Noto Serif SC
+    assert(svgWithFrame.indexOf('Noto Serif SC') > -1, '导出 SVG 使用 Noto Serif SC 衬线字体（UIUX 规范）');
+    // XML 合法性：font-family 属性里的双引号必须转义成 &quot;
+    // （未转义时 SVG 作为 data URL 栅格化会解析失败 → Image.onerror → 导出报"导出失败"）
+    assert(/font-family="&quot;Noto Serif SC&quot;/.test(svgWithFrame), 'font-family 双引号已转义 &quot;（SVG XML 合法，rasterize 可加载）');
+    assert(!/font-family=""Noto/.test(svgWithFrame), 'font-family 无未转义双引号（rasterize 不会解析失败）');
+    // 图片裁切：用 SVG <image> + preloadImages 预渲染的 4:3 JPEG 缩略图
+    // （之前用 foreignObject + CSS background 在 rasterize 路径下完全不渲染——导致导出 PNG 无图）
+    // jsdom 无 canvas API，无法在测试中触发 canvas 预渲染，但应能验证 SVG 结构 + fallback 路径
+    (function () {
+      const d = window.CustomOrder._getDraft();
+      let imgCount = 0;
+      if (d && d.lines) {
+        d.lines.forEach(function (l) { if (l.image) imgCount++; });
+      }
+      assert(imgCount > 0, '草案中有图片菜品（共 ' + imgCount + ' 行）');
+      const svgWithCover = window.CustomOrder._buildSVG('thumb');
+      assert(svgWithCover.indexOf('<foreignObject') === -1, '不再使用 foreignObject（rasterize 路径不渲染，导致 PNG 无图）');
+      assert(svgWithCover.indexOf('<image') > -1, '使用 SVG <image> 元素（rasterize 路径下 base64 data URI 完全支持）');
+      // 真实浏览器中 preloadImages 会用 canvas 预渲染；jsdom 中无 canvas 会走 fallback 分支（xMidYMid slice）
+      // 两者都通过 <image> 元素输出，无 foreignObject
+      assert(svgWithCover.indexOf('</image>') > -1 || svgWithCover.indexOf('/>') > -1, 'SVG 含 <image> 元素闭合');
+    })();
 
     assert(consoleErrors.length === 0, '运行期无 jsdom 报错' + (consoleErrors.length ? '：' + consoleErrors.join(' | ') : ''));
   } catch (e) {

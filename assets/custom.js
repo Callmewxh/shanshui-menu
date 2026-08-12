@@ -252,8 +252,104 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   }
 
+  // —— 字体族（与 UIUX 手册一致）——
+  // 双引号写成 &quot;：buildSVG 拼进 font-family="..." 属性，SVG 按 XML 解析（rasterize 路径），
+  // 未转义的引号会让整个 SVG 加载失败 → 导出报"导出失败"。
+  var FONT_SERIF = '&quot;Noto Serif SC&quot;, &quot;Songti SC&quot;, &quot;STSong&quot;, &quot;SimSun&quot;, serif';
+  var FONT_SANS = '-apple-system, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, &quot;Helvetica Neue&quot;, sans-serif';
+
+  // cover 算法：图片按 preserveAspectRatio 等价于 cover + 任意百分比定位
+  // px, py: 0-1（CSS background-position 50%/y% 中的 50/y 归一化）
+  function coverRect(imgW, imgH, boxW, boxH, px, py) {
+    if (!imgW || !imgH) return null;
+    var rImg = imgW / imgH, rBox = boxW / boxH;
+    var drawW, drawH, x, y;
+    if (rImg > rBox) {
+      drawH = boxH; drawW = boxH * rImg;
+      x = (boxW - drawW) * px; y = 0;
+    } else {
+      drawW = boxW; drawH = boxW / rImg;
+      x = 0; y = (boxH - drawH) * py;
+    }
+    return { x: x, y: y, w: drawW, h: drawH };
+  }
+
+  // 缩略图渲染尺寸（4:3，800×600）：canvas 预渲染菜品图为统一尺寸 JPEG
+  // 比 SVG <image> 在 rasterize（Image.src → canvas）路径更可靠（foreignObject 在该路径不渲染）
+  var THUMB_W = 800, THUMB_H = 600, THUMB_QUALITY = 0.85;
+
+  // 按 crop 渲染菜品图为 4:3 缩略图（等价于菜品库 cropBg 的渲染结果）
+  function renderThumb(img, crop) {
+    var canvas = document.createElement('canvas');
+    canvas.width = THUMB_W; canvas.height = THUMB_H;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#EDE4D3';
+    ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+    var iw = img.naturalWidth || img.width || 0;
+    var ih = img.naturalHeight || img.height || 0;
+    if (!iw || !ih) return null;
+    var c = crop || null;
+    var r = null;
+    if (c && typeof c.w === 'number') {
+      // 新 crop {x,y,w,h}（0-1）：精确裁切矩形，等价 CSS background-size/position 公式
+      var w = clamp(c.w, 0.05, 1);
+      var h = clamp(typeof c.h === 'number' ? c.h : w * 0.75, 0.05, 1);
+      var x = clamp(c.x, 0, 1 - w);
+      var y = clamp(c.y, 0, 1 - h);
+      var drawW = THUMB_W / w, drawH = THUMB_H / h;
+      // drawImage(img, x, y, w, h) 中 x/y 是整图左上角在 canvas 上的位置（可为负）
+      r = { x: -THUMB_W * x / w, y: -THUMB_H * y / h, w: drawW, h: drawH };
+    } else {
+      // 旧 crop {x,y}(0-100)：等价 CSS cover + background-position:50% y%
+      var py = (c && typeof c.y === 'number') ? clamp(c.y, 0, 100) / 100 : 0.5;
+      r = coverRect(iw, ih, THUMB_W, THUMB_H, 0.5, py);
+    }
+    if (!r) return null;
+    try { ctx.drawImage(img, r.x, r.y, r.w, r.h); }
+    catch (e) { return null; }
+    try { return canvas.toDataURL('image/jpeg', THUMB_QUALITY); }
+    catch (e) { return null; }
+  }
+
+  // 预加载所有菜品图片，按 crop 渲染成 4:3 缩略图存到 line._thumb
+  // cb(lines)：所有图片处理完后调用
+  function preloadImages(lines, cb) {
+    var pending = lines.filter(function (l) { return l.image && !l._thumb && l._thumb !== null; });
+    if (!pending.length) { cb(lines); return; }
+    var remain = pending.length;
+    pending.forEach(function (l) {
+      var im = new Image();
+      im.onload = function () {
+        l._thumb = renderThumb(im, l.crop);
+        if (--remain === 0) cb(lines);
+      };
+      im.onerror = function () {
+        l._thumb = null;
+        if (--remain === 0) cb(lines);
+      };
+      im.src = l.image;
+    });
+  }
+
+  // 菜名换行：每行最多 maxChars 字，超过截断 + …；返回数组（1-2 行）
+  function wrapCn(name, maxChars) {
+    name = name || '未命名菜品';
+    if (name.length <= maxChars) return [name];
+    if (name.length <= maxChars * 2) {
+      // 优先在分隔符处断行
+      var cut = -1;
+      for (var i = maxChars; i < name.length && i < maxChars + 3; i++) {
+        if (/[\s·（(\/]/.test(name[i])) { cut = i + 1; break; }
+      }
+      if (cut < 0) cut = maxChars;
+      return [name.slice(0, cut), name.slice(cut)];
+    }
+    return [name.slice(0, maxChars), name.slice(maxChars, maxChars * 2 - 1) + '…'];
+  }
+
   // 构造导出 SVG（thumb=带图版三列网格；plain=无图排版）
   // k: 字号/行距缩放（三档界面大小），固定 pageW 保证手机端字号相对更大、更利于长辈阅读
+  // lines 需预先 preloadImages 处理过 _thumb（4:3 JPEG 缩略图）
   function buildSVG(ver, k) {
     k = k || 1;
     var pageW = ver === 'thumb' ? 1080 : 860;
@@ -261,8 +357,8 @@
     var headerH = Math.round(168 * k);
     var contentW = pageW - M * 2;
 
-    var fHead = 44 * k, fSub = 18 * k, fTotal = 34 * k, fTotalLbl = 15 * k;
-    var fCat = 30 * k, fCn = 22 * k, fNote = 14 * k, fPlain = 20 * k, fPlainNote = 15 * k, fNoImg = 16 * k;
+    var fHead = 40 * k, fSub = 17 * k, fTotal = 32 * k, fTotalLbl = 14 * k;
+    var fCat = 26 * k, fCn = 21 * k, fNote = 14 * k, fPlain = 19 * k, fPlainNote = 14 * k, fNoImg = 15 * k;
 
     var client = (draft.client || '').trim() || '贵宾';
     var type = (draft.type || '').trim() || '宴席';
@@ -276,69 +372,89 @@
       var lines = draft.lines.filter(function (l) { return l.cat === cat; });
       if (!lines.length) return;
       // 分类标题
-      bodyParts.push('<text x="' + M + '" y="' + (y + 30 * k) + '" font-family="serif" font-size="' + fCat + '" font-weight="700" fill="#B23A2E">' + esc(cat) + '</text>');
-      bodyParts.push('<rect x="' + M + '" y="' + (y + 42 * k) + '" width="' + (46 * k) + '" height="' + (4 * k) + '" rx="' + (2 * k) + '" fill="#C2A15A"/>');
-      y += 64 * k;
+      bodyParts.push('<text x="' + M + '" y="' + (y + 28 * k) + '" font-family="' + FONT_SERIF + '" font-size="' + fCat + '" font-weight="700" fill="#B23A2E" letter-spacing="2">' + esc(cat) + '</text>');
+      bodyParts.push('<rect x="' + M + '" y="' + (y + 38 * k) + '" width="' + (42 * k) + '" height="' + (3 * k) + '" rx="' + (1.5 * k) + '" fill="#C2A15A"/>');
+      // 分类右侧细金线（装饰）
+      bodyParts.push('<line x1="' + (M + 52 * k) + '" y1="' + (y + 39 * k) + '" x2="' + (pageW - M) + '" y2="' + (y + 39 * k) + '" stroke="#E8DCBE" stroke-width="' + (1 * k) + '"/>');
+      y += 58 * k;
 
       if (ver === 'thumb') {
-        var gap = Math.round(22 * k);
+        var gap = Math.round(20 * k);
         var cellW = (contentW - gap * 2) / 3;
-        var thumbH = Math.round(cellW * 0.75);
-        var cellTextH = Math.round(76 * k); // 文字区高度随档位放大，给备注留空间
+        // 图片区必须是 4:3（跟菜品库 .mg-thumb aspect-ratio 一致），用扣除内边距后的 tw 算 th
+        var tw = cellW - 16 * k;
+        var thumbH = Math.round(tw * 0.75);
+        // 文字区高度：单行菜名 + 备注行 + 内边距；k 越大留越多
+        var cellTextH = Math.round(82 * k);
         var cellH = thumbH + cellTextH;
+        // 每行最多字数（按 k 缩放，特大档更严格）
+        var maxChars = k >= 1.5 ? 6 : (k >= 1.2 ? 7 : 8);
+
         lines.forEach(function (l, i) {
           var cx = M + (i % 3) * (cellW + gap);
           var cy = y + Math.floor(i / 3) * (cellH + gap);
           // 卡片背景 + 细边框（新中式克制风格）
-          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="' + (14 * k) + '" fill="#FBF7EE" stroke="#E5DCC8" stroke-width="' + (1 * k) + '"/>');
-          // 微妙内高光（顶部左上角）
-          bodyParts.push('<rect x="' + (cx + 1.5 * k) + '" y="' + (cy + 1.5 * k) + '" width="' + (cellW - 3 * k) + '" height="' + (Math.round(thumbH * 0.6)) + '" rx="' + (12 * k) + '" fill="none" stroke="#FFFFFF" stroke-width="' + (0.8 * k) + '" opacity=".5"/>');
-          var tx = cx + 10 * k, ty = cy + 10 * k, tw = cellW - 20 * k, th = thumbH;
-          bodyParts.push('<clipPath id="clip_' + l.id + '"><rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '"/></clipPath>');
-          bodyParts.push('<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (10 * k) + '" fill="#EDE4D3"/>');
-          if (l.image) {
-            var c = l.crop;
-            var inner;
-            if (c && typeof c.w === 'number') {
-              var iw = (tw / c.w).toFixed(2), ih = (th / c.h).toFixed(2);
-              var ix = (-tw * (c.x) / c.w).toFixed(2), iy = (-th * (c.y) / c.h).toFixed(2);
-              inner = '<image href="' + l.image + '" xlink:href="' + l.image + '" x="' + ix + '" y="' + iy + '" width="' + iw + '" height="' + ih + '" preserveAspectRatio="none"/>';
-            } else {
-              inner = '<image href="' + l.image + '" xlink:href="' + l.image + '" x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" preserveAspectRatio="xMidYMid slice"/>';
-            }
-            bodyParts.push('<g clip-path="url(#clip_' + l.id + ')">' + inner + '</g>');
+          bodyParts.push('<rect x="' + cx + '" y="' + cy + '" width="' + cellW + '" height="' + cellH + '" rx="' + (12 * k) + '" fill="#FFFFFF" stroke="#E8DCBE" stroke-width="' + (1 * k) + '"/>');
+          var tx = cx + 8 * k, ty = cy + 8 * k;
+          var th = thumbH;
+          if (l._thumb) {
+            // 优先用 preloadImages 预渲染的 4:3 JPEG（rasterize 路径稳定支持）
+            bodyParts.push('<image href="' + l._thumb + '" xlink:href="' + l._thumb + '" x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" preserveAspectRatio="none"/>');
+          } else if (l.image) {
+            // 预加载失败 fallback：直接用原图 + 居中裁切
+            bodyParts.push('<image href="' + l.image + '" xlink:href="' + l.image + '" x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" preserveAspectRatio="xMidYMid slice"/>');
           } else {
-            bodyParts.push('<text x="' + (tx + tw / 2) + '" y="' + (ty + th / 2 + 6 * k) + '" text-anchor="middle" font-family="sans-serif" font-size="' + fNoImg + '" fill="#A88A5E">无图</text>');
+            // 无图占位
+            bodyParts.push('<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + (8 * k) + '" fill="#EDE4D3"/>');
+            bodyParts.push('<text x="' + (tx + tw / 2) + '" y="' + (ty + th / 2 + 5 * k) + '" text-anchor="middle" font-family="' + FONT_SANS + '" font-size="' + fNoImg + '" fill="#B8A07A">无图</text>');
           }
-          var cnY = cy + thumbH + 36 * k;
-          // 菜名：超长时截断（保留中文字符可见宽度）
-          var maxCnW = tw - 4 * k; // 最大文字宽度略小于图片区宽
-          var cnText = esc(l.cn || '未命名菜品');
-          bodyParts.push('<text x="' + (cx + 10 * k) + '" y="' + cnY + '" font-family="serif" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + cnText + '</text>');
+          // 菜名（最多两行，超长截断）
+          var nameLines = wrapCn(l.cn || '未命名菜品', maxChars);
+          var cnY = cy + thumbH + 30 * k;
+          var cnX = cx + 10 * k;
+          bodyParts.push('<text x="' + cnX + '" y="' + cnY + '" font-family="' + FONT_SERIF + '" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + esc(nameLines[0]) + '</text>');
+          if (nameLines[1]) {
+            bodyParts.push('<text x="' + cnX + '" y="' + (cnY + 26 * k) + '" font-family="' + FONT_SERIF + '" font-size="' + fCn + '" font-weight="600" fill="#3A2E26">' + esc(nameLines[1]) + '</text>');
+          }
+          // 备注截断 + 显示
           if (l.note) {
-            // 备注紧跟菜名下方，左对齐，有足够内边距
-            bodyParts.push('<text x="' + (cx + 14 * k) + '" y="' + (cnY + 26 * k) + '" font-family="sans-serif" font-size="' + fNote + '" fill="#B23A2E">' + esc(l.note) + '</text>');
+            var noteMax = maxChars + 4;
+            var noteText = l.note.length > noteMax ? (l.note.slice(0, noteMax - 1) + '…') : l.note;
+            var noteY = nameLines[1] ? (cnY + 52 * k) : (cnY + 24 * k);
+            bodyParts.push('<text x="' + cnX + '" y="' + noteY + '" font-family="' + FONT_SANS + '" font-size="' + fNote + '" fill="#B23A2E">' + esc(noteText) + '</text>');
           }
         });
         var rows = Math.ceil(lines.length / 3);
         y += rows * (cellH + gap);
       } else {
-        var rowH = Math.round(46 * k);
-        lines.forEach(function (l) {
-          // 文字版：菜名 + 备注在同一行，备注紧跟菜名后面
+        var rowH = Math.round(44 * k);
+        var plainMax = Math.floor(contentW / (fPlain * 0.95));
+        lines.forEach(function (l, i) {
           var dishText = esc(l.cn || '未命名菜品');
-          if (l.note) dishText += '  <tspan font-family="sans-serif" font-size="' + fPlainNote + '" fill="#B23A2E">（' + esc(l.note) + '）</tspan>';
-          bodyParts.push('<text x="' + M + '" y="' + (y + 28 * k) + '" font-family="serif" font-size="' + fPlain + '" fill="#3A2E26">' + dishText + '</text>');
-          bodyParts.push('<line x1="' + M + '" y1="' + (y + rowH - 6 * k) + '" x2="' + (M + contentW) + '" y2="' + (y + rowH - 6 * k) + '" stroke="#F0E8D8"/>');
+          if (dishText.length > plainMax + 6) {
+            dishText = esc((l.cn || '').slice(0, plainMax + 5) + '…');
+          }
+          var lineParts = ['<text x="' + M + '" y="' + (y + 28 * k) + '" font-family="' + FONT_SERIF + '" font-size="' + fPlain + '" fill="#3A2E26">'];
+          // 菜名（黑色）
+          lineParts.push('<tspan>' + dishText + '</tspan>');
+          if (l.note) {
+            var noteMax = plainMax + 6;
+            var nt = l.note.length > noteMax ? (l.note.slice(0, noteMax - 1) + '…') : l.note;
+            lineParts.push('<tspan font-family="' + FONT_SANS + '" font-size="' + fPlainNote + '" fill="#B23A2E">  （' + esc(nt) + '）</tspan>');
+          }
+          lineParts.push('</text>');
+          bodyParts.push(lineParts.join(''));
+          bodyParts.push('<line x1="' + M + '" y1="' + (y + rowH - 6 * k) + '" x2="' + (M + contentW) + '" y2="' + (y + rowH - 6 * k) + '" stroke="#F0E8D8" stroke-width="' + (1 * k) + '"/>');
           y += rowH;
         });
         y += 8 * k;
       }
     });
 
-    var pageH = Math.round(y + 60 * k);
+    // 页脚：留白即可，不显示品牌名水印（用户反馈难看）
+    var pageH = Math.round(y + 48 * k);
     // 内边距：页面内容区缩进，形成外框效果
-    var outerM = Math.round(16 * k);
+    var outerM = Math.round(14 * k);
     var innerW = pageW - outerM * 2;
     var innerH = pageH - outerM * 2;
     var svg =
@@ -346,19 +462,19 @@
       // 页面底色
       '<rect width="' + pageW + '" height="' + pageH + '" fill="#F5F0E6"/>' +
       // 外框（新中式细线）
-      '<rect x="' + outerM + '" y="' + outerM + '" width="' + innerW + '" height="' + innerH + '" rx="' + (12 * k) + '" fill="none" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
+      '<rect x="' + outerM + '" y="' + outerM + '" width="' + innerW + '" height="' + innerH + '" rx="' + (10 * k) + '" fill="none" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       // 顶部品牌条
-      '<rect x="0" y="0" width="' + pageW + '" height="' + (10 * k) + '" fill="#B23A2E"/>' +
+      '<rect x="0" y="0" width="' + pageW + '" height="' + (8 * k) + '" fill="#B23A2E"/>' +
       // 抬头
-      '<text x="' + M + '" y="' + (74 * k) + '" font-family="serif" font-size="' + fHead + '" font-weight="700" fill="#B23A2E">' + esc(client) + ' · ' + esc(type) + '</text>' +
-      '<text x="' + M + '" y="' + (106 * k) + '" font-family="sans-serif" font-size="' + fSub + '" fill="#A88A5E">' + esc(getBrandName()) + ' · 宴席定制单</text>' +
-      '<text x="' + (pageW - M) + '" y="' + (74 * k) + '" text-anchor="end" font-family="serif" font-size="' + fTotal + '" font-weight="700" fill="#8A6D1F">' + esc(totalStr) + '</text>' +
-      '<text x="' + (pageW - M) + '" y="' + (104 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + fTotalLbl + '" fill="#A88A5E">本单总价（元 / 桌）</text>' +
-      '<line x1="' + M + '" y1="' + (132 * k) + '" x2="' + (pageW - M) + '" y2="' + (132 * k) + '" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
+      '<text x="' + M + '" y="' + (70 * k) + '" font-family="' + FONT_SERIF + '" font-size="' + fHead + '" font-weight="700" fill="#B23A2E" letter-spacing="1">' + esc(client) + ' · ' + esc(type) + '</text>' +
+      '<text x="' + M + '" y="' + (100 * k) + '" font-family="' + FONT_SANS + '" font-size="' + fSub + '" fill="#A88A5E" letter-spacing="1">' + esc(getBrandName()) + ' · 宴席定制单</text>' +
+      '<text x="' + (pageW - M) + '" y="' + (70 * k) + '" text-anchor="end" font-family="' + FONT_SERIF + '" font-size="' + fTotal + '" font-weight="700" fill="#8A6D1F" letter-spacing="1">' + esc(totalStr) + '</text>' +
+      '<text x="' + (pageW - M) + '" y="' + (98 * k) + '" text-anchor="end" font-family="' + FONT_SANS + '" font-size="' + fTotalLbl + '" fill="#A88A5E">本单总价（元 / 桌）</text>' +
+      '<line x1="' + M + '" y1="' + (124 * k) + '" x2="' + (pageW - M) + '" y2="' + (124 * k) + '" stroke="#D8C7A6" stroke-width="' + (1.5 * k) + '"/>' +
       bodyParts.join('') +
-      // 页脚品牌线
-      '<line x1="' + M + '" y1="' + (pageH - 36 * k) + '" x2="' + (pageW - M) + '" y2="' + (pageH - 36 * k) + '" stroke="#F0E8D8" stroke-width="' + (1 * k) + '"/>' +
-      '<text x="' + (pageW - M) + '" y="' + (pageH - 14 * k) + '" text-anchor="end" font-family="sans-serif" font-size="' + (11 * k) + '" fill="#C8BAA0">' + esc(getBrandName()) + '</text>' +
+      // 底部装饰金线（无文字水印）
+      '<line x1="' + M + '" y1="' + (pageH - 24 * k) + '" x2="' + (pageW - M) + '" y2="' + (pageH - 24 * k) + '" stroke="#E8DCBE" stroke-width="' + (1 * k) + '"/>' +
+      '<rect x="' + (pageW / 2 - 6 * k) + '" y="' + (pageH - 28 * k) + '" width="' + (12 * k) + '" height="' + (3 * k) + '" rx="' + (1.5 * k) + '" fill="#C2A15A"/>' +
       '</svg>';
     return svg;
   }
@@ -476,21 +592,24 @@
     }
     var ver = getExpVer();
     var k = getExpScale();
-    var svg = buildSVG(ver, k);
     var base = safeName(draft.client) + '-' + safeName(draft.type) + '-定制单';
-    rasterize(svg, function (canvas) {
-      if (!canvas) { alert('导出失败，请重试'); return; }
-      if (expFmt === 'pdf') {
-        canvasToPdfBlob(canvas, base, function (blob, name) {
-          if (blob) downloadBlob(blob, name);
-          else canvas.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); }, 'image/png');
-        });
-      } else {
-        canvas.toBlob(function (b) {
-          if (b) downloadBlob(b, base + '.png');
-          else alert('导出失败，请重试');
-        }, 'image/png');
-      }
+    // 预加载所有菜品图片获取原始尺寸，确保 SVG 裁切与菜品库一致
+    preloadImages(draft.lines, function () {
+      var svg = buildSVG(ver, k);
+      rasterize(svg, function (canvas) {
+        if (!canvas) { alert('导出失败，请重试'); return; }
+        if (expFmt === 'pdf') {
+          canvasToPdfBlob(canvas, base, function (blob, name) {
+            if (blob) downloadBlob(blob, name);
+            else canvas.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); }, 'image/png');
+          });
+        } else {
+          canvas.toBlob(function (b) {
+            if (b) downloadBlob(b, base + '.png');
+            else alert('导出失败，请重试');
+          }, 'image/png');
+        }
+      });
     });
   }
 
@@ -510,17 +629,20 @@
     if (m) m.hidden = true;
   }
 
-  // 预览：在导出弹窗内渲染缩小版 SVG（同步版本与字号档位）
+  // 预览：在导出弹窗内渲染缩小版 SVG（异步：先预加载图片，确保裁切精确）
   function renderExpPreview() {
     var container = $('#expPreview');
     if (!container || !draft) return;
     var ver = getExpVer();
     var k = getExpScale();
-    var svg = buildSVG(ver, k);
-    container.innerHTML = svg;
-    // 缩放预览适应容器
-    var svgs = container.querySelector('svg');
-    if (svgs) { svgs.style.width = '100%'; svgs.style.height = 'auto'; svgs.style.maxHeight = '280px'; }
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">渲染预览中…</div>';
+    preloadImages(draft.lines, function () {
+      var svg = buildSVG(ver, k);
+      container.innerHTML = svg;
+      // 缩放预览适应容器
+      var svgs = container.querySelector('svg');
+      if (svgs) { svgs.style.width = '100%'; svgs.style.height = 'auto'; svgs.style.maxHeight = '280px'; }
+    });
   }
 
   // —— 事件绑定 ——
@@ -641,7 +763,7 @@
     });
   }
 
-  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _setTotal: function (v) { if (draft) draft.total = v; }, _openExport: openExport };
+  window.CustomOrder = { enter: enter, render: render, _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _setTotal: function (v) { if (draft) draft.total = v; }, _openExport: openExport, _preloadImages: preloadImages, _getDraft: function () { return draft; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
