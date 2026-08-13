@@ -641,8 +641,9 @@
         py2 += headH2 + 2;
         s.rows.forEach(function (l, i) {
           var ry = py2 + i * rowH2;
-          // #1 不再放序号；#3 菜名可换行
-          var cnLines = wrapCn(l.cn || '未命名菜品', 11);
+          // #1 不再放序号；#3 菜名单行优先（按栏宽算阈值，约19字一行放得下），仅极长才折两行
+          var cnMax = Math.max(11, Math.floor((plainW - 2) / 4.2));
+          var cnLines = wrapCn(l.cn || '未命名菜品', cnMax);
           // #4 英文对齐中文（同一起始 x）；行高足够且菜名有英文时才画，保证不压分隔线
           var hasEn = (rowH2 >= 13) && (l.en || '').trim();
           // 垂直布局：菜名在上、英文在下，全部收在 rowH2 内，分隔线固定在底部统一位置
