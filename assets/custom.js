@@ -387,8 +387,8 @@
     var secH = secBottom - secTop;
 
     var isPhoto = ver !== 'plain';
-    var cols = isPhoto ? 4 : 1;
-    var fScale = 1, cardH = 0, thumbH = 0, metaH = 0, gapRowS = 0;
+    var cols = isPhoto ? 3 : 1;   // 带图版：一行 3 个（V2.2 灵活排版），不变形且更饱满
+    var fScale = 1, cardH = 0, thumbW = 0, thumbH = 0, metaH = 0, gapRowS = 0;
 
     // 统一"填满"策略：给两版各算自然高度，按可用高度（含底部留白）放大/缩小，
     // 保证底部距页脚约 12mm，避免之前"间隔太开"的底部大空。
@@ -396,16 +396,20 @@
     var availH = secBottom - secTop - BOTTOM_MARGIN;
 
     if (isPhoto) {
-      // 带图版：单一 4×4 网格（v2.2 效果），按菜单顺序排，无分类段标题
+      // 带图版：单一 3 列网格（v2.2 灵活排版，一行3个），按菜单顺序排，无分类段标题
       var gapCol = 4, gapRow = 3;
       var cw = (contentW - (cols - 1) * gapCol) / cols;
-      var thumbHnat = (cw - 2 * 1.2) * 0.75;
+      // 关键：缩略框宽高都随 fScale 缩放，且严格 thumbH = thumbW*0.75（4:3），
+      // 否则 fScale≠1 时框比例失真 + none 拉伸 → 照片变形。cover 仅裁切不变形。
+      var thumbWnat = cw - 2 * 1.2;
+      var thumbHnat = thumbWnat * 0.75;
       var metaHnat = 10;
       var cardHnat = 1.2 * 2 + thumbHnat + metaHnat;
       var rowsTotal = Math.ceil(draft.lines.length / cols);
       var naturalH = rowsTotal * (cardHnat + gapRow) - gapRow;
       fScale = clamp(availH / naturalH, 0.5, 1.3);
       cardH = cardHnat * fScale;
+      thumbW = thumbWnat * fScale;
       thumbH = thumbHnat * fScale;
       metaH = metaHnat * fScale;
       gapRowS = gapRow * fScale;
@@ -459,15 +463,20 @@
     parts.push('<text x="' + m(px + pw / 2) + '" y="' + m(iy + 14) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(8.5) + '" font-weight="700" fill="#fff">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
 
     if (isPhoto) {
-      // —— 带图版：单一 4×4 网格（v2.2 效果），按菜单顺序排，无分类段标题 ——
+      // —— 带图版：单一 3 列网格（v2.2 灵活排版，一行3个），按菜单顺序排，无分类段标题 ——
+      // 缩略图用 cover（xMidYMid slice）裁切：缩略框严格 4:3，与 _thumb(4:3) 一致 → 100% 不变形，且与菜品库裁切位置一致。
+      // 最后一行不足 3 个时整行居中，视觉更匀称。
       var gapCol = 4;
       var cw = (contentW - (cols - 1) * gapCol) / cols;
-      var thumbW = cw - 2 * 1.2;
-      var usedH = Math.ceil(draft.lines.length / cols) * (cardH + gapRowS) - gapRowS;
       var gy = secTop; // 顶部对齐：去掉居中留下的顶部大空，让网格贴紧信息条
+      var N = draft.lines.length;
       draft.lines.forEach(function (l, i) {
         var col = i % cols, row = Math.floor(i / cols);
-        var cx = SX + col * (cw + gapCol);
+        var rowStart = row * cols;
+        var rowEnd = Math.min(rowStart + cols, N);
+        var cnt = rowEnd - rowStart;
+        var offset = (cols - cnt) * (cw + gapCol) / 2; // 末行居中
+        var cx = SX + offset + col * (cw + gapCol);
         var cy = gy + row * (cardH + gapRowS);
         parts.push('<rect x="' + m(cx) + '" y="' + m(cy) + '" width="' + m(cw) + '" height="' + m(cardH) + '" rx="' + m(3) + '" fill="' + C.surface + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.4) + '"/>');
         var tx = cx + 1.2, ty = cy + 1.2;
@@ -476,8 +485,8 @@
         parts.push('<rect x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" rx="' + m(2) + '" fill="#EDE4D3"/>');
         var src = l._thumb || l.image;
         if (src) {
-          // _thumb 已是按菜品库 crop 预渲染的 4:3 JPEG，直接铺满（preserveAspectRatio=none 不变形）
-          parts.push('<g clip-path="url(#' + clipId + ')"><image href="' + src + '" xlink:href="' + src + '" x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" preserveAspectRatio="none"/></g>');
+          // cover 裁切：缩略框严格 4:3，与 _thumb(4:3) 一致 → 不变形、且与菜品库裁切位置一致
+          parts.push('<g clip-path="url(#' + clipId + ')"><image href="' + src + '" xlink:href="' + src + '" x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" preserveAspectRatio="xMidYMid slice"/></g>');
         }
         var maxChars = Math.max(4, Math.floor((cw - 4) / 3));
         var cn = l.cn || '未命名菜品';
