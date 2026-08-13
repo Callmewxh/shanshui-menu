@@ -622,11 +622,19 @@
       var plainCols = 2, plainGap = 8, plainW = (contentW - plainGap) / 2;
       var plainX = [SX, SX + plainW + plainGap];
       var plainY = [secTop, secTop];
+      // 预排平衡两栏 → 全局统一行高，保证每根分隔线横向对齐（不随段内菜品数抖动错位）
+      var colRows = [0, 0];
+      segs.forEach(function (s) {
+        var c = colRows[0] <= colRows[1] ? 0 : 1;
+        colRows[c] += s.rows.length;
+      });
+      var maxColRows = Math.max(1, colRows[0], colRows[1]);
+      var rowH2 = Math.min(16, Math.max(12.5, (availH - 40) / maxColRows));
       var targetCol = 0;
       segs.forEach(function (s, si) {
         targetCol = plainY[0] <= plainY[1] ? 0 : 1;
         var px2 = plainX[targetCol], py2 = plainY[targetCol];
-        var headH2 = 12, rowH2 = Math.min(16, Math.max(12.5, (availH - 32) / Math.max(6, s.rows.length)));
+        var headH2 = 12;
         parts.push('<rect x="' + m(px2) + '" y="' + m(py2) + '" width="' + m(plainW) + '" height="' + m(headH2) + '" rx="' + m(2.2) + '" fill="' + C.primary + '"/>');
         parts.push('<text x="' + m(px2 + 5) + '" y="' + m(py2 + 8) + '" font-family="' + FS + '" font-size="' + m(5) + '" font-weight="700" fill="#fff" letter-spacing="' + m(0.8) + '">' + (CN[s.cat] || '') + '  ' + esc2(s.cat) + '</text>');
         parts.push('<text x="' + m(px2 + plainW - 4) + '" y="' + m(py2 + 7.6) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.5) + '" fill="#F4DDB8">' + s.rows.length + ' 道</text>');
@@ -635,18 +643,26 @@
           var ry = py2 + i * rowH2;
           // #1 不再放序号；#3 菜名可换行
           var cnLines = wrapCn(l.cn || '未命名菜品', 11);
-          var cnY = ry + rowH2 * 0.46;
-          cnLines.forEach(function (ln, li) {
-            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnY + li * 4.4) + '" font-family="' + FS + '" font-size="' + m(4.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
-          });
-          // #4 英文对齐中文（同起始 x），过长截断；行高不足时不画以免重叠
-          if (rowH2 >= 12.5) {
-            var pen = (l.en || '').trim();
-            if (pen) {
-              if (pen.length > 30) pen = pen.slice(0, 29) + '…';
-              parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnY + cnLines.length * 4.4 + 3.4) + '" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="' + C.muted + '">' + esc2(pen) + '</text>');
-            }
+          // #4 英文对齐中文（同一起始 x）；行高足够且菜名有英文时才画，保证不压分隔线
+          var hasEn = (rowH2 >= 13) && (l.en || '').trim();
+          // 垂直布局：菜名在上、英文在下，全部收在 rowH2 内，分隔线固定在底部统一位置
+          var cnBase, cnStep = 4.2, enBase;
+          if (cnLines.length >= 2) {
+            if (hasEn) { cnBase = ry + 3.4; enBase = ry + rowH2 - 4.0; }
+            else { cnBase = ry + rowH2 * 0.5 - cnStep; }   // 两行菜名整体居中
+          } else {
+            if (hasEn) { cnBase = ry + rowH2 * 0.42; enBase = ry + rowH2 - 4.0; }
+            else { cnBase = ry + rowH2 * 0.56; }           // 单行菜名居中
           }
+          cnLines.forEach(function (ln, li) {
+            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnBase + li * cnStep) + '" font-family="' + FS + '" font-size="' + m(4.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
+          });
+          if (hasEn) {
+            var pen = (l.en || '').trim();
+            if (pen.length > 30) pen = pen.slice(0, 29) + '…';
+            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(enBase) + '" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="' + C.muted + '">' + esc2(pen) + '</text>');
+          }
+          // 分隔线：整行宽、底部统一位置，不随菜名行数抖动
           parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
         });
         plainY[targetCol] = py2 + s.rows.length * rowH2 + 7;
@@ -654,12 +670,12 @@
       parts.push('<line x1="' + m(105) + '" y1="' + m(secTop) + '" x2="' + m(105) + '" y2="' + m(Math.max(plainY[0], plainY[1]) - 4) + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.35) + '"/>');
     }
 
-    // —— 页脚：中间免责语 + 金菱 + 两侧金线（无左右文字）——
+    // —— 页脚：左、右两根金线，中间放免责语（去掉菱形图标）——
     var fy = footerY;
-    parts.push('<line x1="' + m(SX) + '" y1="' + m(fy) + '" x2="' + m(70) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
-    parts.push('<line x1="' + m(140) + '" y1="' + m(fy) + '" x2="' + m(contentR) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
-    parts.push('<rect x="' + (PAGE_W / 2 - m(1.2)) + '" y="' + m(fy - 2.4) + '" width="' + m(2.4) + '" height="' + m(2.4) + '" fill="' + C.gold + '" transform="rotate(45 ' + (PAGE_W / 2) + ' ' + m(fy - 1.2) + ')"/>');
-    parts.push('<text x="' + (PAGE_W / 2) + '" y="' + m(fy + 4) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.9) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
+    var fcx = 105;
+    parts.push('<line x1="' + m(SX) + '" y1="' + m(fy) + '" x2="' + m(fcx - 22) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<line x1="' + m(fcx + 22) + '" y1="' + m(fy) + '" x2="' + m(contentR) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 1) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.9) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
 
     parts.push('</svg>');
     return parts.join('');
