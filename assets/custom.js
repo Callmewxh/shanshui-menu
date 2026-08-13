@@ -358,8 +358,9 @@
     var PAGE_W = m(210), PAGE_H = m(297);
 
     var C = {
-      bg: '#F5F0E6', surface: '#FFFFFF', ink: '#3A2E26', muted: '#A88A5E',
-      primary: '#B23A2E', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6', line: '#ECE3D2'
+      bg: '#F5F0E6', surface: '#FBF7EE', ink: '#3A2E26', desc: '#5C4F45', muted: '#A88A5E',
+      primary: '#B23A2E', primaryDeep: '#8F2A20', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6', line: 'rgba(58,46,38,.10)',
+      imgBg: '#EDE4D3'
     };
     var FS = FONT_SERIF;
     var FK = '&quot;KaiTi&quot;, &quot;STKaiti&quot;, &quot;楷体&quot;, serif';
@@ -463,40 +464,113 @@
     parts.push('<text x="' + m(px + pw / 2) + '" y="' + m(iy + 14) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(8.5) + '" font-weight="700" fill="#fff">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
 
     if (isPhoto) {
-      // —— 带图版：单一 3 列网格（v2.2 灵活排版，一行3个），按菜单顺序排，无分类段标题 ——
-      // 缩略图用 cover（xMidYMid slice）裁切：缩略框严格 4:3，与 _thumb(4:3) 一致 → 100% 不变形，且与菜品库裁切位置一致。
-      // 最后一行不足 3 个时整行居中，视觉更匀称。
-      var gapCol = 4;
-      var cw = (contentW - (cols - 1) * gapCol) / cols;
-      var gy = secTop; // 顶部对齐：去掉居中留下的顶部大空，让网格贴紧信息条
-      var N = draft.lines.length;
-      draft.lines.forEach(function (l, i) {
-        var col = i % cols, row = Math.floor(i / cols);
-        var rowStart = row * cols;
-        var rowEnd = Math.min(rowStart + cols, N);
-        var cnt = rowEnd - rowStart;
-        var offset = (cols - cnt) * (cw + gapCol) / 2; // 末行居中
-        var cx = SX + offset + col * (cw + gapCol);
-        var cy = gy + row * (cardH + gapRowS);
-        parts.push('<rect x="' + m(cx) + '" y="' + m(cy) + '" width="' + m(cw) + '" height="' + m(cardH) + '" rx="' + m(3) + '" fill="' + C.surface + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.4) + '"/>');
-        var tx = cx + 1.2, ty = cy + 1.2;
-        var clipId = 'clip_p' + i;
-        parts.push('<clipPath id="' + clipId + '"><rect x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" rx="' + m(2) + '"/></clipPath>');
-        parts.push('<rect x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" rx="' + m(2) + '" fill="#EDE4D3"/>');
-        var src = l._thumb || l.image;
-        if (src) {
-          // cover 裁切：缩略框严格 4:3，与 _thumb(4:3) 一致 → 不变形、且与菜品库裁切位置一致
-          parts.push('<g clip-path="url(#' + clipId + ')"><image href="' + src + '" xlink:href="' + src + '" x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" preserveAspectRatio="xMidYMid slice"/></g>');
-        }
-        var maxChars = Math.max(4, Math.floor((cw - 4) / 3));
-        var cn = l.cn || '未命名菜品';
-        if (cn.length > maxChars) cn = cn.slice(0, maxChars - 1) + '…';
-        var metaY = cy + 1.2 + thumbH + metaH * 0.5;
-        parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(metaY) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(3.3 * fScale) + '" font-weight="700" fill="' + C.ink + '">' + esc2(cn) + '</text>');
-        if (l.note) {
-          var nt = l.note; if (nt.length > maxChars) nt = nt.slice(0, maxChars - 1) + '…';
-          parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(metaY + 4 * fScale) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.6 * fScale) + '" fill="' + C.primary + '">' + esc2(nt) + '</text>');
-        }
+      // —— 带图版 v3.2（新中式红金克制）：
+      //    分品类段（项目设计语言核心：朱红印章 + 「壹·凉菜」衬线 + 金色细线 + 回纹装饰）+ 3 列双线金框卡片
+      //    段头尺寸脱离 fScale（固定可读大小），卡片按 fScale 适配 A4 单页
+      //    缩略图 cover 裁切，与菜品库 crop 位置一致；末段内不足整行时居中
+      //    关键：把「固定高度（段头+段间距）」与「可缩放高度（卡片+行间距）」分开算 fScale，
+      //         避免之前把固定段头塞进 naturalH 导致卡片缩不够、内容溢出页脚。
+      var pcols = 3;
+      var padX = 1.4, padY = 1.2;             // 卡片内边距（mm，再缩小）
+      var gapCol = 3, gapRow = 2.8;            // 卡片间距（缩小）
+      var cw = (contentW - (pcols - 1) * gapCol) / pcols;
+      var thumbWnat = cw - 2 * padX;
+      var thumbHnat = thumbWnat * 0.75;      // 严格 4:3
+      var metaHnat = 9.5;                    // 菜名 + 备注 + 上下留白（缩小）
+      var cardHnat = padY * 2 + thumbHnat + metaHnat;
+
+      // 各分类段（含菜品为空则跳过）
+      var segs = CATS.map(function (cat) {
+        var ls = draft.lines.filter(function (l) { return l.cat === cat; });
+        return ls.length ? { cat: cat, lines: ls, nRow: Math.ceil(ls.length / pcols) } : null;
+      }).filter(Boolean);
+
+      // 高度拆解：固定部分（不缩放）+ 可缩放部分（按 fScale 适配）
+      var catHeadHnat = 8.5;   // 段头固定高度（mm）
+      var catGapHnat = 3;      // 段间距固定（mm）
+      var headTrailHnat = 2;   // 段头下方的「回」字装饰+双金线预留
+      var fixedH = 0;
+      var scaledH = 0;
+      segs.forEach(function (s, i) {
+        fixedH += catHeadHnat + headTrailHnat;  // 段头 + 装饰条
+        scaledH += s.nRow * cardHnat + (s.nRow - 1) * gapRow;
+        if (i < segs.length - 1) fixedH += catGapHnat;
+      });
+      fScale = clamp((availH - fixedH) / scaledH, 0.5, 1.2);
+
+      var cardH = cardHnat * fScale;
+      var thumbW = thumbWnat * fScale;
+      var thumbH = thumbHnat * fScale;
+      var metaH = metaHnat * fScale;
+      var gapRowS = gapRow * fScale;
+
+      var gy = secTop;
+      var sealChars = ['壹', '贰', '叁'];
+
+      segs.forEach(function (s, segIdx) {
+        var headY = gy;
+        // 段头布局（固定尺寸，不随 fScale 缩放，确保印章字清晰可读）
+        var sealSize = 7;                                  // 朱红印章 7×7mm（固定）
+        var sealX = SX;
+        var sealY = headY + (catHeadHnat - sealSize) / 2;
+        parts.push('<rect x="' + m(sealX) + '" y="' + m(sealY) + '" width="' + m(sealSize) + '" height="' + m(sealSize) + '" rx="' + m(0.8) + '" fill="' + C.primary + '"/>');
+        parts.push('<rect x="' + m(sealX + 0.5) + '" y="' + m(sealY + 0.5) + '" width="' + m(sealSize - 1) + '" height="' + m(sealSize - 1) + '" rx="' + m(0.5) + '" fill="none" stroke="' + C.primaryDeep + '" stroke-width="' + m(0.4) + '" opacity="0.55"/>');
+        parts.push('<text x="' + m(sealX + sealSize / 2) + '" y="' + m(sealY + sealSize * 0.78) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(5) + '" font-weight="700" fill="#fff" letter-spacing="' + m(0.3) + '">' + sealChars[segIdx] + '</text>');
+        var labelX = sealX + sealSize + 2.5;
+        parts.push('<text x="' + m(labelX) + '" y="' + m(headY + catHeadHnat * 0.72) + '" font-family="' + FS + '" font-size="' + m(5.2) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2(s.cat) + '</text>');
+        parts.push('<text x="' + m(contentR) + '" y="' + m(headY + catHeadHnat * 0.72) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '" letter-spacing="' + m(0.4) + '">共 ' + s.lines.length + ' 道</text>');
+        // 段头下方金色细线 + 「回」字装饰符 + 双线
+        var ruleY = headY + catHeadHnat - 0.6;
+        parts.push('<rect x="' + m(SX) + '" y="' + m(ruleY) + '" width="' + m(contentW) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
+        var huiSize = 3.2;
+        var huiX = contentL + contentW / 2 - huiSize / 2;
+        parts.push('<rect x="' + m(huiX) + '" y="' + m(ruleY - 0.2) + '" width="' + m(huiSize) + '" height="' + m(huiSize) + '" fill="' + C.bg + '"/>');
+        parts.push('<text x="' + m(contentL + contentW / 2) + '" y="' + m(ruleY + 0.4) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(3) + '" font-weight="700" fill="' + C.gold + '">回</text>');
+        parts.push('<rect x="' + m(SX) + '" y="' + m(ruleY + 1) + '" width="' + m(contentW) + '" height="' + m(0.2) + '" fill="' + C.goldHair + '"/>');
+        gy += catHeadHnat + headTrailHnat;
+
+        // —— 卡片网格（缩略图 + 菜名 + 备注）——
+        var N = s.lines.length;
+        s.lines.forEach(function (l, i) {
+          var col = i % pcols, row = Math.floor(i / pcols);
+          var rowStart = row * pcols;
+          var rowEnd = Math.min(rowStart + pcols, N);
+          var cnt = rowEnd - rowStart;
+          var offset = (pcols - cnt) * (cw + gapCol) / 2; // 不足整行：本段内居中
+          var cx = SX + offset + col * (cw + gapCol);
+          var cy = gy + row * (cardH + gapRowS);
+
+          // 卡片外框（米白底 + 金线边框，圆角）
+          parts.push('<rect x="' + m(cx) + '" y="' + m(cy) + '" width="' + m(cw) + '" height="' + m(cardH) + '" rx="' + m(3) + '" fill="' + C.surface + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.5) + '"/>');
+          // 双线金框效果：内嵌细金线（新中式仪式感）
+          parts.push('<rect x="' + m(cx + 1) + '" y="' + m(cy + 1) + '" width="' + m(cw - 2) + '" height="' + m(cardH - 2) + '" rx="' + m(2.2) + '" fill="none" stroke="' + C.gold + '" stroke-width="' + m(0.2) + '" opacity="0.55"/>');
+
+          // 照片区域（cover 裁切，与菜品库 crop 一致）
+          var tx = cx + padX, ty = cy + padY;
+          var clipId = 'clip_p' + segIdx + '_' + i;
+          parts.push('<clipPath id="' + clipId + '"><rect x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" rx="' + m(1.5) + '"/></clipPath>');
+          parts.push('<rect x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" rx="' + m(1.5) + '" fill="' + C.imgBg + '"/>');
+          var src = l._thumb || l.image;
+          if (src) {
+            parts.push('<g clip-path="url(#' + clipId + ')"><image href="' + src + '" xlink:href="' + src + '" x="' + m(tx) + '" y="' + m(ty) + '" width="' + m(thumbW) + '" height="' + m(thumbH) + '" preserveAspectRatio="xMidYMid slice"/></g>');
+          }
+
+          // 菜名（衬线粗体，居中，按 fScale）
+          var maxChars = Math.max(4, Math.floor((cw - 4) / (3.2 * fScale)));
+          var cn = l.cn || '未命名菜品';
+          if (cn.length > maxChars) cn = cn.slice(0, maxChars - 1) + '…';
+          var nameY = ty + thumbH + metaH * 0.42;
+          parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(nameY) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(3.4 * fScale) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(0.15) + '">' + esc2(cn) + '</text>');
+          // 备注（小红字，无则不画，保持卡片干净）
+          if (l.note) {
+            var nt = l.note;
+            if (nt.length > maxChars + 3) nt = nt.slice(0, maxChars + 2) + '…';
+            parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(nameY + 3.8 * fScale) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.5 * fScale) + '" fill="' + C.primary + '">' + esc2(nt) + '</text>');
+          }
+        });
+
+        gy += s.nRow * cardH + (s.nRow - 1) * gapRowS;
+        if (segIdx < segs.length - 1) gy += catGapHnat;
       });
     } else {
       // —— 无图版：分品类段编号清单 ——
