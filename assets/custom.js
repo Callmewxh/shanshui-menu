@@ -369,8 +369,11 @@
     function esc2(s) { return esc(s); }
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-    var client = (draft.client || '').trim() || '贵宾';
+    // #7 贵宾：未填写名字时直接不写（不再兜底"贵宾"）
+    var client = (draft.client || '').trim();
     var type = (draft.type || '').trim() || '宴席';
+    // #5 中间显示菜单名称（套餐名优先，其次宴席类型），可放大
+    var menuName = (draft.source || '').trim() || type;
     var total = (draft.total || '').toString().trim();
     var totalStr = total ? '¥' + total : '—';
 
@@ -446,37 +449,72 @@
     parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 9) + '" text-anchor="end" font-family="' + FK + '" font-size="' + m(9.5) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.6) + '">宴席定制单</text>');
     parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 13.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.goldDeep + '" letter-spacing="' + m(1.8) + '">BANQUET CUSTOM ORDER</text>');
 
-    // —— 信息条：左(客户) / 中(宴席) / 右(红色价格块) 三段式，左右视觉重量平衡 ——
+    // —— 信息条：左(客户，未填则不写) / 中(菜单名称，放大) / 右(红色价格，不框) ——
     var iy = hy + 15, infoH = 17;
     parts.push('<rect x="' + m(SX) + '" y="' + m(iy) + '" width="' + m(contentW) + '" height="' + m(infoH) + '" rx="' + m(2.6) + '" fill="#FFFDF7" stroke="' + C.line + '" stroke-width="' + m(0.4) + '"/>');
-    // 左：金色细竖条 + 客户名（衬线大字），给左段一个明确的视觉边界
-    parts.push('<rect x="' + m(SX + 2) + '" y="' + m(iy + 3) + '" width="' + m(0.6) + '" height="' + m(infoH - 6) + '" fill="' + C.gold + '"/>');
-    parts.push('<text x="' + m(SX + 6.5) + '" y="' + m(iy + 11.5) + '" font-family="' + FS + '" font-size="' + m(6.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(client) + '</text>');
-    // 中：宴席类型居中 + 下方金线（填满中间空白，平衡左右）
+    // 左：客户名（仅在有填写时显示；未填则不写"贵宾"）
+    if (client) {
+      parts.push('<rect x="' + m(SX + 2) + '" y="' + m(iy + 3) + '" width="' + m(0.6) + '" height="' + m(infoH - 6) + '" fill="' + C.gold + '"/>');
+      parts.push('<text x="' + m(SX + 6.5) + '" y="' + m(iy + 11.5) + '" font-family="' + FS + '" font-size="' + m(6.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(client) + '</text>');
+    }
+    // 中：菜单名称（放大居中）+ 下方金线
     var infoCx = contentL + contentW / 2;
-    var typeText = esc2(type);
-    parts.push('<text x="' + m(infoCx) + '" y="' + m(iy + 10.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(4.2) + '" font-weight="700" fill="' + C.goldDeep + '" letter-spacing="' + m(0.4) + '">' + typeText + '</text>');
-    parts.push('<rect x="' + m(infoCx - 10) + '" y="' + m(iy + 13) + '" width="' + m(20) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
-    // 右：红色价格块（宽度稍减，与左段视觉重量接近）
-    var pw = 36, px = contentR - pw;
-    parts.push('<rect x="' + m(px) + '" y="' + m(iy) + '" width="' + m(pw) + '" height="' + m(infoH) + '" rx="' + m(2.6) + '" fill="' + C.primary + '"/>');
-    parts.push('<text x="' + m(px + pw / 2) + '" y="' + m(iy + 5.5) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="#fff" letter-spacing="' + m(1) + '">本单总价</text>');
-    parts.push('<text x="' + m(px + pw / 2) + '" y="' + m(iy + 14) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(8.5) + '" font-weight="700" fill="#fff">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
+    var menuText = esc2(menuName);
+    parts.push('<text x="' + m(infoCx) + '" y="' + m(iy + 11.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(7.2) + '" font-weight="700" fill="' + C.goldDeep + '" letter-spacing="' + m(0.6) + '">' + menuText + '</text>');
+    parts.push('<rect x="' + m(infoCx - 12) + '" y="' + m(iy + 14) + '" width="' + m(24) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
+    // 右：红色价格（不框，纯红字表示）
+    parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 6.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(1) + '">本单总价</text>');
+    parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 14.5) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="' + C.primary + '">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
 
     if (isPhoto) {
-      // —— 带图版 v3.2（新中式红金克制）：
+      // 新版带图：连续画册网格。图片比例、裁剪和菜品库保持一致。
+      var galleryCols = 4, galleryGap = 3;
+      var galleryW = (contentW - galleryGap * (galleryCols - 1)) / galleryCols;
+      var galleryRows = Math.ceil(draft.lines.length / galleryCols);
+      var galleryH = Math.min(48, (availH - galleryGap * Math.max(0, galleryRows - 1)) / Math.max(1, galleryRows));
+      var galleryTextH = 13;   // 菜名(可两行) + 英文 预留高度
+      var galleryImageH = Math.min(galleryW * 0.75, galleryH - galleryTextH);
+      var galleryTotalH = galleryRows * galleryH + Math.max(0, galleryRows - 1) * galleryGap;
+      var galleryY = secTop + Math.max(0, (availH - galleryTotalH) / 2);
+      var gNameFs = 3.2, gEnFs = 2.0;
+      draft.lines.forEach(function (l, i) {
+        var gx = SX + (i % galleryCols) * (galleryW + galleryGap);
+        var gy = galleryY + Math.floor(i / galleryCols) * (galleryH + galleryGap);
+        var gid = 'gallery_' + i;
+        parts.push('<rect x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(galleryW) + '" height="' + m(galleryH) + '" rx="' + m(2) + '" fill="#FFFDF8" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
+        parts.push('<clipPath id="' + gid + '"><rect x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(galleryW) + '" height="' + m(galleryImageH) + '" rx="' + m(2) + '"/></clipPath>');
+        var gsrc = l._thumb || l.image;
+        if (gsrc) parts.push('<g clip-path="url(#' + gid + ')"><image href="' + gsrc + '" xlink:href="' + gsrc + '" x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(galleryW) + '" height="' + m(galleryImageH) + '" preserveAspectRatio="xMidYMid slice"/></g>');
+        // #1 不再放序号；#2 不再写菜品分类；#3 菜名可换行
+        var gcn = l.cn || '未命名菜品';
+        var gcnChars = Math.max(5, Math.floor((galleryW - 4) / gNameFs));
+        var gcnLines = wrapCn(gcn, gcnChars);
+        var gyName = gy + galleryImageH + 5.2;
+        gcnLines.forEach(function (ln, li) {
+          parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + li * 4) + '" font-family="' + FS + '" font-size="' + m(gNameFs) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
+        });
+        // #4 英文对齐中文（同一起始 x），过长截断
+        var gen = (l.en || '').trim();
+        if (gen) {
+          var gmaxEn = Math.max(8, Math.floor((galleryW - 4) / (gEnFs * 0.62)));
+          if (gen.length > gmaxEn) gen = gen.slice(0, gmaxEn - 1) + '…';
+          parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + gcnLines.length * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gEnFs) + '" fill="' + C.muted + '">' + esc2(gen) + '</text>');
+        }
+      });
+    } else if (isPhoto) {
+      // —— 带图版 v3.2（旧版保留，不再进入）
       //    分品类段（项目设计语言核心：朱红印章 + 「壹·凉菜」衬线 + 金色细线 + 回纹装饰）+ 3 列双线金框卡片
       //    段头尺寸脱离 fScale（固定可读大小），卡片按 fScale 适配 A4 单页
       //    缩略图 cover 裁切，与菜品库 crop 位置一致；末段内不足整行时居中
       //    关键：把「固定高度（段头+段间距）」与「可缩放高度（卡片+行间距）」分开算 fScale，
       //         避免之前把固定段头塞进 naturalH 导致卡片缩不够、内容溢出页脚。
-      var pcols = 3;
-      var padX = 1.4, padY = 1.2;             // 卡片内边距（mm，再缩小）
-      var gapCol = 3, gapRow = 2.8;            // 卡片间距（缩小）
+      var pcols = 4;
+      var padX = 1.15, padY = 1.05;
+      var gapCol = 2.4, gapRow = 2.4;
       var cw = (contentW - (pcols - 1) * gapCol) / pcols;
       var thumbWnat = cw - 2 * padX;
       var thumbHnat = thumbWnat * 0.75;      // 严格 4:3
-      var metaHnat = 9.5;                    // 菜名 + 备注 + 上下留白（缩小）
+      var metaHnat = 9;
       var cardHnat = padY * 2 + thumbHnat + metaHnat;
 
       // 各分类段（含菜品为空则跳过）
@@ -496,9 +534,11 @@
         scaledH += s.nRow * cardHnat + (s.nRow - 1) * gapRow;
         if (i < segs.length - 1) fixedH += catGapHnat;
       });
-      fScale = clamp((availH - fixedH) / scaledH, 0.5, 1.2);
+      // 横向尺寸不能超过四列可用宽度；菜品较少时通过居中与分段留白保持舒展。
+      fScale = clamp((availH - fixedH) / scaledH, 0.5, 1);
 
       var cardH = cardHnat * fScale;
+      var cardW = cw * fScale;
       var thumbW = thumbWnat * fScale;
       var thumbH = thumbHnat * fScale;
       var metaH = metaHnat * fScale;
@@ -536,14 +576,15 @@
           var rowStart = row * pcols;
           var rowEnd = Math.min(rowStart + pcols, N);
           var cnt = rowEnd - rowStart;
-          var offset = (pcols - cnt) * (cw + gapCol) / 2; // 不足整行：本段内居中
-          var cx = SX + offset + col * (cw + gapCol);
+          var rowW = cnt * cardW + (cnt - 1) * gapCol;
+          var offset = (contentW - rowW) / 2;
+          var cx = SX + offset + col * (cardW + gapCol);
           var cy = gy + row * (cardH + gapRowS);
 
           // 卡片外框（米白底 + 金线边框，圆角）
-          parts.push('<rect x="' + m(cx) + '" y="' + m(cy) + '" width="' + m(cw) + '" height="' + m(cardH) + '" rx="' + m(3) + '" fill="' + C.surface + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.5) + '"/>');
+          parts.push('<rect x="' + m(cx) + '" y="' + m(cy) + '" width="' + m(cardW) + '" height="' + m(cardH) + '" rx="' + m(2.4) + '" fill="' + C.surface + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.5) + '"/>');
           // 双线金框效果：内嵌细金线（新中式仪式感）
-          parts.push('<rect x="' + m(cx + 1) + '" y="' + m(cy + 1) + '" width="' + m(cw - 2) + '" height="' + m(cardH - 2) + '" rx="' + m(2.2) + '" fill="none" stroke="' + C.gold + '" stroke-width="' + m(0.2) + '" opacity="0.55"/>');
+          parts.push('<rect x="' + m(cx + 0.75) + '" y="' + m(cy + 0.75) + '" width="' + m(cardW - 1.5) + '" height="' + m(cardH - 1.5) + '" rx="' + m(1.8) + '" fill="none" stroke="' + C.gold + '" stroke-width="' + m(0.2) + '" opacity="0.55"/>');
 
           // 照片区域（cover 裁切，与菜品库 crop 一致）
           var tx = cx + padX, ty = cy + padY;
@@ -556,16 +597,16 @@
           }
 
           // 菜名（衬线粗体，居中，按 fScale）
-          var maxChars = Math.max(4, Math.floor((cw - 4) / (3.2 * fScale)));
+          var maxChars = Math.max(4, Math.floor((cardW - 4) / (3.2 * fScale)));
           var cn = l.cn || '未命名菜品';
           if (cn.length > maxChars) cn = cn.slice(0, maxChars - 1) + '…';
           var nameY = ty + thumbH + metaH * 0.42;
-          parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(nameY) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(3.4 * fScale) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(0.15) + '">' + esc2(cn) + '</text>');
+          parts.push('<text x="' + m(cx + cardW / 2) + '" y="' + m(nameY) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(3.4 * fScale) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(0.15) + '">' + esc2(cn) + '</text>');
           // 备注（小红字，无则不画，保持卡片干净）
           if (l.note) {
             var nt = l.note;
             if (nt.length > maxChars + 3) nt = nt.slice(0, maxChars + 2) + '…';
-            parts.push('<text x="' + m(cx + cw / 2) + '" y="' + m(nameY + 3.8 * fScale) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.5 * fScale) + '" fill="' + C.primary + '">' + esc2(nt) + '</text>');
+            parts.push('<text x="' + m(cx + cardW / 2) + '" y="' + m(nameY + 3.8 * fScale) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.5 * fScale) + '" fill="' + C.primary + '">' + esc2(nt) + '</text>');
           }
         });
 
@@ -573,31 +614,44 @@
         if (segIdx < segs.length - 1) gy += catGapHnat;
       });
     } else {
-      // —— 无图版：分品类段编号清单 ——
+      // 新版无图：双栏宴席菜单。减少表格感，让菜名成为主视觉。
       var segs = CATS.map(function (cat) {
         return { cat: cat, rows: draft.lines.filter(function (l) { return l.cat === cat; }) };
       }).filter(function (s) { return s.rows.length; });
-      var y = secTop;
-      var rowH = 8 * fScale;
-      var catHeadH = 9 * fScale;
       var CN = { '凉菜': '壹', '主菜': '贰', '主食点心': '叁' };
-      segs.forEach(function (s) {
-        parts.push('<rect x="' + m(SX) + '" y="' + m(y + 3 * fScale) + '" width="' + m(3) + '" height="' + m(3) + '" fill="' + C.primary + '" transform="rotate(45 ' + m(SX + 1.5) + ' ' + m(y + 4.5 * fScale) + ')"/>');
-        parts.push('<text x="' + m(SX + 7) + '" y="' + m(y + 6.5 * fScale) + '" font-family="' + FK + '" font-size="' + m(6 * fScale) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(1) + '">' + (CN[s.cat] || '') + ' · ' + esc2(s.cat) + '</text>');
-        parts.push('<text x="' + m(SX + 38) + '" y="' + m(y + 6.5 * fScale) + '" font-family="' + FN + '" font-size="' + m(2.8 * fScale) + '" fill="' + C.muted + '">共 ' + s.rows.length + ' 道</text>');
-        parts.push('<rect x="' + m(SX + 55) + '" y="' + m(y + 5.5 * fScale) + '" width="' + m(contentW - 55) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
-        y += catHeadH + 2 * fScale;
+      var plainCols = 2, plainGap = 8, plainW = (contentW - plainGap) / 2;
+      var plainX = [SX, SX + plainW + plainGap];
+      var plainY = [secTop, secTop];
+      var targetCol = 0;
+      segs.forEach(function (s, si) {
+        targetCol = plainY[0] <= plainY[1] ? 0 : 1;
+        var px2 = plainX[targetCol], py2 = plainY[targetCol];
+        var headH2 = 12, rowH2 = Math.min(16, Math.max(12.5, (availH - 32) / Math.max(6, s.rows.length)));
+        parts.push('<rect x="' + m(px2) + '" y="' + m(py2) + '" width="' + m(plainW) + '" height="' + m(headH2) + '" rx="' + m(2.2) + '" fill="' + C.primary + '"/>');
+        parts.push('<text x="' + m(px2 + 5) + '" y="' + m(py2 + 8) + '" font-family="' + FS + '" font-size="' + m(5) + '" font-weight="700" fill="#fff" letter-spacing="' + m(0.8) + '">' + (CN[s.cat] || '') + '  ' + esc2(s.cat) + '</text>');
+        parts.push('<text x="' + m(px2 + plainW - 4) + '" y="' + m(py2 + 7.6) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.5) + '" fill="#F4DDB8">' + s.rows.length + ' 道</text>');
+        py2 += headH2 + 2;
         s.rows.forEach(function (l, i) {
-          var cy = y + i * rowH;
-          parts.push('<text x="' + m(SX) + '" y="' + m(cy + rowH * 0.6) + '" font-family="' + FS + '" font-size="' + m(3.6 * fScale) + '" fill="' + C.goldDeep + '">' + ('0' + (i + 1)).slice(-2) + '</text>');
-          parts.push('<text x="' + m(SX + 10) + '" y="' + m(cy + rowH * 0.6) + '" font-family="' + FS + '" font-size="' + m(4.6 * fScale) + '" font-weight="700" fill="' + C.ink + '">' + esc2(l.cn || '未命名菜品') + '</text>');
-          if (l.note) {
-            parts.push('<text x="' + m(contentR) + '" y="' + m(cy + rowH * 0.6) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(3 * fScale) + '" fill="' + C.primary + '">（' + esc2(l.note) + '）</text>');
+          var ry = py2 + i * rowH2;
+          // #1 不再放序号；#3 菜名可换行
+          var cnLines = wrapCn(l.cn || '未命名菜品', 11);
+          var cnY = ry + rowH2 * 0.46;
+          cnLines.forEach(function (ln, li) {
+            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnY + li * 4.4) + '" font-family="' + FS + '" font-size="' + m(4.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
+          });
+          // #4 英文对齐中文（同起始 x），过长截断；行高不足时不画以免重叠
+          if (rowH2 >= 12.5) {
+            var pen = (l.en || '').trim();
+            if (pen) {
+              if (pen.length > 30) pen = pen.slice(0, 29) + '…';
+              parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnY + cnLines.length * 4.4 + 3.4) + '" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="' + C.muted + '">' + esc2(pen) + '</text>');
+            }
           }
-          if (i < s.rows.length - 1) parts.push('<line x1="' + m(SX) + '" y1="' + m(cy + rowH - 2 * fScale) + '" x2="' + m(contentR) + '" y2="' + m(cy + rowH - 2 * fScale) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
+          parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
         });
-        y += s.rows.length * rowH + 4 * fScale;
+        plainY[targetCol] = py2 + s.rows.length * rowH2 + 7;
       });
+      parts.push('<line x1="' + m(105) + '" y1="' + m(secTop) + '" x2="' + m(105) + '" y2="' + m(Math.max(plainY[0], plainY[1]) - 4) + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.35) + '"/>');
     }
 
     // —— 页脚：中间免责语 + 金菱 + 两侧金线（无左右文字）——
