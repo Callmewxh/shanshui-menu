@@ -644,16 +644,19 @@
           // #1 不再放序号；#3 菜名单行优先（按栏宽算阈值，约19字一行放得下），仅极长才折两行
           var cnMax = Math.max(11, Math.floor((plainW - 2) / 4.2));
           var cnLines = wrapCn(l.cn || '未命名菜品', cnMax);
-          // #4 英文对齐中文（同一起始 x）；行高足够且菜名有英文时才画，保证不压分隔线
-          var hasEn = (rowH2 >= 13) && (l.en || '').trim();
-          // 垂直布局：菜名在上、英文在下，全部收在 rowH2 内，分隔线固定在底部统一位置
-          var cnBase, cnStep = 4.2, enBase;
+          // #4 英文对齐中文（同一起始 x）；仅行高足够、且与菜名/分隔线都不挤时才画，保证不压字、不压线
+          var hasEn = (rowH2 >= 15) && (l.en || '').trim();
+          // 垂直布局：菜名在上、英文在下，全部收在 rowH2 内；分隔线固定在底部，与最低文字恒留 ≥3mm
+          var cnBase, cnStep = 4.4, enBase;
           if (cnLines.length >= 2) {
-            if (hasEn) { cnBase = ry + 3.4; enBase = ry + rowH2 - 4.0; }
-            else { cnBase = ry + rowH2 * 0.5 - cnStep; }   // 两行菜名整体居中
+            // 两行菜名已占满行高：整体居中，且不再画英文，避免中/英与分隔线互相挤压
+            cnBase = ry + rowH2 * 0.5 - cnStep * 0.5;
+          } else if (hasEn) {
+            // 单行菜名偏上 + 英文贴底：英文基线恒在分隔线上方 5.1mm，与线留出 ≥3mm 距离
+            cnBase = ry + rowH2 * 0.40;
+            enBase = ry + rowH2 - 5.6;
           } else {
-            if (hasEn) { cnBase = ry + rowH2 * 0.42; enBase = ry + rowH2 - 4.0; }
-            else { cnBase = ry + rowH2 * 0.56; }           // 单行菜名居中
+            cnBase = ry + rowH2 * 0.56;           // 单行菜名居中
           }
           cnLines.forEach(function (ln, li) {
             parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnBase + li * cnStep) + '" font-family="' + FS + '" font-size="' + m(4.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
@@ -676,7 +679,7 @@
     var fcx = 105;
     parts.push('<line x1="' + m(SX) + '" y1="' + m(fy) + '" x2="' + m(fcx - 22) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
     parts.push('<line x1="' + m(fcx + 22) + '" y1="' + m(fy) + '" x2="' + m(contentR) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
-    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 1) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.9) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
+    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 3.6) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.9) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
 
     parts.push('</svg>');
     return parts.join('');
