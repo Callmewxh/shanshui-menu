@@ -506,6 +506,19 @@ const Store = (function () {
     return { ok: true };
   }
 
+  // 发布：把当前菜单推送到 WebDAV（只读发布模型下，仅管理端主动调用）
+  async function publishToWebDAV() {
+    if (typeof WebDAV === 'undefined' || !WebDAV.isConfigured()) {
+      return { ok: false, msg: '未配置 WebDAV 代理地址' };
+    }
+    try {
+      await WebDAV.davPut(WebDAV.DEFAULT_FILE, { library: STATE.library, menu: STATE.menu });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, msg: e.message || 'WebDAV 写入失败' };
+    }
+  }
+
   return {
     get STATE() { return STATE; },
     get MENU() { return STATE.menu; },        // 兼容旧调用
@@ -517,7 +530,7 @@ const Store = (function () {
     getLibDish, addLibDish, updateLibDish, removeLibDish, usageCount,
     addDishesToPackage, removeDishRef, reorderPackage, resolvePackage,
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,
-    uploadImage, importConfig, reset,
+    uploadImage, importConfig, reset, publishToWebDAV,
     getBackupMeta, restoreBackup, getUsages, restoreLibDish, restoreRefs, restorePackage,
   };
 })();

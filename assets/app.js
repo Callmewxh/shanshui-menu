@@ -1141,17 +1141,58 @@
   async function pullFromCloud(opts) {
     opts = opts || {};
     try {
-      const res = await fetch('./data/menu-config.json?t=' + Date.now(), { cache: 'no-cache' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
+      let data, src;
+      if (typeof WebDAV !== 'undefined' && WebDAV.isConfigured()) {
+        // 优先从 WebDAV 拉取（只读发布模型：设备只拉不写）
+        data = await WebDAV.davGet(WebDAV.DEFAULT_FILE, { cacheBust: true });
+        src = 'webdav';
+      } else {
+        // 回退：当前部署站点的静态 menu-config.json
+        const res = await fetch('./data/menu-config.json?t=' + Date.now(), { cache: 'no-cache' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        data = await res.json();
+        src = 'static';
+      }
       const r = await Store.importConfig(data);
       if (!r.ok) throw new Error(r.msg || '配置格式不正确');
       if (state.mode === 'order') renderAll(); else renderManage();
-      if (!opts.silent) toast('已从云端拉取菜单');
+      if (!opts.silent) toast(src === 'webdav' ? '已从 WebDAV 云端拉取菜单' : '已从云端拉取菜单');
       return true;
     } catch (e) {
+      // WebDAV 配置了但失败：尝试回退静态，避免完全不可用
+      if (typeof WebDAV !== 'undefined' && WebDAV.isConfigured()) {
+        try {
+          const res = await fetch('./data/menu-config.json?t=' + Date.now(), { cache: 'no-cache' });
+          if (res.ok) {
+            const data = await res.json();
+            const r = await Store.importConfig(data);
+            if (r.ok) {
+              if (state.mode === 'order') renderAll(); else renderManage();
+              if (!opts.silent) toast('WebDAV 拉取失败，已回退到静态菜单');
+              return true;
+            }
+          }
+        } catch (_) { /* 忽略，走下方提示 */ }
+      }
       // 云端同步失败（多为网络受限/需 VPN）：明确提示用户
       toast('云端同步失败：请检查网络或开启 VPN 后重试「从云端拉取菜单」');
+      return false;
+    }
+  }
+
+  // 发布：把当前菜单推送到 WebDAV（替代原「上传 GitHub」）
+  async function publishToWebDAV() {
+    if (typeof WebDAV === 'undefined' || !WebDAV.isConfigured()) {
+      toast('请先在设置填写 WebDAV 代理地址');
+      return false;
+    }
+    try {
+      const r = await Store.publishToWebDAV();
+      if (!r.ok) throw new Error(r.msg || 'WebDAV 写入失败');
+      toast('已发布到 WebDAV 云端');
+      return true;
+    } catch (e) {
+      toast('发布失败：' + (e.message || 'WebDAV 写入错误'));
       return false;
     }
   }
@@ -1727,6 +1768,20 @@
       await pullFromCloud();
     });
 
+    // —— WebDAV 云端同步设置（代理地址 / 令牌 / 发布）——
+    const davUrlEl = $('#setDavUrl'), davTokEl = $('#setDavToken');
+    if (davUrlEl) davUrlEl.value = (typeof WebDAV !== 'undefined') ? WebDAV.getUrl() : '';
+    if (davTokEl) davTokEl.value = (typeof WebDAV !== 'undefined') ? WebDAV.getToken() : '';
+    const saveDavCfg = () => { if (typeof WebDAV !== 'undefined') WebDAV.saveConfig(davUrlEl ? davUrlEl.value : '', davTokEl ? davTokEl.value : ''); };
+    if (davUrlEl) davUrlEl.addEventListener('change', saveDavCfg);
+    if (davTokEl) davTokEl.addEventListener('change', saveDavCfg);
+    const davPublishBtn = $('#setDavPublish');
+    if (davPublishBtn) davPublishBtn.addEventListener('click', async () => {
+      closeSettings();
+      saveDavCfg();
+      await publishToWebDAV();
+    });
+
     // —— 品牌设置（LOGO 图片 + 酒店名称）——
     var BrandConfig = {
       KEY_LOGO: 'ss_brand_logo',   // base64 dataURL of uploaded logo PNG
@@ -1901,6 +1956,71 @@
     $('#cropApply').addEventListener('click', applyCrop);
     initCrop();
 
+    // —— 分享 / 整份菜单导出（二维码 + 多页 PDF）——
+    function shareUrlFor(banquetId) {
+      try { return location.origin + location.pathname + '?banquet=' + encodeURIComponent(banquetId || 'wedding'); } catch (e) { return '?banquet=' + (banquetId || 'wedding'); }
+    }
+    function menuExportBanquet() { return (typeof mg !== 'undefined' && mg.banquet) ? mg.banquet : state.banquet; }
+    function menuExportScale() {
+      var el = $('#menuExportModal .exp-size-btn.on');
+      var s = el ? parseFloat(el.getAttribute('data-scale')) : 1;
+      return (isNaN(s) || s <= 0) ? 1 : s;
+    }
+    function renderMenuExportPreview() {
+      var container = $('#mePreview'); if (!container) return;
+      var bId = menuExportBanquet();
+      var b = Store.getBanquet(bId);
+      if (!b || !b.packages.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">该宴席暂无套餐</div>'; return; }
+      container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">渲染预览中…</div>';
+      if (window.CustomOrder && window.CustomOrder.buildPackageSVG) {
+        var svg = window.CustomOrder.buildPackageSVG(bId, b.packages[0].id, menuExportScale());
+        container.innerHTML = svg;
+        var svgs = container.querySelector('svg');
+        if (svgs) { svgs.style.height = '260px'; svgs.style.width = 'auto'; svgs.style.maxWidth = '100%'; svgs.style.display = 'block'; svgs.style.margin = '0 auto'; }
+      }
+    }
+    function openMenuExport() {
+      closeSettings();
+      var bId = menuExportBanquet();
+      var b = Store.getBanquet(bId);
+      var note = $('#meBanquetNote');
+      if (note) note.textContent = '将导出「' + (b ? b.name : bId) + '」全部 ' + (b ? b.packages.length : 0) + ' 个套餐，每套餐一页。';
+      renderMenuExportPreview();
+      var m = $('#menuExportModal'); if (m) m.hidden = false;
+    }
+
+    $('#setShareQr').addEventListener('click', function () {
+      closeSettings();
+      if (window.CustomOrder) window.CustomOrder.showQrModal(shareUrlFor(menuExportBanquet()));
+    });
+    $('#setExportMenu').addEventListener('click', openMenuExport);
+    $('#expShareQr').addEventListener('click', function () {
+      if (window.CustomOrder) window.CustomOrder.showQrModal(shareUrlFor(state.banquet));
+    });
+    $('#meConfirm').addEventListener('click', function () {
+      var withQr = $('#meQr') && $('#meQr').checked;
+      if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: withQr, scale: menuExportScale() });
+      var m = $('#menuExportModal'); if (m) m.hidden = true;
+    });
+    $('#menuExportModal').querySelectorAll('.exp-size-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        $('#menuExportModal').querySelectorAll('.exp-size-btn').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        renderMenuExportPreview();
+      });
+    });
+    $('#qrCopy').addEventListener('click', function () {
+      var link = $('#qrLink'); var txt = link ? link.textContent : '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('链接已复制'); }, function () {});
+        else toast('链接：' + txt);
+      } catch (e) { toast('链接：' + txt); }
+    });
+    ['qrModal', 'menuExportModal'].forEach(function (id) {
+      var m = $('#' + id);
+      if (m) m.addEventListener('click', function (e) { if (e.target === m) m.hidden = true; });
+    });
+
     // 弹窗关闭（data-close 按钮 & 点击遮罩）
     document.querySelectorAll('[data-close]').forEach((btn) => {
       btn.addEventListener('click', () => { $('#' + btn.dataset.close).hidden = true; });
@@ -1909,6 +2029,36 @@
     ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'menuDishModal', 'copyPkgModal'].forEach((id) => {
       $('#' + id).addEventListener('click', (e) => { if (e.target.id === id) $('#' + id).hidden = true; });
     });
+  }
+
+  // ---------- 深链（扫码分享入口）----------
+  // ?banquet=wedding          → 自动选中该宴席
+  // ?pkg=A                    → 同时定位到某套餐
+  // ?export=pdf               → 加载后自动导出整份菜单 PDF（含二维码）
+  // 无参数时完全不改变默认行为。
+  function handleDeepLink() {
+    try {
+      var sp = new URLSearchParams(location.search);
+      var bq = sp.get('banquet');
+      var pk = sp.get('pkg');
+      var exp = sp.get('export');
+      var known = Store.BANQUETS.map(function (b) { return b.id; });
+      if (bq && known.indexOf(bq) >= 0) {
+        state.banquet = bq;
+        var b = banquet();
+        if (pk && b && b.packages.some(function (p) { return p.id === pk; })) state.pkg = pk;
+        else if (b && b.packages[0]) state.pkg = b.packages[0].id;
+        renderAll();
+      }
+      if (exp === 'pdf') {
+        var target = (bq && known.indexOf(bq) >= 0) ? bq : (state.banquet || 'wedding');
+        setTimeout(function () {
+          if (window.CustomOrder && window.CustomOrder.exportWholeMenu) {
+            window.CustomOrder.exportWholeMenu(target, { withQr: true });
+          }
+        }, 300);
+      }
+    } catch (e) {}
   }
 
   // ---------- 启动 ----------
@@ -1928,5 +2078,6 @@
     if (!pulled) renderAll();
     applyHeroPin();
     initImmersive();
+    handleDeepLink();
   });
 })();

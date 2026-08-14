@@ -89,8 +89,14 @@
             <button class="set-row primary-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
             <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>离线兜底：从本地文件整体替换</i></span></button>
             <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
+            <button class="set-row" id="setShareQr" type="button"><span class="set-ic">▦</span><span><b>分享婚宴菜单（二维码）</b><i>生成二维码，客户扫码看线上菜单</i></span></button>
+            <button class="set-row" id="setExportMenu" type="button"><span class="set-ic">⤓</span><span><b>导出整份菜单（PDF）</b><i>本宴席所有套餐打包成多页 PDF</i></span></button>
             <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
             <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
+            <div class="set-section-title">WebDAV 云端同步</div>
+            <button class="set-row set-brand" type="button"><span class="set-ic">☁</span><span class="set-txt"><label for="setDavUrl">代理地址</label><i>如 https://你的worker.workers.dev/dav</i><input type="url" id="setDavUrl" class="set-input" placeholder="https://.../dav" autocomplete="off"></span></button>
+            <button class="set-row set-brand" type="button"><span class="set-ic">🔑</span><span class="set-txt"><label for="setDavToken">访问令牌</label><i>与 Worker 的 DAV_TOKEN 一致（留空不校验）</i><input type="text" id="setDavToken" class="set-input" placeholder="DAV_TOKEN" autocomplete="off"></span></button>
+            <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端（替代上传 GitHub）</i></span></button>
             <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
             <!-- 品牌设置 -->
             <div class="set-section-title">品牌信息</div>
@@ -404,6 +410,7 @@
         </div>
         <span class="exp-size-hint">字号与行距随档位放大，方便长辈看清</span>
       </div>
+      <label class="me-qr-row"><input type="checkbox" id="expQr"> 导出图片含二维码（扫码看线上菜单）</label>
       <div class="exp-format">
         <span>导出格式</span>
         <div class="exp-fmt-toggle">
@@ -413,13 +420,57 @@
       </div>
       <div class="edit-actions">
         <button class="mg-btn" data-close="exportModal" type="button">取消</button>
+        <button class="mg-btn ghost" id="expShareQr" type="button">分享二维码</button>
         <button class="mg-btn primary" id="expConfirm" type="button">生成图片</button>
       </div>
     </div>
   </div>
 
+  <!-- 分享二维码弹窗 -->
+  <div class="modal" id="qrModal" hidden>
+    <div class="modal-card exp-modal-card">
+      <button class="modal-close" aria-label="关闭" data-close="qrModal">✕</button>
+      <h3>扫码查看菜单</h3>
+      <div class="qr-wrap"><img id="qrImg" alt="菜单二维码"></div>
+      <div class="qr-link" id="qrLink"></div>
+      <div class="edit-actions">
+        <button class="mg-btn" data-close="qrModal" type="button">关闭</button>
+        <button class="mg-btn primary" id="qrCopy" type="button">复制链接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 整份宴席菜单导出弹窗 -->
+  <div class="modal" id="menuExportModal" hidden>
+    <div class="modal-card exp-modal-card">
+      <button class="modal-close" aria-label="关闭" data-close="menuExportModal">✕</button>
+      <h3>导出整份宴席菜单</h3>
+      <div class="exp-menu-note" id="meBanquetNote"></div>
+      <div class="exp-size">
+        <span class="exp-size-label">界面大小</span>
+        <div class="exp-size-toggle">
+          <button type="button" class="exp-size-btn on" data-scale="1">标准</button>
+          <button type="button" class="exp-size-btn" data-scale="1.3">大</button>
+          <button type="button" class="exp-size-btn" data-scale="1.6">特大</button>
+        </div>
+        <span class="exp-size-hint">字号与行距随档位放大，方便长辈看清</span>
+      </div>
+      <label class="me-qr-row"><input type="checkbox" id="meQr" checked> 每页烧入二维码（客户扫码看线上实时菜单）</label>
+      <div class="exp-preview-wrap">
+        <div class="exp-preview-label">预览（首页）</div>
+        <div class="exp-preview" id="mePreview"></div>
+      </div>
+      <div class="edit-actions">
+        <button class="mg-btn" data-close="menuExportModal" type="button">取消</button>
+        <button class="mg-btn primary" id="meConfirm" type="button">生成 PDF 并下载</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/qrcode.js"></script>
   <script src="assets/data.js"></script>
   <script src="assets/store.js"></script>
+  <script src="assets/webdav.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/custom.js"></script>
   <script>
