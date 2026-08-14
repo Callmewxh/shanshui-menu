@@ -13,6 +13,7 @@ const Store = (function () {
 
   const LS_KEY = 'ss_menu_v1'; // 沿用 v1 键名，load 时自动把旧版内嵌数据迁移为菜品库
   const BACKUP_KEY = 'ss_menu_v1_backup'; // 自动备份（防丢）：每次保存后同步一份带时间戳的副本到独立键
+  const THEME_KEY = 'ss_theme';           // 皮肤主题（四风格：shanshui / apple / glass / wabi）
 
   function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -494,6 +495,10 @@ const Store = (function () {
     STATE = seed();
   }
 
+  // 皮肤主题：独立键持久化，与菜单数据隔离（换肤不影响任何菜单/菜品）
+  function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'shanshui'; } catch (_) { return 'shanshui'; } }
+  async function setTheme(t) { try { localStorage.setItem(THEME_KEY, t || 'shanshui'); } catch (_) {} }
+
   // 导入整份配置（与 exportConfig 配对）：用于跨设备搬运菜单（各设备独立存储时）
   async function importConfig(data) {
     if (!data || !Array.isArray(data.library) || typeof data.menu !== 'object') {
@@ -532,5 +537,6 @@ const Store = (function () {
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,
     uploadImage, importConfig, reset, publishToWebDAV,
     getBackupMeta, restoreBackup, getUsages, restoreLibDish, restoreRefs, restorePackage,
+    getTheme, setTheme,
   };
 })();

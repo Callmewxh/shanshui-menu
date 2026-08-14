@@ -12,11 +12,15 @@
 | `index.html` | 302 | 全部 DOM 结构：顶栏 / 点菜屏 / 管理屏 / 6 个弹窗 |
 | `assets/app.js` | 1782 | 全部交互逻辑（点菜端 + 管理端 + 手势 + 事件绑定） |
 | `assets/store.js` | 502 | 数据层：localStorage 读写、菜品库/菜单 CRUD、迁移、备份 |
-| `assets/style.css` | 711 | 全部样式，含手机端 3 处 `@media` 适配 |
+| `assets/custom.js` | ~1270 | **定制单 + 导出引擎**：自选菜品草案、A4 SVG 排版、栅格化、PDF 生成、**二维码分享 / 整份菜单多页 PDF** |
+| `assets/style.css` | ~740 | 全部样式，含手机端 3 处 `@media` 适配 |
 | `assets/data.js` | 61 | 种子数据（仅新设备首次打开且云端拉取失败时用） |
+| `assets/qrcode.js` | — | **内置二维码库**（qrcode-generator 1.4.4，MIT，无外部依赖/离线可用），全局函数 `qrcode(0,'M')` |
+| `assets/webdav.js` | — | WebDAV 同步（设置里的备份通道） |
 | `data/menu-config.json` | — | **已发布的真实菜单**（3.4 MB，含 base64 图），新设备首次打开自动拉取 |
 | `sw.js` | 40 | PWA Service Worker，网络优先。**改版本号要同步改 `CACHE`** |
 | `tools/publish-menu.js` | 178 | 发布脚本：扫描下载目录最新导出 → 校验 → 覆盖 `data/menu-config.json` |
+| `tools/render-package-preview.js` | — | 用**真实菜单数据**渲出整份菜单每页 SVG + 对照 HTML（人眼验收视觉保真） |
 
 ---
 
@@ -109,6 +113,47 @@ STATE = {
 
 ---
 
+## 四·五、custom.js 导出引擎地图
+
+### 定制单（自选菜品 → 一页 A4）
+
+| 功能 | 函数 |
+|---|---|
+| 进入定制单 / 渲染草案 | `enter` `render` |
+| 从菜品库挑菜 | `openPick` `renderPick` `applyLibDish` |
+| 图片裁切（与菜品库一致） | `cropBgStyle` `coverRect` `renderThumb` `preloadImages` |
+| 菜名换行（卡片内不溢出） | `wrapCn` |
+| **A4 单页排版** | `buildSVG(ver, k)` — `ver='thumb'` 带图 4 列画册 / `'plain'` 无图分类段；`k` 为字号档位 |
+| SVG → canvas（高清 2×） | `rasterize` |
+| canvas → 单页 PDF | `canvasToPdfBlob` `buildPdfWithJpeg` |
+| 导出主流程 | `doExport` `openExport` `renderExpPreview` |
+
+### 二维码分享 / 整份菜单（本次新增）
+
+| 功能 | 函数 | 说明 |
+|---|---|---|
+| 生成二维码 canvas | `makeQRCanvas(text, size)` | 容错级 M，四周留 4 模块静区；无 canvas 环境 resolve(null) |
+| 线上菜单深链 | `shareUrl(banquetId)` | `origin + pathname + ?banquet=xxx`（不用 hash，防扫码 App 截断） |
+| 烧码进导出物 | `burnQR(canvas, banquetId)` | 右下角 ~15%，白底 + 金线框 + 「扫码看菜单」字样 |
+| **多页 PDF** | `buildMultiPagePdf(pages)` | `pages=[{bytes,w,h}]`；1=Catalog、2=Pages，每页占 3 个对象（Page/Image/Contents） |
+| **单套餐一页 SVG** | `buildPackageSVG(banquetId, pkgId, k)` | 抬头「宴席菜单」、信息条 = 宴席名/套餐名/套餐价、4 列画册（与 `buildSVG` 同参数） |
+| **整份菜单导出** | `exportWholeMenu(banquetId, {withQr, scale})` | 每套餐一页 → 逐页栅格化 → 可选烧码 → 合成多页 PDF 下载 |
+| 分享二维码弹窗 | `showQrModal(url)` | 填 `#qrImg`/`#qrLink` 并展开 `#qrModal` |
+
+**两个必须记住的坑：**
+1. `Store.resolvePackage()` **直接返回菜品数组**，不是 `{dishes:[...]}`。按对象取值会静默拿到空列表 → 导出页「有框无图」。
+2. 二维码里放的是**网址**不是菜单数据。整份菜单含图 3.4 MB，二维码上限仅 ~3 KB，物理上放不进去；放网址还顺带让客户永远看到线上最新版。
+
+### 深链参数（`app.js` `handleDeepLink`）
+
+| 参数 | 作用 |
+|---|---|
+| `?banquet=wedding` | 打开即切到指定宴席（二维码默认指向） |
+| `?pkg=A1` | 再定位到指定套餐 |
+| `?export=pdf` | 打开后自动触发整份菜单 PDF 下载（扫码即下载，无需托管文件） |
+
+---
+
 ## 五、index.html DOM id 速查
 
 **顶栏**：`brandBtn` `brandMenu`（模式切换在这）· `banquetSelect` `bsTrigger` `bsMenu` · `search`
@@ -117,7 +162,7 @@ STATE = {
 
 **管理屏** `#manageScreen`：
 - 工具栏 `mgToolbar` → 子标签 `mgTabs` · 菜品库栏 `mgLibbar`（`libCat` `mgAddLibDish`）· 菜单栏 `mgCtxbar`（`mgBanquet` `mgPkgRow` `mgAddPkg` `mgAddFromLib`）
-- 设置 `mgSetWrap` → `mgSettings` `mgSetMenu` → `setPull` `setImportJson` `setExport` `setRestore` `setBatch` `setShowDesc`+`setShowDescCb` `setReset`
+- 设置 `mgSetWrap` → `mgSettings` `mgSetMenu` → `setPull` `setImportJson` `setExport` **`setShareQr`（分享二维码）** **`setExportMenu`（导出整份菜单 PDF）** `setRestore` `setBatch` `setShowDesc`+`setShowDescCb` `setReset`
 - 列表 `mgLibList`（菜品库）· `mgList`（菜单）· `mgDrop`（拖图遮罩）
 - 右键菜单 `pkgCtxMenu`
 

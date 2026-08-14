@@ -113,19 +113,28 @@ function run() {
     if (stdBtn) stdBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
 
     // buildSVG 两种版本
+    // 注意：抬头中部显示的是「菜单名称」——套餐名优先，缺省才回落宴席类型（custom.js #5 设计）。
+    // 因此不能硬断言出现「婚宴」；应按 draft 实际的 source/type 计算期望值。
+    const dr = window.CustomOrder._getDraft ? window.CustomOrder._getDraft() : null;
+    const expectMenuName = ((dr && dr.source) || '').trim() || ((dr && dr.type) || '').trim() || '宴席';
     const svgThumb = window.CustomOrder._buildSVG('thumb');
     assert(svgThumb.indexOf('<svg') === 0, 'buildSVG(thumb) 返回 SVG 根');
-    assert(/婚宴/.test(svgThumb), 'thumb SVG 含宴席类型');
+    assert(svgThumb.indexOf(expectMenuName) > -1, 'thumb SVG 含菜单名称「' + expectMenuName + '」（套餐名优先，其次宴席类型）');
     assert(svgThumb.indexOf('<image') > -1, 'thumb SVG 嵌入菜品缩略图（SVG <image> + preloadImages 预渲染）');
     assert(svgThumb.indexOf('</svg>') > -1, 'thumb SVG 闭合正确');
     const svgPlain = window.CustomOrder._buildSVG('plain');
-    assert(/婚宴/.test(svgPlain), 'plain SVG 含宴席类型');
+    assert(svgPlain.indexOf(expectMenuName) > -1, 'plain SVG 含菜单名称「' + expectMenuName + '」');
     assert(svgPlain.indexOf('<image') === -1, 'plain SVG 无图');
     assert(svgPlain.indexOf('</svg>') > -1, 'plain SVG 闭合正确');
 
-    // 档位缩放：特大档位下菜名字号应为 21*1.6=33.6
+    // 档位缩放：v2.2 起菜名字号由 fScale 自适应填充（不再是固定 21×k），
+    // 故按「整体等比放大」验证：特大档位下最大字号 ≈ 标准档位 × 1.6。
     const svgThumbXL = window.CustomOrder._buildSVG('thumb', 1.6);
-    assert(/font-size="33.6"/.test(svgThumbXL), '特大档位菜名字号放大到 33.6（21×1.6）');
+    const maxFs = s => Math.max.apply(null, (s.match(/font-size="([\d.]+)"/g) || ['font-size="0"'])
+      .map(x => parseFloat(x.replace(/[^\d.]/g, ''))));
+    const fsStd = maxFs(svgThumb), fsXL = maxFs(svgThumbXL);
+    const ratio = fsStd > 0 ? fsXL / fsStd : 0;
+    assert(Math.abs(ratio - 1.6) < 0.05, '特大档位字号整体放大 1.6 倍（标准 ' + fsStd + ' → 特大 ' + fsXL + '，比值 ' + ratio.toFixed(3) + '）');
 
     // 纯前端 PDF 生成器：构造最小 JPEG 字节，验证产出合法 PDF 头尾
     const fakeJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9]);

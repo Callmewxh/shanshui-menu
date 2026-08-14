@@ -64,4 +64,19 @@
 - **「图 / 图片」** → 说清是 **菜品大图** / **缩略图** / **4:3 取景框裁剪**
 - **「前后端」** → 本项目是纯前端静态 PWA，没有后端；用 **展示层 / 数据真源（data.js 或导出 JSON）**
 
-> 维护约定：本文件与 `CODEMAP.md` 配套。改动涉及验证级别判定或分类维度调整时，顺手更新此处。
+---
+
+## 4. 已落地特性 · 验证级别与回归测试映射
+
+> 每加一类影响「导出 / 同步 / 数据模型」的能力，在此登记其验证级别 + 回归测试入口，便于下次改动前快速判定爆炸半径（T2/T3 必须跑对应回归）。
+
+| 特性 | 验证级别 | 回归测试入口 | 关键坑（必记） |
+|------|---------|-------------|---------------|
+| 二维码分享（弹窗预览，烧进导出图已移除） | **T2** | `tools/menu-export.test.js`（`makeQRCanvas`/`guestUrl` 编码断言） | 二维码指向**客人专享深链** `?guest=1&banquet=&pkg=`（仅查看+下载当前套餐），不是把整份菜单数据塞进二维码；jsdom 无 canvas 后端，`makeQRCanvas` 优雅降级 `resolve(null)`，断言需过滤 `getContext` 噪声 |
+| 整份菜单多页 PDF（每套餐一页） | **T3** | `tools/menu-export.test.js`（`/Kids` 引用计数、DCTDecode 对象数、xref 完整性） | `Store.resolvePackage(banquetId,pkgId)` 直接返回**菜品数组**，不是 `{dishes:[...]}`（store.js:334）；多页 PDF 对象编号规则（1=Catalog、2=Pages、每页占 3 对象：Page/Image XObject(DCTDecode)/Contents）须严格递增 |
+| 单页定制单 SVG 导出（buildSVG） | **T2** | `tools/custom-order.test.js` | 菜单名=套餐名优先于宴席类型；`fScale` 自适应字号（特大档/标准档比值≈1.6），断言不能硬编码字号 |
+| 客人专享（guest）受限界面 | **T3** | `tools/menu-export.test.js`（`guestUrl` 断言）+ `tools/custom-order.test.js`（点定制单链路无回归） | 深链 `?guest=1&banquet=X&pkg=Y` 进入受限单套餐界面：`setMode` 加 `if(state.guest && mode!=='order') return` 守卫防客人切管理/定制；导出物**不再烧二维码**（`#expQr`/`#meQr` 已移除，`exportWholeMenu` 默认 `withQr:false`）；访客下载走单套餐 PDF（`opts.pkgId`）；`#guestDownload` 仅 `body.guest-mode` 下显示 |
+
+**真机验收（T3 必做）**：云端部署后，用 iPad/手机实际走一遍「管理 → 分享套餐二维码 → 扫码打开 `?guest=1&...` 受限界面 → 仅查看当前套餐 + 点底部下载本套餐 PDF；确认顶栏管理/定制入口不可见、无法切到其他套餐/宴席」。回归测试只能覆盖逻辑，视觉保真（金线/排版/缩略图裁切/guest 界面洁净度）须在部署链接人眼验收。
+
+> 维护约定：本文件与 `CODEMAP.md` 配套。改动涉及验证级别判定或分类维度调整时，顺手更新此处；新增导出/同步类特性时同步登记第 4 节。
