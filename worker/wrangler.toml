@@ -1,0 +1,21 @@
+# Cloudflare Worker · 山水S酒店菜单 WebDAV 代理
+# 部署方式（二选一）：
+#   A. 仪表盘：按 worker/DEPLOY.md 把 webdav-proxy.js 粘进去 + 设 4 个变量（最简单）
+#   B. CLI：本文件 + `wrangler deploy`（需先有 Cloudflare 凭据）
+#
+# 部署前准备：
+#   1) export CLOUDFLARE_API_TOKEN=xxxx        # 具有 Workers 编辑权限的令牌
+#   2) export CLOUDFLARE_ACCOUNT_ID=xxxx       # 你的账户 ID（也可填到下方 account_id）
+#   3) 设置密钥（切勿写进本文件 / 仓库）：
+#        npx wrangler secret put WEBDAV_BASE
+#        npx wrangler secret put WEBDAV_USER
+#        npx wrangler secret put WEBDAV_PASS
+#        npx wrangler secret put DAV_TOKEN      # 推荐，与 PWA 端「密码/访问令牌」填一致
+#        npx wrangler secret put ALLOW_ORIGIN   # 可选，限定 PWA 源，如 https://xxx.app.workbuddy.link
+#   4) npx wrangler deploy
+
+name = "shanshui-dav"
+main = "webdav-proxy.js"
+compatibility_date = "2025-01-01"
+
+# account_id = "在此填写你的 Cloudflare 账户 ID，或上方 export CLOUDFLARE_ACCOUNT_ID"

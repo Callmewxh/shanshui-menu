@@ -527,7 +527,9 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('./sw.js').catch(function () {});
+        // updateViaCache:'none' 确保每次导航都向网络重新拉取 sw.js（不被 HTTP 缓存挡住），
+        // 配合 sw.js 内 CACHE 版本号自增，设备才能拿到最新代码。
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(function () {});
       });
     }
   </script>
