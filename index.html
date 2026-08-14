@@ -464,13 +464,13 @@
         <!-- 数据同步 -->
         <div class="settings-section">
           <div class="settings-section-title">数据同步</div>
-          <button class="set-row primary-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
-          <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>离线兜底：从本地文件整体替换</i></span></button>
+          <button class="set-row primary-row" id="setPull" type="button" hidden><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
+          <button class="set-row primary-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>主路径：从本地文件整体替换本机</i></span></button>
           <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
           <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
         </div>
-        <!-- WebDAV 云端同步 -->
-        <div class="settings-section">
+        <!-- WebDAV 云端同步（solo 模式隐藏，代码保留于 assets/webdav.js + worker/） -->
+        <div class="settings-section" hidden>
           <div class="settings-section-title">WebDAV 云端同步</div>
           <button class="set-row" id="setDavOpen" type="button"><span class="set-ic">☁</span><span><b>配置 WebDAV</b><i id="setDavSummary">未配置</i></span></button>
           <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端</i></span></button>

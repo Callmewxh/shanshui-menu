@@ -190,6 +190,7 @@ body {
   flex: 0 0 auto; border: 1px solid var(--line); background: var(--bg);
   border-radius: 12px; padding: 8px 18px; display: flex; flex-direction: column; align-items: flex-start;
   cursor: pointer; transition: .15s;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
 }
 .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
 .chip-name { font-size: 14px; font-weight: 600; }

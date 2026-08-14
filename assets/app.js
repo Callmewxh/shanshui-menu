@@ -152,7 +152,7 @@
       return;
     }
     bar.innerHTML = b.packages.map(
-      (p) => `<button class="chip ${p.id === state.pkg ? 'on' : ''}" data-p="${p.id}" title="左键查看，右键呼出「定制菜单」">
+      (p) => `<button class="chip ${p.id === state.pkg ? 'on' : ''}" data-p="${p.id}" title="点击查看套餐，长按呼出「定制菜单」">
         <span class="chip-name">${p.name}</span>
         <span class="chip-price">¥${p.price}<i>/桌</i></span>
       </button>`
@@ -1534,28 +1534,56 @@
       const sel = $('#banquetSelect');
       if (sel && !sel.contains(e.target)) { const m = $('#bsMenu'); if (m) m.hidden = true; }
     });
+    // 长按套餐 chip 呼出菜单时，释放后的跟随 click 需吞掉，避免误切换套餐 / 误关菜单
+    let justLongPressed = false;
     $('#pkgbar').addEventListener('click', (e) => {
       const t = e.target.closest('.chip'); if (!t) return;
+      if (justLongPressed) return; // 长按释放的跟随 click：不切换套餐（见下方长按处理）
       state.pkg = t.dataset.p;
       renderHero(); renderPkg(); renderBanner(); renderList();
     });
-    // 点菜界面右键套餐 → 呼出「定制菜单」选项（不直接进，给用户确认）
+    // 点菜界面：桌面右键 / 平板长按 套餐 chip → 呼出「定制菜单」选项（不直接进，给用户确认）
     let pkgbarCtxPkg = null;
+    function showPkgbarCtx(clientX, clientY, pkg) {
+      pkgbarCtxPkg = pkg;
+      const m = $('#pkgbarCtxMenu');
+      m.hidden = false;
+      const w = m.offsetWidth || 140, h = m.offsetHeight || 40;
+      const x = Math.max(8, Math.min(clientX, window.innerWidth - w - 8));
+      const y = Math.max(8, Math.min(clientY, window.innerHeight - h - 8));
+      m.style.left = x + 'px'; m.style.top = y + 'px';
+    }
     function closePkgbarCtx() {
       const m = $('#pkgbarCtxMenu'); if (m) m.hidden = true;
       pkgbarCtxPkg = null;
     }
+    // 桌面：右键
     $('#pkgbar').addEventListener('contextmenu', (e) => {
       const t = e.target.closest('.chip'); if (!t) return;
       e.preventDefault();
-      pkgbarCtxPkg = t.dataset.p;
-      const m = $('#pkgbarCtxMenu');
-      m.hidden = false;
-      const w = m.offsetWidth || 140, h = m.offsetHeight || 40;
-      const x = Math.max(8, Math.min(e.clientX, window.innerWidth - w - 8));
-      const y = Math.max(8, Math.min(e.clientY, window.innerHeight - h - 8));
-      m.style.left = x + 'px'; m.style.top = y + 'px';
+      showPkgbarCtx(e.clientX, e.clientY, t.dataset.p);
     });
+    // 平板/手机：长按（无右键）→ 呼出「定制菜单」
+    let lpTimer = null, lpX = 0, lpY = 0, lpPkg = null;
+    $('#pkgbar').addEventListener('touchstart', (e) => {
+      const t = e.target.closest('.chip'); if (!t) return;
+      const touch = e.touches[0];
+      lpX = touch.clientX; lpY = touch.clientY; lpPkg = t.dataset.p;
+      lpTimer = setTimeout(() => {
+        lpTimer = null;
+        justLongPressed = true;
+        setTimeout(() => { justLongPressed = false; }, 700); // 吞掉释放后的跟随 click
+        showPkgbarCtx(lpX, lpY, lpPkg);
+      }, 550);
+    }, { passive: true });
+    $('#pkgbar').addEventListener('touchmove', (e) => {
+      if (!lpTimer) return;
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - lpX) > 12 || Math.abs(t.clientY - lpY) > 12) { clearTimeout(lpTimer); lpTimer = null; }
+    }, { passive: true });
+    function cancelLp() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
+    $('#pkgbar').addEventListener('touchend', cancelLp);
+    $('#pkgbar').addEventListener('touchcancel', cancelLp);
     $('#pkgbarCtxMenu').addEventListener('click', (e) => {
       const item = e.target.closest('.ctx-item'); if (!item) return;
       const pkg = pkgbarCtxPkg;
@@ -1570,6 +1598,7 @@
     document.addEventListener('click', (e) => {
       const m = $('#pkgbarCtxMenu');
       if (!m || m.hidden) return;
+      if (justLongPressed) { justLongPressed = false; return; } // 长按释放的跟随 click：不关菜单
       if (!m.contains(e.target)) closePkgbarCtx();
     });
     document.addEventListener('scroll', closePkgbarCtx, true);

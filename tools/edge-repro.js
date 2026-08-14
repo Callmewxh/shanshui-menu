@@ -51,9 +51,9 @@ function evaluate(ws, expr, opts = {}) {
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 (async () => {
-  // 1) 找到 page target 的 websocket
+  // 1) 找到 page target 的 websocket（优先我们启动的 about:blank 页，避开 edge:// 内部页）
   const list = await getJSON(`http://127.0.0.1:${PORT}/json`);
-  const page = (list.find((t) => t.type === 'page') ) || list[0];
+  const page = list.find((t) => t.type === 'page' && /about:blank/.test(t.url)) || list.find((t) => t.type === 'page') || list[0];
   if (!page || !page.webSocketDebuggerUrl) { console.error('未找到可调试的 page target'); process.exit(2); }
   console.log('连接 target:', page.url, page.webSocketDebuggerUrl);
   const ws = await connect(page.webSocketDebuggerUrl);
@@ -112,6 +112,36 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     return { ok:true, menuHiddenAfterClick: m ? m.hidden : null };
   })()`);
   console.log('点击『定制菜单』后:', JSON.stringify(afterClick));
+
+  // 6.5) 平板长按测试：touchstart 后等待 > 550ms 定时器 → 菜单应出现
+  const lpDispatch = await evaluate(ws, `(() => {
+    const chip = document.querySelector('#pkgbar .chip');
+    const m0 = document.getElementById('pkgbarCtxMenu'); if (m0) m0.hidden = true;
+    if (!chip) return { ok:false, reason:'no chip' };
+    if (typeof Touch === 'undefined' || typeof TouchEvent === 'undefined') return { ok:false, reason:'Touch API 不可用' };
+    const touch = new Touch({ identifier: 1, target: chip, clientX: 70, clientY: 70 });
+    chip.dispatchEvent(new TouchEvent('touchstart', { touches:[touch], targetTouches:[touch], changedTouches:[touch], bubbles:true, cancelable:true }));
+    return { ok:true, dispatched:true };
+  })()`);
+  console.log('长按派发:', JSON.stringify(lpDispatch));
+  await sleep(700); // 等过 550ms 定时器
+  const lpAfter = await evaluate(ws, `(() => {
+    const m = document.getElementById('pkgbarCtxMenu');
+    return { menuHidden: m.hidden, left: m.style.left, top: m.style.top };
+  })()`);
+  console.log('长按 700ms 后菜单状态(应 hidden:false):', JSON.stringify(lpAfter));
+
+  // 6.6) 短按（touchstart 后立刻 touchend）不应弹出菜单
+  await evaluate(ws, `(() => {
+    const chip = document.querySelector('#pkgbar .chip');
+    const m = document.getElementById('pkgbarCtxMenu'); if (m) m.hidden = true;
+    const touch = new Touch({ identifier: 2, target: chip, clientX: 70, clientY: 70 });
+    chip.dispatchEvent(new TouchEvent('touchstart', { touches:[touch], targetTouches:[touch], changedTouches:[touch], bubbles:true, cancelable:true }));
+    chip.dispatchEvent(new TouchEvent('touchend', { touches:[], targetTouches:[], changedTouches:[touch], bubbles:true, cancelable:true }));
+  })()`);
+  await sleep(650);
+  const shortAfter = await evaluate(ws, `document.getElementById('pkgbarCtxMenu').hidden`);
+  console.log('短按后菜单应仍隐藏(应 true):', JSON.stringify(shortAfter));
 
   // 7) 控制台/异常
   console.log('--- 控制台/异常日志 (' + logs.length + ') ---');
