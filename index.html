@@ -117,17 +117,6 @@
         <div class="mg-list" id="mgList" hidden></div>
         <div class="mg-dropzone" id="mgDrop" hidden><div class="mg-dropzone-inner">松开鼠标，把图片批量加入菜品库<br>（自动建立若干「待命名」菜品，之后逐个点开改名）</div></div>
       </div>
-      <!-- 套餐条右键菜单（在菜单 tab 右键某套餐弹出） -->
-      <div class="ctx-menu" id="pkgCtxMenu" hidden>
-        <button class="ctx-item" data-act="edit" type="button">编辑套餐</button>
-        <button class="ctx-item" data-act="copyTo" type="button">复制到其他宴席...</button>
-        <button class="ctx-item" data-act="dup" type="button">创建副本</button>
-        <button class="ctx-item danger" data-act="del" type="button">删除</button>
-      </div>
-      <!-- 点菜界面右键套餐 → 呼出「定制菜单」选项（不直接进，给用户确认） -->
-      <div class="ctx-menu" id="pkgbarCtxMenu" hidden>
-        <button class="ctx-item" data-act="custom" type="button">定制菜单</button>
-      </div>
     </div>
 
     <!-- 定制单模式：纯内存草案，不回写标准菜单 -->
@@ -540,6 +529,17 @@
       <span class="guest-bar-brand">山水S酒店 · 套餐菜单</span>
       <button class="mg-btn primary" id="guestDownload" type="button">下载本套餐（PDF）</button>
     </div>
+  </div>
+
+  <!-- 右键/长按菜单：提升到 <body> 层级，避免被 .app(flex/overflow) 影响导致 position:fixed 渲染为 0×0 不可见 -->
+  <div class="ctx-menu" id="pkgCtxMenu" hidden>
+    <button class="ctx-item" data-act="edit" type="button">编辑套餐</button>
+    <button class="ctx-item" data-act="copyTo" type="button">复制到其他宴席...</button>
+    <button class="ctx-item" data-act="dup" type="button">创建副本</button>
+    <button class="ctx-item danger" data-act="del" type="button">删除</button>
+  </div>
+  <div class="ctx-menu" id="pkgbarCtxMenu" hidden>
+    <button class="ctx-item" data-act="custom" type="button">定制菜单</button>
   </div>
 </body>
 </html>
