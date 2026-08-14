@@ -66,13 +66,25 @@ function run() {
     // 本地 data.js 种子无图（真图在 menu-config.json）。为验证缩略图嵌入分支，给菜品库补一张占位图
     window.eval("Store.LIBRARY.forEach(function(d){ if(!d.image) d.image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC'; });");
 
+    // 8 点反馈 #1：定制单不再是品牌菜单并列入口，改由点菜界面右键套餐呼出「定制菜单」
     const customBtn = document.querySelector('.brand-item[data-mode="custom"]');
-    assert(!!customBtn, '品牌菜单含「定制单」入口');
+    assert(!customBtn, '品牌菜单已无「定制单」并列入口（改为右键套餐呼出）');
 
-    // 进入定制单模式
-    customBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    // 点菜界面右键某个套餐 chip → 呼出「定制菜单」右键菜单（不直接进入）
+    const chip = document.querySelector('#pkgbar .chip');
+    assert(!!chip, '点菜界面存在套餐 chip');
+    const ctxMenu = document.getElementById('pkgbarCtxMenu');
+    assert(!!ctxMenu, '存在点菜右键菜单 #pkgbarCtxMenu');
+    const cevt = new window.MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 });
+    chip.dispatchEvent(cevt);
+    assert(ctxMenu.hidden === false, '右键 chip 后呼出「定制菜单」菜单（不直接进入）');
+
+    // 点击「定制菜单」→ 进入定制单模式
+    const customItem = ctxMenu.querySelector('.ctx-item[data-act="custom"]');
+    assert(!!customItem, '右键菜单含「定制菜单」项');
+    customItem.dispatchEvent(new window.Event('click', { bubbles: true }));
     const cs = document.getElementById('customScreen');
-    assert(cs && cs.hidden === false, '点击后定制单界面可见');
+    assert(cs && cs.hidden === false, '点击「定制菜单」后定制单界面可见');
 
     const body = document.getElementById('csBody');
     const rows = body ? body.querySelectorAll('.cs-row').length : 0;
@@ -102,13 +114,10 @@ function run() {
     const fmtBtns = Array.from(document.querySelectorAll('.exp-fmt')).map(b => b.getAttribute('data-fmt'));
     assert(fmtBtns.indexOf('png') >= 0 && fmtBtns.indexOf('pdf') >= 0 && fmtBtns.indexOf('svg') < 0, '导出格式为 PNG/PDF（无 SVG）：' + fmtBtns.join(','));
 
-    // 字号档位：默认标准=1，点击「特大」后=1.6
+    // 字号档位：界面大小设置已简化为固定档（getExpScale 恒返回 1），仅校验结构存在 + 默认档
     assert(Math.abs(window.CustomOrder._getExpScale() - 1) < 1e-6, '默认字号档位=标准(1)');
     const xlBtn = document.querySelector('.exp-size-btn[data-scale="1.6"]');
-    assert(!!xlBtn, '存在「特大」档位按钮');
-    if (xlBtn) xlBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
-    assert(Math.abs(window.CustomOrder._getExpScale() - 1.6) < 1e-6, '切换特大后档位=1.6');
-    // 切回标准，便于后续断言
+    assert(!!xlBtn, '存在「特大」档位按钮（结构保留）');
     const stdBtn = document.querySelector('.exp-size-btn[data-scale="1"]');
     if (stdBtn) stdBtn.dispatchEvent(new window.Event('click', { bubbles: true }));
 
@@ -191,6 +200,32 @@ function run() {
       // 两者都通过 <image> 元素输出，无 foreignObject
       assert(svgWithCover.indexOf('</image>') > -1 || svgWithCover.indexOf('/>') > -1, 'SVG 含 <image> 元素闭合');
     })();
+
+    // —— Fix #2：iPhone 下载 —— exportWholeMenu 在用户手势内先开好新标签，
+    // 避免异步生成 PDF 后 window.open 被 Safari 弹窗拦截（表现为「点击下载没反应」）。
+    const origOpen = window.open;
+    const openCalls = [];
+    window.open = function (u) { openCalls.push(u); return { location: {}, closed: false }; };
+    let uaOverridden = false;
+    try {
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+        configurable: true
+      });
+      uaOverridden = true;
+    } catch (e) { uaOverridden = false; }
+
+    if (uaOverridden) {
+      const bObj = window.eval("Store.getBanquet('wedding')");
+      const pid = bObj && bObj.packages && bObj.packages[0] ? bObj.packages[0].id : null;
+      const before = openCalls.length;
+      if (pid) { try { window.CustomOrder.exportWholeMenu('wedding', { pkgId: pid, withQr: false }); } catch (e) {} }
+      assert(pid && openCalls.length > before && openCalls[before] === '',
+        'iOS 下 exportWholeMenu 在手势内先 window.open(\'\') 开新标签（防弹窗拦截）');
+    } else {
+      assert(true, 'iOS UA 不可在 jsdom 覆盖，跳过手势开标签断言（逻辑见代码）');
+    }
+    window.open = origOpen;
 
     assert(consoleErrors.length === 0, '运行期无 jsdom 报错' + (consoleErrors.length ? '：' + consoleErrors.join(' | ') : ''));
   } catch (e) {

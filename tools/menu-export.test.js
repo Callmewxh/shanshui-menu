@@ -110,7 +110,7 @@ function run() {
     const pkgName = window.eval("(Store.getBanquet('wedding').packages[0].name) || ''");
     assert(pkgName === '' || svg.indexOf(pkgName) > -1, '套餐页含套餐名「' + pkgName + '」');
     assert(/元\/桌/.test(svg), '套餐页含价格单位「元/桌」');
-    assert(/扫码二维码/.test(svg), '套餐页页脚含二维码扫码提示');
+    assert(!/扫码二维码/.test(svg), '套餐页页脚已移除二维码扫码提示（8 点反馈 #8）');
     assert(svg.indexOf('<image') > -1, '套餐页嵌入菜品缩略图（SVG <image>）');
     assert(/font-family="&quot;Noto Serif SC&quot;/.test(svg), '套餐页字体使用转义后的 Noto Serif SC（SVG XML 合法）');
 

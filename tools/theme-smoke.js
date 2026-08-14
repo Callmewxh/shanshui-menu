@@ -60,7 +60,9 @@ async function run() {
     const skeletonIds = ['pkgbar', 'list', 'settingsModal', 'modal', 'customScreen', 'brandMenu', 'themeOpts'];
     skeletonIds.forEach(id => assert(!!document.getElementById(id), '骨架节点 #' + id + ' 存在'));
 
-    const modes = ['order', 'manage', 'custom'];
+    // 注意：custom（定制单）已不再作为品牌菜单并列入口（8 点反馈 #1 移除），
+    // 改由点菜界面右键套餐 → 呼出「定制菜单」进入，故这里只验证 order / manage 两个品牌入口。
+    const modes = ['order', 'manage'];
     const themes = ['shanshui', 'apple', 'glass', 'wabi'];
 
     for (const mode of modes) {

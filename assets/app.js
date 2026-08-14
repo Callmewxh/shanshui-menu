@@ -77,6 +77,7 @@
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove('show'), 1800);
   }
+  window.toast = toast; // 暴露给 custom.js（iOS 下载引导等）
 
   // 撤销提示：删除后短暂显示「撤销」按钮，点击可恢复（防误删）
   function showUndo(msg, undoFn) {
@@ -151,7 +152,7 @@
       return;
     }
     bar.innerHTML = b.packages.map(
-      (p) => `<button class="chip ${p.id === state.pkg ? 'on' : ''}" data-p="${p.id}">
+      (p) => `<button class="chip ${p.id === state.pkg ? 'on' : ''}" data-p="${p.id}" title="左键查看，右键呼出「定制菜单」">
         <span class="chip-name">${p.name}</span>
         <span class="chip-price">¥${p.price}<i>/桌</i></span>
       </button>`
@@ -1538,6 +1539,40 @@
       state.pkg = t.dataset.p;
       renderHero(); renderPkg(); renderBanner(); renderList();
     });
+    // 点菜界面右键套餐 → 呼出「定制菜单」选项（不直接进，给用户确认）
+    let pkgbarCtxPkg = null;
+    function closePkgbarCtx() {
+      const m = $('#pkgbarCtxMenu'); if (m) m.hidden = true;
+      pkgbarCtxPkg = null;
+    }
+    $('#pkgbar').addEventListener('contextmenu', (e) => {
+      const t = e.target.closest('.chip'); if (!t) return;
+      e.preventDefault();
+      pkgbarCtxPkg = t.dataset.p;
+      const m = $('#pkgbarCtxMenu');
+      m.hidden = false;
+      const w = m.offsetWidth || 140, h = m.offsetHeight || 40;
+      const x = Math.max(8, Math.min(e.clientX, window.innerWidth - w - 8));
+      const y = Math.max(8, Math.min(e.clientY, window.innerHeight - h - 8));
+      m.style.left = x + 'px'; m.style.top = y + 'px';
+    });
+    $('#pkgbarCtxMenu').addEventListener('click', (e) => {
+      const item = e.target.closest('.ctx-item'); if (!item) return;
+      const pkg = pkgbarCtxPkg;
+      closePkgbarCtx();
+      if (item.dataset.act === 'custom' && pkg) {
+        state.pkg = pkg;
+        if (window.CustomOrder) window.CustomOrder.enter(state.banquet, state.pkg);
+        setMode('custom');
+      }
+    });
+    // 点空白处 / 滚动 关闭点菜右键菜单
+    document.addEventListener('click', (e) => {
+      const m = $('#pkgbarCtxMenu');
+      if (!m || m.hidden) return;
+      if (!m.contains(e.target)) closePkgbarCtx();
+    });
+    document.addEventListener('scroll', closePkgbarCtx, true);
     $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); });
     $('#list').addEventListener('click', (e) => {
       const c = e.target.closest('.card'); if (!c) return;
@@ -2030,9 +2065,29 @@
     // 客人专享深链：扫码后只进入受限单套餐界面（无管理/定制入口）
     function guestUrlFor(banquetId, pkgId) {
       try {
-        return location.origin + location.pathname + '?guest=1&banquet=' +
+        var base = location.origin + location.pathname + '?guest=1&banquet=' +
           encodeURIComponent(banquetId || 'wedding') + '&pkg=' + encodeURIComponent(pkgId || '');
+        var data = guestPkgData(banquetId, pkgId);
+        return data ? base + '&data=' + data : base;
       } catch (e) { return '?guest=1&banquet=' + (banquetId || 'wedding') + '&pkg=' + (pkgId || ''); }
+    }
+    // 把「当前套餐」（含改过的价格 / 菜名覆盖）编码进客人深链，
+    // 使客人在无后端情况下也能看到定制版菜单与价格。只编码 libId 引用，菜品图由客人端 library 按 libId 解析。
+    function guestPkgData(banquetId, pkgId) {
+      try {
+        var p = Store && Store.getPackage ? Store.getPackage(banquetId, pkgId) : null;
+        if (!p) return '';
+        var payload = {
+          v: 1,
+          id: p.id,
+          n: p.name,
+          pr: (typeof p.price === 'number' || typeof p.price === 'string') ? p.price : 0,
+          d: p.demo ? 1 : 0,
+          ds: Array.isArray(p.dishes) ? p.dishes : [],
+          ov: p.nameOverrides || null
+        };
+        return encodeURIComponent(JSON.stringify(payload));
+      } catch (e) { return ''; }
     }
     // 取当前正在展示的「套餐」作为分享目标（后台看管理端、点菜端看 state）
     function currentShareTarget() {
@@ -2074,11 +2129,6 @@
       if (window.CustomOrder) window.CustomOrder.showQrModal(guestUrlFor(t.b, t.p));
     });
     $('#setExportMenu').addEventListener('click', openMenuExport);
-    $('#expShareQr').addEventListener('click', function () {
-      var bid = (window.CustomOrder && window.CustomOrder.getDraftBanquet && window.CustomOrder.getDraftBanquet()) || state.banquet;
-      var pid = (window.CustomOrder && window.CustomOrder.getDraftPkg && window.CustomOrder.getDraftPkg()) || state.pkg;
-      if (window.CustomOrder) window.CustomOrder.showQrModal(guestUrlFor(bid, pid));
-    });
     $('#meConfirm').addEventListener('click', function () {
       if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: false, scale: menuExportScale() });
       var m = $('#menuExportModal'); if (m) m.hidden = true;
@@ -2093,13 +2143,6 @@
         b.classList.add('on');
         renderMenuExportPreview();
       });
-    });
-    $('#qrCopy').addEventListener('click', function () {
-      var link = $('#qrLink'); var txt = link ? link.textContent : '';
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('链接已复制'); }, function () {});
-        else toast('链接：' + txt);
-      } catch (e) { toast('链接：' + txt); }
     });
     ['qrModal', 'menuExportModal'].forEach(function (id) {
       var m = $('#' + id);
@@ -2132,6 +2175,32 @@
       if (g === '1' || g === 'true') {
         var gbq = sp.get('banquet') || state.banquet || 'wedding';
         var gpk = sp.get('pkg');
+        // 解码内联定制套餐（改价/改名）：注入内存菜单，使渲染/PDF/下载自动复用定制版
+        var dataRaw = sp.get('data');
+        if (dataRaw) {
+          try {
+            var pd = JSON.parse(decodeURIComponent(dataRaw));
+            if (pd && pd.id) {
+              var inj = {
+                id: pd.id,
+                name: pd.n != null ? pd.n : pd.id,
+                price: (typeof pd.pr === 'number' || typeof pd.pr === 'string') ? pd.pr : 0,
+                demo: !!pd.d,
+                dishes: Array.isArray(pd.ds) ? pd.ds : [],
+                nameOverrides: pd.ov || {}
+              };
+              if (!Store.STATE.menu[gbq]) {
+                var bn = (Store.BANQUETS.filter(function (b) { return b.id === gbq; })[0] || {}).name || gbq;
+                Store.STATE.menu[gbq] = { name: bn, packages: [] };
+              }
+              var pkgs = Store.STATE.menu[gbq].packages;
+              var ex = -1;
+              for (var zi = 0; zi < pkgs.length; zi++) { if (pkgs[zi].id === inj.id) { ex = zi; break; } }
+              if (ex >= 0) pkgs[ex] = inj; else pkgs.push(inj);
+              if (!gpk) gpk = inj.id;
+            }
+          } catch (e) { /* 解码失败则回退默认解析 */ }
+        }
         if (known.indexOf(gbq) >= 0) {
           var gb = banquet(); // 先用旧 banquet 找 banquet() 依赖 state，先设 state
           state.banquet = gbq;
@@ -2141,7 +2210,7 @@
           state.guest = true;
           state.mode = 'order';
           document.body.classList.add('guest-mode');
-          var gb = $('#guestBar'); if (gb) gb.hidden = false;
+          var gb2 = $('#guestBar'); if (gb2) gb2.hidden = false;
           closeSettings();
           renderAll();
         }

@@ -41,7 +41,7 @@
       pkgId: pkgId,
       type: (b && b.name) ? b.name : '宴席',
       client: '',
-      total: '',
+      total: (pkg && typeof pkg.price !== 'undefined') ? String(pkg.price) : '',
       source: pkg ? (pkg.name || pkgId) : '',
       lines: dishes.map(function (d, i) {
         return {
@@ -685,17 +685,47 @@
     return parts.join('');
   }
 
-  // 当前字号档位（三档：标准1 / 大1.3 / 特大1.6）
-  function getExpScale() {
-    var el = $('.exp-size-btn.on');
-    var s = el ? parseFloat(el.getAttribute('data-scale')) : 1;
-    return isNaN(s) || s <= 0 ? 1 : s;
+  // 字号档位 UI 已从定制导出弹窗移除，固定使用标准比例 1（内部 buildSVG 仍支持显式传 k 缩放）
+  function getExpScale() { return 1; }
+
+  // iOS / iPadOS 不认 blob 的 download 属性：a.download 会被静默忽略并直接预览。
+  // 桌面 / 安卓则走 a.download 真正下载。
+  function isIOS() {
+    var ua = (navigator.userAgent || '');
+    var plat = (navigator.platform || '');
+    return /iPad|iPhone|iPod/.test(ua) || (plat === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
+  function isWeChat() { return /MicroMessenger/i.test(navigator.userAgent || ''); }
+
+  // iOS / 微信专用：在用户手势内先开好的新标签引用。
+  // 因为 PDF 生成为异步（先预加载图片再栅格化），若等生成完才 window.open 会被 Safari 弹窗拦截 → 什么都不发生。
+  // 故在点击手势里先开空白标签，生成完再导航它到 blob，保证 iPhone 真能打开 PDF。
+  var pendingWin = null;
 
   function downloadBlob(blob, filename) {
+    if (!blob) return;
     var url = URL.createObjectURL(blob);
+    // iOS / 微信：a.download 无效，且异步后 window.open 会被拦截。
+    // 优先用点击手势里开好的新标签导航；若被拦截（pendingWin 为空/关闭）则退化为同标签打开，
+    // 由系统 PDF 查看器提供「分享 → 保存到文件」。
+    if (isIOS() || isWeChat()) {
+      if (pendingWin && !pendingWin.closed) {
+        try { pendingWin.location.href = url; }
+        catch (e) { try { window.location.href = url; } catch (e2) {} }
+      } else {
+        try { window.location.href = url; } catch (e) {}
+      }
+      setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 30000);
+      if (window.toast) {
+        window.toast(isWeChat()
+          ? '已打开，点右上角 ⋯ → 在浏览器打开 → 保存到文件'
+          : '已打开 PDF，点右上角 ⋯ → 保存到文件');
+      }
+      pendingWin = null;
+      return;
+    }
     var a = document.createElement('a');
-    a.href = url; a.download = filename;
+    a.href = url; a.download = filename; a.rel = 'noopener';
     document.body.appendChild(a); a.click();
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   }
@@ -835,6 +865,30 @@
     } catch (e) {
       return '?guest=1&banquet=' + (banquetId || 'wedding') + '&pkg=' + (pkgId || '');
     }
+  }
+  // 把当前定制草案（改价 / 换菜 / 增删）编码进客人深链，让扫码端看到的就是修改后的版本
+  function guestUrlForDraft() {
+    if (!draft) return guestUrl(state.banquet, state.pkg);
+    var payload = {
+      v: 1,
+      id: draft.pkgId,
+      n: draft.source || draft.pkgId,
+      pr: draft.total,
+      d: 0,
+      ds: draft.lines.map(function (l) { return l.libId; }).filter(Boolean),
+      ov: null
+    };
+    try {
+      return location.origin + location.pathname + '?guest=1&banquet=' +
+        encodeURIComponent(draft.banquetId || 'wedding') + '&pkg=' + encodeURIComponent(draft.pkgId || '') +
+        '&data=' + encodeURIComponent(JSON.stringify(payload));
+    } catch (e) {
+      return guestUrl(draft.banquetId, draft.pkgId);
+    }
+  }
+  function showGuestQr() {
+    if (!draft) return;
+    showQrModal(guestUrlForDraft());
   }
 
   // 把二维码烧进已栅格化的 canvas 右下角（白底留白，保证扫码识别率）
@@ -1019,7 +1073,6 @@
     // —— 页脚：金线 + 菜品数 / 扫码提示 ——
     parts.push('<rect x="' + m(SX) + '" y="' + m(footerY - 3) + '" width="' + m(contentW) + '" height="' + m(0.3) + '" fill="' + C.goldHair + '"/>');
     parts.push('<text x="' + m(SX) + '" y="' + m(footerY + 1.5) + '" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '">共 ' + dishes.length + ' 道菜</text>');
-    parts.push('<text x="' + m(contentR) + '" y="' + m(footerY + 1.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '">扫码二维码即可在手机查看完整菜单</text>');
     parts.push('</svg>');
     return parts.join('');
   }
@@ -1040,6 +1093,13 @@
       : b.packages.slice();
     if (!pkgs.length) { try { alert('该套餐不存在，无法导出'); } catch (e) {} return; }
     var single = pkgs.length === 1;
+
+    // iOS / 微信：在用户手势内先开好一个空白新标签，待异步生成完 PDF 再导航它到 blob，
+    // 避免生成完才 window.open 被 Safari 弹窗拦截（表现为「点击下载没反应」）。
+    pendingWin = null;
+    if (isIOS() || isWeChat()) {
+      try { pendingWin = window.open('', '_blank'); } catch (e) { pendingWin = null; }
+    }
 
     // 先把所有套餐用到的菜品图片预加载（拿到原始尺寸，裁切与菜品库一致）
     var allLines = [];
@@ -1265,6 +1325,8 @@
     if (expBtn) expBtn.addEventListener('click', openExport);
     var expConfirm = $('#expConfirm');
     if (expConfirm) expConfirm.addEventListener('click', function () { doExport(); closeExport(); });
+    var expShareQr = $('#expShareQr');
+    if (expShareQr) expShareQr.addEventListener('click', showGuestQr);
     $$('.exp-fmt').forEach(function (b) {
       b.addEventListener('click', function () {
         $$('.exp-fmt').forEach(function (x) { x.classList.remove('on'); });
@@ -1286,14 +1348,7 @@
       });
     });
 
-    // 字号档位切换（三档界面大小）
-    $$('.exp-size-btn').forEach(function (b) {
-      b.addEventListener('click', function () {
-        $$('.exp-size-btn').forEach(function (x) { x.classList.remove('on'); });
-        b.classList.add('on');
-        renderExpPreview();
-      });
-    });
+    // 字号档位已从定制导出弹窗移除，保留空槽位不绑定任何按钮
 
     // 弹窗关闭（data-close）
     $$('[data-close]').forEach(function (el) {
@@ -1314,9 +1369,11 @@
   window.CustomOrder = {
     enter: enter, render: render,
     // —— 二维码分享 / 整份菜单导出（供 app.js 调用）——
-    makeQRCanvas: makeQRCanvas, shareUrl: shareUrl, guestUrl: guestUrl, burnQR: burnQR,
+    makeQRCanvas: makeQRCanvas, shareUrl: shareUrl, guestUrl: guestUrl, guestUrlForDraft: guestUrlForDraft, burnQR: burnQR,
     buildPackageSVG: buildPackageSVG, buildMultiPagePdf: buildMultiPagePdf,
     exportWholeMenu: exportWholeMenu, showQrModal: showQrModal,
+    // —— 下载（供测试钩子）——
+    downloadBlob: downloadBlob, isIOS: isIOS, isWeChat: isWeChat,
     // —— 测试钩子 ——
     _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _setTotal: function (v) { if (draft) draft.total = v; }, _openExport: openExport, _preloadImages: preloadImages, _getDraft: function () { return draft; },
     getDraftBanquet: function () { return draft ? draft.banquetId : null; },
