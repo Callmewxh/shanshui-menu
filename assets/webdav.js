@@ -7,15 +7,28 @@ const WebDAV = (function () {
 
   const LS_URL = 'ss_dav_url';
   const LS_TOKEN = 'ss_dav_token';
+  const LS_NAME = 'ss_dav_name';
+  const LS_BASE_PATH = 'ss_dav_base_path';
+  const LS_USERNAME = 'ss_dav_username';
+  const LS_PASSWORD = 'ss_dav_password';
   const DEFAULT_FILE = 'menu-config.json';
 
-  function getUrl() { return (localStorage.getItem(LS_URL) || '').trim(); }
-  function getToken() { return (localStorage.getItem(LS_TOKEN) || '').trim(); }
+  function getConfig() {
+    return {
+      name: (localStorage.getItem(LS_NAME) || '').trim(),
+      url: (localStorage.getItem(LS_URL) || '').trim(),
+      basePath: (localStorage.getItem(LS_BASE_PATH) || '').trim(),
+      username: (localStorage.getItem(LS_USERNAME) || '').trim(),
+      password: (localStorage.getItem(LS_PASSWORD) || '').trim(),
+      token: (localStorage.getItem(LS_TOKEN) || '').trim(),
+    };
+  }
 
-  // 是否已在设置里填了代理地址
-  function isConfigured() { return !!getUrl(); }
+  function getUrl() { return getConfig().url; }
+  function getToken() { return getConfig().token; }
+  function getPassword() { return getConfig().password; }
 
-  // 保存代理地址与令牌到本机（仅本机，不上传）
+  // 兼容旧 API：只保存 url/token
   function saveConfig(url, token) {
     try {
       localStorage.setItem(LS_URL, (url || '').trim());
@@ -23,17 +36,39 @@ const WebDAV = (function () {
     } catch (_) {}
   }
 
-  // 把 /dav 基址 + 文件名拼成完整 URL
+  // 完整保存 WebDAV 配置表单
+  function saveFullConfig(cfg) {
+    try {
+      localStorage.setItem(LS_NAME, (cfg.name || '').trim());
+      localStorage.setItem(LS_URL, (cfg.url || '').trim());
+      localStorage.setItem(LS_BASE_PATH, (cfg.basePath || '').trim());
+      localStorage.setItem(LS_USERNAME, (cfg.username || '').trim());
+      localStorage.setItem(LS_PASSWORD, (cfg.password || '').trim());
+      localStorage.setItem(LS_TOKEN, (cfg.token || '').trim());
+    } catch (_) {}
+  }
+
+  function isConfigured() { return !!getConfig().url; }
+
+  function effectiveToken() {
+    const cfg = getConfig();
+    return cfg.token || cfg.password;
+  }
+
+  // 把 /dav 基址 + 可选根路径 + 文件名拼成完整 URL
   function buildUrl(file) {
-    const base = getUrl().replace(/\/+$/, '');
-    return base + '/' + (file || DEFAULT_FILE);
+    const cfg = getConfig();
+    const base = cfg.url.replace(/\/+$/, '');
+    const path = (cfg.basePath || '').replace(/^\/+/, '').replace(/\/+$/, '');
+    const f = file || DEFAULT_FILE;
+    return base + (path ? '/' + path : '') + '/' + f;
   }
 
   async function davGet(file, opts) {
     opts = opts || {};
     const url = buildUrl(file) + (opts.cacheBust ? ('?t=' + Date.now()) : '');
     const headers = { Accept: 'application/json' };
-    const tok = getToken();
+    const tok = effectiveToken();
     if (tok) headers['x-dav-token'] = tok;
     const res = await fetch(url, { method: 'GET', headers, cache: 'no-cache' });
     if (!res.ok) throw new Error('WebDAV GET ' + res.status);
@@ -43,7 +78,7 @@ const WebDAV = (function () {
   async function davPut(file, obj) {
     const url = buildUrl(file);
     const headers = { 'Content-Type': 'application/json' };
-    const tok = getToken();
+    const tok = effectiveToken();
     if (tok) headers['x-dav-token'] = tok;
     const res = await fetch(url, {
       method: 'PUT',
@@ -55,13 +90,26 @@ const WebDAV = (function () {
     return true;
   }
 
+  async function testConnection(file) {
+    try {
+      await davGet(file || DEFAULT_FILE, { cacheBust: true });
+      return { ok: true, msg: '连接成功' };
+    } catch (e) {
+      return { ok: false, msg: e.message || '连接失败' };
+    }
+  }
+
   return {
     isConfigured,
     getUrl,
     getToken,
+    getPassword,
+    getConfig,
     saveConfig,
+    saveFullConfig,
     davGet,
     davPut,
+    testConnection,
     DEFAULT_FILE,
   };
 })();

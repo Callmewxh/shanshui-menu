@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+  <div class="grain" aria-hidden="true"></div>
   <div class="app">
     <!-- 顶栏 -->
     <header class="topbar">
@@ -81,30 +82,9 @@
 
         <span class="mg-spacer"></span>
 
-        <!-- 设置：折叠菜单（不再弹独立窗口） -->
+        <!-- 设置入口 -->
         <div class="mg-setwrap" id="mgSetWrap">
           <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置</button>
-          <div class="mg-setmenu" id="mgSetMenu" hidden>
-            <div class="set-menu-head">菜单数据各设备独立存储。优先用「云端拉取」同步，导入/导出作备份与离线兜底</div>
-            <button class="set-row primary-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
-            <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>离线兜底：从本地文件整体替换</i></span></button>
-            <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
-            <button class="set-row" id="setShareQr" type="button"><span class="set-ic">▦</span><span><b>分享婚宴菜单（二维码）</b><i>生成二维码，客户扫码看线上菜单</i></span></button>
-            <button class="set-row" id="setExportMenu" type="button"><span class="set-ic">⤓</span><span><b>导出整份菜单（PDF）</b><i>本宴席所有套餐打包成多页 PDF</i></span></button>
-            <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
-            <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
-            <div class="set-section-title">WebDAV 云端同步</div>
-            <button class="set-row set-brand" type="button"><span class="set-ic">☁</span><span class="set-txt"><label for="setDavUrl">代理地址</label><i>如 https://你的worker.workers.dev/dav</i><input type="url" id="setDavUrl" class="set-input" placeholder="https://.../dav" autocomplete="off"></span></button>
-            <button class="set-row set-brand" type="button"><span class="set-ic">🔑</span><span class="set-txt"><label for="setDavToken">访问令牌</label><i>与 Worker 的 DAV_TOKEN 一致（留空不校验）</i><input type="text" id="setDavToken" class="set-input" placeholder="DAV_TOKEN" autocomplete="off"></span></button>
-            <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端（替代上传 GitHub）</i></span></button>
-            <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
-            <!-- 品牌设置 -->
-            <div class="set-section-title">品牌信息</div>
-            <div class="set-row set-brand"><span class="set-ic">🖼</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 无背景图（建议 120×120 以上）</i><div class="brand-logo-wrap" id="brandLogoWrap"><div class="brand-logo-preview" id="brandLogoPreview">S</div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="清除恢复默认">✕ 清除</button></span></div>
-            <input type="file" id="brandLogoInput" accept="image/png,image/*" hidden>
-            <div class="set-row set-brand"><span class="set-ic">✎</span><span class="set-txt"><label for="setBrandName">酒店/品牌名称</label><i>用于标题栏、导出报价单等</i><input type="text" id="setBrandName" maxlength="20" placeholder="山水S酒店" class="set-input"></span></div>
-            <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
-          </div>
         </div>
         <input type="file" id="importFile" accept="application/json" hidden>
         <input type="file" id="batchImgInput" accept="image/*" multiple hidden>
@@ -410,7 +390,6 @@
         </div>
         <span class="exp-size-hint">字号与行距随档位放大，方便长辈看清</span>
       </div>
-      <label class="me-qr-row"><input type="checkbox" id="expQr"> 导出图片含二维码（扫码看线上菜单）</label>
       <div class="exp-format">
         <span>导出格式</span>
         <div class="exp-fmt-toggle">
@@ -420,7 +399,7 @@
       </div>
       <div class="edit-actions">
         <button class="mg-btn" data-close="exportModal" type="button">取消</button>
-        <button class="mg-btn ghost" id="expShareQr" type="button">分享二维码</button>
+        <button class="mg-btn ghost" id="expShareQr" type="button">分享本套餐二维码</button>
         <button class="mg-btn primary" id="expConfirm" type="button">生成图片</button>
       </div>
     </div>
@@ -430,8 +409,8 @@
   <div class="modal" id="qrModal" hidden>
     <div class="modal-card exp-modal-card">
       <button class="modal-close" aria-label="关闭" data-close="qrModal">✕</button>
-      <h3>扫码查看菜单</h3>
-      <div class="qr-wrap"><img id="qrImg" alt="菜单二维码"></div>
+      <h3>扫码查看本套餐（客人专享）</h3>
+      <div class="qr-wrap"><img id="qrImg" alt="套餐二维码"></div>
       <div class="qr-link" id="qrLink"></div>
       <div class="edit-actions">
         <button class="mg-btn" data-close="qrModal" type="button">关闭</button>
@@ -455,7 +434,6 @@
         </div>
         <span class="exp-size-hint">字号与行距随档位放大，方便长辈看清</span>
       </div>
-      <label class="me-qr-row"><input type="checkbox" id="meQr" checked> 每页烧入二维码（客户扫码看线上实时菜单）</label>
       <div class="exp-preview-wrap">
         <div class="exp-preview-label">预览（首页）</div>
         <div class="exp-preview" id="mePreview"></div>
@@ -463,6 +441,69 @@
       <div class="edit-actions">
         <button class="mg-btn" data-close="menuExportModal" type="button">取消</button>
         <button class="mg-btn primary" id="meConfirm" type="button">生成 PDF 并下载</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-card settings-card">
+      <button class="modal-close" aria-label="关闭" data-close="settingsModal">✕</button>
+      <h3 class="settings-title">设置</h3>
+      <div class="settings-body">
+        <!-- 数据同步 -->
+        <div class="settings-section">
+          <div class="settings-section-title">数据同步</div>
+          <button class="set-row primary-row" id="setPull" type="button"><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
+          <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>离线兜底：从本地文件整体替换</i></span></button>
+          <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
+          <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
+        </div>
+        <!-- WebDAV 云端同步 -->
+        <div class="settings-section">
+          <div class="settings-section-title">WebDAV 云端同步</div>
+          <button class="set-row" id="setDavOpen" type="button"><span class="set-ic">☁</span><span><b>配置 WebDAV</b><i id="setDavSummary">未配置</i></span></button>
+          <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端</i></span></button>
+        </div>
+        <!-- 品牌信息 -->
+        <div class="settings-section">
+          <div class="settings-section-title">品牌信息</div>
+          <div class="set-row set-brand"><span class="set-ic">🖼</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 无背景图（建议 120×120 以上）</i><div class="brand-logo-wrap" id="brandLogoWrap"><div class="brand-logo-preview" id="brandLogoPreview">S</div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="清除恢复默认">✕ 清除</button></span></div>
+          <input type="file" id="brandLogoInput" accept="image/png,image/*" hidden>
+          <div class="set-row set-brand"><span class="set-ic">✎</span><span class="set-txt"><label for="setBrandName">酒店/品牌名称</label><i>用于标题栏、导出报价单等</i><input type="text" id="setBrandName" maxlength="20" placeholder="山水S酒店" class="set-input"></span></div>
+        </div>
+        <!-- 显示与其他 -->
+        <div class="settings-section">
+          <div class="settings-section-title">显示与其他</div>
+          <div class="set-row set-brand"><span class="set-ic">🎨</span><span class="set-txt"><label>皮肤主题</label><i>切换界面整体风格</i><div class="theme-opts" id="themeOpts"><button type="button" class="theme-opt" data-theme="shanshui">新中式</button><button type="button" class="theme-opt" data-theme="apple">苹果风</button><button type="button" class="theme-opt" data-theme="glass">玻璃拟态</button><button type="button" class="theme-opt" data-theme="wabi">侘寂</button></div></span></div>
+          <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
+          <button class="set-row" id="setShareQr" type="button"><span class="set-ic">▦</span><span><b>分享套餐二维码（客人专享）</b><i>扫码只能查看并下载当前套餐，不含管理/定制入口</i></span></button>
+          <button class="set-row" id="setExportMenu" type="button"><span class="set-ic">⤓</span><span><b>导出整份菜单（PDF）</b><i>本宴席所有套餐打包成多页 PDF</i></span></button>
+          <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
+          <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebDAV 配置弹窗 -->
+  <div class="modal" id="webdavFormModal" hidden>
+    <div class="modal-card webdav-card">
+      <div class="webdav-head">
+        <button type="button" class="webdav-back" id="webdavBack">‹</button>
+        <h3>WebDAV 云端同步</h3>
+      </div>
+      <div class="webdav-body">
+        <div class="field"><label for="wfName">名称</label><input id="wfName" type="text" placeholder="如：坚果云" autocomplete="off"></div>
+        <div class="field"><label for="wfUrl">服务器地址</label><input id="wfUrl" type="url" placeholder="https://你的worker.workers.dev/dav" autocomplete="off"></div>
+        <div class="field"><label for="wfUsername">用户名</label><input id="wfUsername" type="text" placeholder="选填" autocomplete="off"></div>
+        <div class="field"><label for="wfPassword">密码 / 访问令牌</label><div class="pwd-wrap"><input id="wfPassword" type="password" placeholder="DAV_TOKEN 或密码" autocomplete="off"><button type="button" class="pwd-toggle" id="wfPwdToggle">👁</button></div></div>
+        <div class="field"><label for="wfBasePath">根路径</label><input id="wfBasePath" type="text" placeholder="/" value="/" autocomplete="off"></div>
+        <div class="webdav-status" id="wfStatus"></div>
+      </div>
+      <div class="webdav-actions">
+        <button type="button" class="mg-btn ghost" id="wfTest">⚡ 测试连接</button>
+        <button type="button" class="mg-btn primary" id="wfSave">确定</button>
       </div>
     </div>
   </div>
@@ -480,5 +521,13 @@
       });
     }
   </script>
+
+  <!-- 客人专享界面：底部下载当前套餐（默认隐藏，仅在 ?guest=1 访客模式下显示） -->
+  <div class="guest-bar" id="guestBar" hidden>
+    <div class="guest-bar-inner">
+      <span class="guest-bar-brand">山水S酒店 · 客人专享菜单</span>
+      <button class="mg-btn primary" id="guestDownload" type="button">下载本套餐（PDF）</button>
+    </div>
+  </div>
 </body>
 </html>

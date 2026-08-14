@@ -276,7 +276,7 @@
       lastMgY = y;
       if (hide === null) return;
       // 拖动套餐 / 设置菜单展开时不收起，避免操作被打断
-      if (hide && (pkgDrag || !$('#mgSetMenu').hidden)) return;
+      if (hide && (pkgDrag || !$('#settingsModal').hidden)) return;
       // 上滑（向下滚动）时收起顶部区域，腾出查看/编辑空间（平板/手机一致生效）
       app.classList.toggle('mg-chrome-hidden', hide);
       app.classList.toggle('chrome-hidden', hide);
@@ -343,6 +343,8 @@
 
   // ================= 管理模式 =================
   function setMode(mode) {
+    // 访客（客人）模式：二维码分享进来的受限单套餐界面，禁止切到管理/定制，避免把后台暴露给客人
+    if (state.guest && mode !== 'order') return;
     const app = document.querySelector('.app');
     if (app) app.classList.remove('chrome-hidden', 'mg-chrome-hidden');
     closeSettings();
@@ -1197,26 +1199,45 @@
     }
   }
 
-  // ---------- 设置：折叠菜单（不弹独立窗口） ----------
+  // ---------- 设置：居中弹窗 ----------
   function toggleSettings(force) {
-    const m = $('#mgSetMenu');
+    const m = $('#settingsModal');
     const show = (typeof force === 'boolean') ? force : m.hidden;
-    if (show) {
-      m.hidden = false;
-      // 锚定到 ⚙ 按钮，并约束在视口内（手机端设置键在左侧也不溢出）
-      const r = $('#mgSettings').getBoundingClientRect();
-      const mw = Math.min(m.offsetWidth || 268, window.innerWidth - 16);
-      let left = r.right - mw;                 // 默认右对齐按钮右缘
-      if (left < 8) left = r.left + r.width - mw;  // 右空间不足：在按钮左侧展开
-      if (left < 8) left = 8;                   // 仍不足：贴视口左
-      m.style.top = (r.bottom + 8) + 'px';
-      m.style.left = left + 'px';
-      m.style.right = 'auto';
+    m.hidden = !show;
+    if (show) updateSettingsDavSummary();
+  }
+  function closeSettings() { $('#settingsModal').hidden = true; }
+  function updateSettingsDavSummary() {
+    const sum = $('#setDavSummary');
+    if (!sum) return;
+    if (typeof WebDAV !== 'undefined' && WebDAV.isConfigured()) {
+      const cfg = WebDAV.getConfig();
+      sum.textContent = (cfg.name || cfg.url || '已配置');
     } else {
-      m.hidden = true;
+      sum.textContent = '未配置';
     }
   }
-  function closeSettings() { $('#mgSetMenu').hidden = true; }
+
+  // ---------- WebDAV 配置子界面 ----------
+  function openWebDAVForm() {
+    $('#settingsModal').hidden = true;
+    const m = $('#webdavFormModal');
+    m.hidden = false;
+    const cfg = (typeof WebDAV !== 'undefined') ? WebDAV.getConfig() : {};
+    $('#wfName').value = cfg.name || '';
+    $('#wfUrl').value = cfg.url || '';
+    $('#wfUsername').value = cfg.username || '';
+    $('#wfPassword').value = cfg.password || cfg.token || '';
+    $('#wfBasePath').value = cfg.basePath || '/';
+    const st = $('#wfStatus');
+    st.textContent = '';
+    st.className = 'webdav-status';
+  }
+  function closeWebDAVForm() {
+    $('#webdavFormModal').hidden = true;
+    $('#settingsModal').hidden = false;
+    updateSettingsDavSummary();
+  }
 
   // ---------- 恢复默认（保留居中二次确认弹窗，防误触） ----------
   function openResetConfirm() {
@@ -1534,7 +1555,10 @@
         if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
         if (e.key === 'ArrowRight') { viewerGo(1); return; }
       }
-      if (e.key === 'Escape') { closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; $('#menuDishModal').hidden = true; }
+      if (e.key === 'Escape') {
+        if (!$('#webdavFormModal').hidden) { closeWebDAVForm(); return; }
+        closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; $('#menuDishModal').hidden = true;
+      }
     });
     // 详情弹窗：左右滑动循环切换菜品（横向位移明显大于纵向才算滑动）
     const mEl = $('#modal');
@@ -1732,6 +1756,15 @@
 
     // —— 设置折叠菜单（导出 / 导入 / 恢复默认） ——
     $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
+    // 皮肤主题切换（仅写 data-theme + 持久化，不影响其他功能）
+    const themeOpts = $('#themeOpts');
+    if (themeOpts) {
+      themeOpts.addEventListener('click', (e) => {
+        const b = e.target.closest('.theme-opt'); if (!b) return;
+        const t = b.getAttribute('data-theme');
+        Store.setTheme(t).then(() => { applyTheme(); toast('已切换皮肤：' + b.textContent.trim()); });
+      });
+    }
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
     $('#setRestore').addEventListener('click', () => {
@@ -1768,17 +1801,50 @@
       await pullFromCloud();
     });
 
-    // —— WebDAV 云端同步设置（代理地址 / 令牌 / 发布）——
-    const davUrlEl = $('#setDavUrl'), davTokEl = $('#setDavToken');
-    if (davUrlEl) davUrlEl.value = (typeof WebDAV !== 'undefined') ? WebDAV.getUrl() : '';
-    if (davTokEl) davTokEl.value = (typeof WebDAV !== 'undefined') ? WebDAV.getToken() : '';
-    const saveDavCfg = () => { if (typeof WebDAV !== 'undefined') WebDAV.saveConfig(davUrlEl ? davUrlEl.value : '', davTokEl ? davTokEl.value : ''); };
-    if (davUrlEl) davUrlEl.addEventListener('change', saveDavCfg);
-    if (davTokEl) davTokEl.addEventListener('change', saveDavCfg);
+    // —— WebDAV 云端同步设置 ——
+    function collectWebDAVForm() {
+      return {
+        name: $('#wfName').value.trim(),
+        url: $('#wfUrl').value.trim(),
+        username: $('#wfUsername').value.trim(),
+        password: $('#wfPassword').value.trim(),
+        basePath: $('#wfBasePath').value.trim(),
+        token: '' // 由 password 字段作为有效 token
+      };
+    }
+    const setDavOpen = $('#setDavOpen');
+    if (setDavOpen) setDavOpen.addEventListener('click', (e) => { e.stopPropagation(); openWebDAVForm(); });
+    const webdavBack = $('#webdavBack');
+    if (webdavBack) webdavBack.addEventListener('click', closeWebDAVForm);
+    // 密码可见性切换
+    const wfPwdToggle = $('#wfPwdToggle');
+    if (wfPwdToggle) wfPwdToggle.addEventListener('click', () => {
+      const input = $('#wfPassword');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+    // 测试连接
+    const wfTest = $('#wfTest');
+    if (wfTest) wfTest.addEventListener('click', async () => {
+      const st = $('#wfStatus');
+      if (typeof WebDAV === 'undefined') { st.textContent = 'WebDAV 未加载'; st.className = 'webdav-status err'; return; }
+      if (!$('#wfUrl').value.trim()) { st.textContent = '请先填写服务器地址'; st.className = 'webdav-status err'; return; }
+      st.textContent = '连接中…'; st.className = 'webdav-status';
+      WebDAV.saveFullConfig(collectWebDAVForm());
+      const r = await WebDAV.testConnection();
+      st.textContent = r.msg;
+      st.className = 'webdav-status ' + (r.ok ? 'ok' : 'err');
+    });
+    // 保存并返回
+    const wfSave = $('#wfSave');
+    if (wfSave) wfSave.addEventListener('click', () => {
+      if (typeof WebDAV !== 'undefined') WebDAV.saveFullConfig(collectWebDAVForm());
+      closeWebDAVForm();
+      toast('WebDAV 配置已保存');
+    });
+    // 发布到 WebDAV
     const davPublishBtn = $('#setDavPublish');
     if (davPublishBtn) davPublishBtn.addEventListener('click', async () => {
       closeSettings();
-      saveDavCfg();
       await publishToWebDAV();
     });
 
@@ -1865,10 +1931,11 @@
     // 阻止点击品牌设置行时关闭面板
     var brandRows = document.querySelectorAll('.set-brand');
     brandRows.forEach(function(r) { r.addEventListener('click', function(e) { e.stopPropagation(); }); });
-    document.addEventListener('click', (e) => {
-      const w = $('#mgSetWrap');
-      if (w && !w.contains(e.target)) closeSettings();
-    });
+    // 点击设置/WebDAV 弹窗背景关闭
+    const settingsModalEl = $('#settingsModal');
+    const webdavFormModalEl = $('#webdavFormModal');
+    if (settingsModalEl) settingsModalEl.addEventListener('click', (e) => { if (e.target === settingsModalEl) closeSettings(); });
+    if (webdavFormModalEl) webdavFormModalEl.addEventListener('click', (e) => { if (e.target === webdavFormModalEl) closeWebDAVForm(); });
 
     // 恢复默认二次确认
     $('#resetConfirm').addEventListener('click', confirmReset);
@@ -1960,6 +2027,18 @@
     function shareUrlFor(banquetId) {
       try { return location.origin + location.pathname + '?banquet=' + encodeURIComponent(banquetId || 'wedding'); } catch (e) { return '?banquet=' + (banquetId || 'wedding'); }
     }
+    // 客人专享深链：扫码后只进入受限单套餐界面（无管理/定制入口）
+    function guestUrlFor(banquetId, pkgId) {
+      try {
+        return location.origin + location.pathname + '?guest=1&banquet=' +
+          encodeURIComponent(banquetId || 'wedding') + '&pkg=' + encodeURIComponent(pkgId || '');
+      } catch (e) { return '?guest=1&banquet=' + (banquetId || 'wedding') + '&pkg=' + (pkgId || ''); }
+    }
+    // 取当前正在展示的「套餐」作为分享目标（后台看管理端、点菜端看 state）
+    function currentShareTarget() {
+      if (state.mode === 'manage' && mg && mg.pkg) return { b: mg.banquet, p: mg.pkg };
+      return { b: state.banquet, p: state.pkg };
+    }
     function menuExportBanquet() { return (typeof mg !== 'undefined' && mg.banquet) ? mg.banquet : state.banquet; }
     function menuExportScale() {
       var el = $('#menuExportModal .exp-size-btn.on');
@@ -1991,16 +2070,22 @@
 
     $('#setShareQr').addEventListener('click', function () {
       closeSettings();
-      if (window.CustomOrder) window.CustomOrder.showQrModal(shareUrlFor(menuExportBanquet()));
+      var t = currentShareTarget();
+      if (window.CustomOrder) window.CustomOrder.showQrModal(guestUrlFor(t.b, t.p));
     });
     $('#setExportMenu').addEventListener('click', openMenuExport);
     $('#expShareQr').addEventListener('click', function () {
-      if (window.CustomOrder) window.CustomOrder.showQrModal(shareUrlFor(state.banquet));
+      var bid = (window.CustomOrder && window.CustomOrder.getDraftBanquet && window.CustomOrder.getDraftBanquet()) || state.banquet;
+      var pid = (window.CustomOrder && window.CustomOrder.getDraftPkg && window.CustomOrder.getDraftPkg()) || state.pkg;
+      if (window.CustomOrder) window.CustomOrder.showQrModal(guestUrlFor(bid, pid));
     });
     $('#meConfirm').addEventListener('click', function () {
-      var withQr = $('#meQr') && $('#meQr').checked;
-      if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: withQr, scale: menuExportScale() });
+      if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: false, scale: menuExportScale() });
       var m = $('#menuExportModal'); if (m) m.hidden = true;
+    });
+    // 客人专享界面：下载当前套餐（单页 PDF，无二维码）
+    $('#guestDownload').addEventListener('click', function () {
+      if (window.CustomOrder) window.CustomOrder.exportWholeMenu(state.banquet, { pkgId: state.pkg, withQr: false });
     });
     $('#menuExportModal').querySelectorAll('.exp-size-btn').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -2032,33 +2117,64 @@
   }
 
   // ---------- 深链（扫码分享入口）----------
-  // ?banquet=wedding          → 自动选中该宴席
-  // ?pkg=A                    → 同时定位到某套餐
-  // ?export=pdf               → 加载后自动导出整份菜单 PDF（含二维码）
+  // ?guest=1&banquet=wedding&pkg=A   → 客人专享单套餐界面（受限：无管理/定制入口，仅查看+下载当前套餐）
+  // ?banquet=wedding                 → 自动选中该宴席
+  // ?pkg=A                           → 同时定位到某套餐
+  // ?export=pdf                      → 加载后自动导出整份菜单 PDF（仅后台手动用，客人界面不触发）
   // 无参数时完全不改变默认行为。
   function handleDeepLink() {
     try {
       var sp = new URLSearchParams(location.search);
+      var known = Store.BANQUETS.map(function (b) { return b.id; });
+
+      // —— 客人专享模式：优先解析，命中即进入受限单套餐界面 ——
+      var g = sp.get('guest');
+      if (g === '1' || g === 'true') {
+        var gbq = sp.get('banquet') || state.banquet || 'wedding';
+        var gpk = sp.get('pkg');
+        if (known.indexOf(gbq) >= 0) {
+          var gb = banquet(); // 先用旧 banquet 找 banquet() 依赖 state，先设 state
+          state.banquet = gbq;
+          var b = banquet();
+          if (gpk && b && b.packages.some(function (p) { return p.id === gpk; })) state.pkg = gpk;
+          else if (b && b.packages[0]) state.pkg = b.packages[0].id;
+          state.guest = true;
+          state.mode = 'order';
+          document.body.classList.add('guest-mode');
+          var gb = $('#guestBar'); if (gb) gb.hidden = false;
+          closeSettings();
+          renderAll();
+        }
+        return; // 客人界面不触发整份 PDF 自动下载
+      }
+
       var bq = sp.get('banquet');
       var pk = sp.get('pkg');
       var exp = sp.get('export');
-      var known = Store.BANQUETS.map(function (b) { return b.id; });
       if (bq && known.indexOf(bq) >= 0) {
         state.banquet = bq;
-        var b = banquet();
-        if (pk && b && b.packages.some(function (p) { return p.id === pk; })) state.pkg = pk;
-        else if (b && b.packages[0]) state.pkg = b.packages[0].id;
+        var b2 = banquet();
+        if (pk && b2 && b2.packages.some(function (p) { return p.id === pk; })) state.pkg = pk;
+        else if (b2 && b2.packages[0]) state.pkg = b2.packages[0].id;
         renderAll();
       }
       if (exp === 'pdf') {
         var target = (bq && known.indexOf(bq) >= 0) ? bq : (state.banquet || 'wedding');
         setTimeout(function () {
           if (window.CustomOrder && window.CustomOrder.exportWholeMenu) {
-            window.CustomOrder.exportWholeMenu(target, { withQr: true });
+            window.CustomOrder.exportWholeMenu(target, { withQr: false });
           }
         }, 300);
       }
     } catch (e) {}
+  }
+
+  // ---------- 皮肤主题：仅切换 data-theme 变量，骨架 / DOM / 业务逻辑不变 ----------
+  function applyTheme() {
+    const t = Store.getTheme();
+    document.documentElement.setAttribute('data-theme', t);
+    const opts = document.querySelectorAll('#themeOpts .theme-opt');
+    for (const b of opts) b.classList.toggle('on', b.getAttribute('data-theme') === t);
   }
 
   // ---------- 启动 ----------
@@ -2067,6 +2183,7 @@
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
     bindStatic();
+    applyTheme();   // 尽早套用皮肤，保证首屏即正确
     // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子
     // 拉取成功时 pullFromCloud 内部已渲染，避免首屏重复渲染；拉取失败再统一渲染种子
     let pulled = false;
