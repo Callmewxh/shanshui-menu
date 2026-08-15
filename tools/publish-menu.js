@@ -64,7 +64,7 @@ function findLatest() {
   return cand[0];
 }
 
-// 结构校验：必须是 App exportConfig 的产物 { menu, library }
+// 结构校验：必须是 App exportConfig 的产物 { menu, library }（可选附带顶层 logo / logoCrop 品牌徽标）
 function validate(data) {
   if (!data || typeof data !== 'object') return '不是合法的 JSON 对象';
   if (!Array.isArray(data.library)) return '缺少 library 数组';
@@ -91,6 +91,7 @@ function summarize(data) {
   return {
     libCount: lib.length,
     imgCount: lib.filter((d) => d && d.image).length,
+    hasLogo: !!(typeof data.logo === 'string' && data.logo),
     banquets,
     pkgCount: banquets.reduce((n, b) => n + b.packages.length, 0),
   };
@@ -99,6 +100,7 @@ function summarize(data) {
 function fmtSummary(s) {
   const lines = [
     `  菜品库 ${s.libCount} 道（含图片 ${s.imgCount} 道）`,
+    `  品牌LOGO：${s.hasLogo ? '有（将随菜单一起搬运）' : '无'}`,
     `  宴席 ${s.banquets.length} 类 / 套餐 ${s.pkgCount} 个`,
   ];
   for (const b of s.banquets) {
@@ -159,8 +161,14 @@ function main() {
     console.log('\n[线上当前] 文件不存在，将新建');
   }
 
-  // 与 App exportConfig 保持一致的序列化方式（2 空格缩进）
-  const out = JSON.stringify({ menu: data.menu, library: data.library }, null, 2);
+  // 与 App exportConfig 保持一致的序列化方式（2 空格缩进），并保留顶层 logo / logoCrop
+  // （品牌徽标随菜单一起搬运，否则导出带 logo 也会在搬运环节被丢掉）
+  const outObj = { menu: data.menu, library: data.library };
+  if (typeof data.logo === 'string' && data.logo) {
+    outObj.logo = data.logo;
+    outObj.logoCrop = data.logoCrop || null;
+  }
+  const out = JSON.stringify(outObj, null, 2);
 
   if (prevRaw !== null && out === prevRaw) {
     console.log('\n[跳过] 内容与线上完全一致，无需更新。');

@@ -1132,7 +1132,13 @@
   }
 
   function exportConfig() {
-    const blob = new Blob([JSON.stringify({ menu: Store.MENU, library: Store.LIBRARY }, null, 2)], { type: 'application/json' });
+    // 品牌 LOGO 跟随导出：与 importConfig 配对，使「从云端拉取菜单」能一并带过 LOGO
+    const cfg = { menu: Store.MENU, library: Store.LIBRARY };
+    if (BrandConfig.logo) {
+      cfg.logo = BrandConfig.logo;
+      cfg.logoCrop = BrandConfig.logoCrop || null;
+    }
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'menu-config.json';
@@ -1160,6 +1166,7 @@
       }
       const r = await Store.importConfig(data);
       if (!r.ok) throw new Error(r.msg || '配置格式不正确');
+      BrandConfig.apply(); // 导入可能含品牌 LOGO，刷新界面徽标/预览
       if (state.mode === 'order') renderAll(); else renderManage();
       if (!opts.silent) toast(src === 'webdav' ? '已从 WebDAV 云端拉取菜单' : '已从云端拉取菜单');
       return true;
@@ -1172,6 +1179,7 @@
             const data = await res.json();
             const r = await Store.importConfig(data);
             if (r.ok) {
+              BrandConfig.apply();
               if (state.mode === 'order') renderAll(); else renderManage();
               if (!opts.silent) toast('WebDAV 拉取失败，已回退到静态菜单');
               return true;
@@ -1817,6 +1825,7 @@
           const data = JSON.parse(reader.result);
           Store.importConfig(data).then((res) => {
             if (!res.ok) { alert(res.msg); return; }
+            BrandConfig.apply(); // 导入可能含品牌 LOGO，刷新界面徽标/预览
             mg.banquet = 'wedding';
             const b = MENU()[mg.banquet];
             mg.pkg = b && b.packages[0] ? b.packages[0].id : null;

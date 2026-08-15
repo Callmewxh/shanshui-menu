@@ -507,6 +507,20 @@ const Store = (function () {
     STATE.library = data.library;
     STATE.menu = data.menu;
     stripLegacyFields(STATE);
+    // 品牌 LOGO 跟随配置一起搬运：从云端拉取菜单时一并带过去（与 exportConfig 配对）。
+    // 仅在导出里确实带 logo 时才覆盖本机 logo，避免误清空设备已有 logo。
+    try {
+      if (typeof data.logo === 'string' && data.logo) {
+        localStorage.setItem('ss_brand_logo', data.logo);
+        if ('logoCrop' in data) {
+          if (data.logoCrop && typeof data.logoCrop.w === 'number') {
+            localStorage.setItem('ss_brand_logo_crop', JSON.stringify({ x: data.logoCrop.x, y: data.logoCrop.y, w: data.logoCrop.w, h: data.logoCrop.h }));
+          } else {
+            localStorage.removeItem('ss_brand_logo_crop');
+          }
+        }
+      }
+    } catch (_) { /* logo 写入失败不影响菜单导入 */ }
     await save();
     return { ok: true };
   }
