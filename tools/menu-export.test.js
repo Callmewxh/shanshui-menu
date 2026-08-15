@@ -114,6 +114,21 @@ function run() {
     assert(svg.indexOf('<image') > -1, '套餐页嵌入菜品缩略图（SVG <image>）');
     assert(/font-family="&quot;Noto Serif SC&quot;/.test(svg), '套餐页字体使用转义后的 Noto Serif SC（SVG XML 合法）');
 
+    // 4b) 需求 #3：导出跟随「设置」里上传的 LOGO（无 LOGO 时回退红底白 "S"）
+    const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+    window.localStorage.setItem('ss_brand_logo', LOGO);
+    window.localStorage.setItem('ss_brand_logo_crop', JSON.stringify({ x: 0.1, y: 0.2, w: 0.6, h: 0.6 }));
+    const svgLogo = window.CustomOrder.buildPackageSVG('wedding', pkgId, 1);
+    assert(svgLogo.indexOf('brandmark_') > -1, '有 LOGO 时徽标走裁剪图片路径（含 clipPath brandmark_）');
+    assert(svgLogo.indexOf(LOGO) > -1, '有 LOGO 时导出嵌入用户 LOGO（跟随前面设置）');
+    assert(/brandmark_[^>]*><circle/.test(svgLogo), '有 LOGO 时徽标为圆形裁切（圆心截图框一致，透明底）');
+    assert(svgLogo.indexOf('#FFFFFF') === -1, '有 LOGO 时徽标不使用白底矩形');
+    assert(svgLogo.indexOf('>S</text>') === -1, '有 LOGO 时不再画默认红底白 "S" 方块');
+    window.localStorage.removeItem('ss_brand_logo');
+    window.localStorage.removeItem('ss_brand_logo_crop');
+    const svgNoLogo = window.CustomOrder.buildPackageSVG('wedding', pkgId, 1);
+    assert(svgNoLogo.indexOf('>S</text>') > -1, '无 LOGO 时回退默认红底白 "S" 方块');
+
     // 5) 调用不抛同步异常（栅格化依赖真实 canvas，jsdom 下异步完成，此处仅验证入口安全）
     let threw = false;
     try {

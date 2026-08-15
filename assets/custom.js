@@ -25,6 +25,36 @@
     return 'background-image:url(\'' + (d.image || '') + '\');background-size:cover;background-position:50% ' + y + '%;background-repeat:no-repeat;background-color:#EDE4D3;';
   }
 
+  // —— 品牌徽标（导出用）：跟随「设置」里上传的 LOGO 及其裁剪，无则回退红底白 "S" ——
+  // 与 assets/app.js 的 logoBgStyle 同源：crop = {x,y,w,h} 归一化矩形（x/y 左上角占比，w/h 宽高占比）。
+  function brandMarkSvg(mx, my, size, radius, m, C, FS) {
+    var logo = '', cropStr = '';
+    try { logo = localStorage.getItem('ss_brand_logo') || ''; } catch (e) {}
+    try { cropStr = localStorage.getItem('ss_brand_logo_crop') || ''; } catch (e) {}
+    var crop = null;
+    if (cropStr) { try { crop = JSON.parse(cropStr); } catch (e) {} }
+    var parts = [];
+    if (logo) {
+      // 有 LOGO：透明底 + 圆形裁切（与设置页圆心截图框一致），不画白底矩形
+      var ccx = mx + size / 2, ccy = my + size / 2, cr = size / 2;
+      var cid = 'brandmark_' + Math.round(mx) + '_' + Math.round(my);
+      parts.push('<clipPath id="' + cid + '"><circle cx="' + m(ccx) + '" cy="' + m(ccy) + '" r="' + m(cr) + '"/></clipPath>');
+      if (crop && typeof crop.w === 'number' && crop.w > 0) {
+        var cw = clamp(crop.w, 0.05, 1), ch = clamp((typeof crop.h === 'number' ? crop.h : cw), 0.05, 1);
+        var cx = clamp(crop.x || 0, 0, 1 - cw), cy = clamp(crop.y || 0, 0, 1 - ch);
+        var iw = size / cw, ih = size / ch;
+        var ix = mx - cx * iw, iy2 = my - cy * ih;
+        parts.push('<g clip-path="url(#' + cid + ')"><image href="' + logo + '" xlink:href="' + logo + '" x="' + m(ix) + '" y="' + m(iy2) + '" width="' + m(iw) + '" height="' + m(ih) + '" preserveAspectRatio="none"/></g>');
+      } else {
+        parts.push('<g clip-path="url(#' + cid + ')"><image href="' + logo + '" xlink:href="' + logo + '" x="' + m(mx) + '" y="' + m(my) + '" width="' + m(size) + '" height="' + m(size) + '" preserveAspectRatio="xMidYMid slice"/></g>');
+      }
+    } else {
+      parts.push('<rect x="' + m(mx) + '" y="' + m(my) + '" width="' + m(size) + '" height="' + m(size) + '" rx="' + m(radius) + '" fill="' + C.primary + '"/>');
+      parts.push('<text x="' + m(mx + size / 2) + '" y="' + m(my + size * 0.73) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(size * 0.62) + '" font-weight="700" fill="#fff">S</text>');
+    }
+    return parts.join('');
+  }
+
   // —— 草案（纯内存）——
   var draft = null;
   // draft.lines: [{ id, libId, cat, cn, en, image, crop, note, swappedFrom }]
@@ -442,12 +472,12 @@
 
     // —— 抬头 ——
     var hy = PAD_T + 2;
-    parts.push('<rect x="' + m(SX) + '" y="' + m(hy) + '" width="' + m(13) + '" height="' + m(13) + '" rx="' + m(3) + '" fill="' + C.primary + '"/>');
-    parts.push('<text x="' + m(SX + 6.5) + '" y="' + m(hy + 9.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="#fff">S</text>');
+    parts.push(brandMarkSvg(SX, hy, 13, 3, m, C, FS));
     parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2('山水S酒店') + '</text>');
     parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 13) + '" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '" letter-spacing="' + m(1.6) + '">SHANSHUI HOTEL</text>');
-    parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 9) + '" text-anchor="end" font-family="' + FK + '" font-size="' + m(9.5) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.6) + '">宴席定制单</text>');
-    parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 13.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.goldDeep + '" letter-spacing="' + m(1.8) + '">BANQUET CUSTOM ORDER</text>');
+    var titleX = contentR - 44;
+    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.2) + '">宴席定制单</text>');
+    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 13.2) + '" text-anchor="start" font-family="' + FN + '" font-size="' + m(1.6) + '" fill="' + C.goldDeep + '" letter-spacing="' + m(0.3) + '">BANQUET CUSTOM ORDER</text>');
 
     // —— 信息条：左(客户，未填则不写) / 中(菜单名称，放大) / 右(红色价格，不框) ——
     var iy = hy + 15, infoH = 17;
@@ -461,7 +491,6 @@
     var infoCx = contentL + contentW / 2;
     var menuText = esc2(menuName);
     parts.push('<text x="' + m(infoCx) + '" y="' + m(iy + 11.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(7.2) + '" font-weight="700" fill="' + C.goldDeep + '" letter-spacing="' + m(0.6) + '">' + menuText + '</text>');
-    parts.push('<rect x="' + m(infoCx - 12) + '" y="' + m(iy + 14) + '" width="' + m(24) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
     // 右：红色价格（不框，纯红字表示）
     parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 6.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(1) + '">本单总价</text>');
     parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 14.5) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="' + C.primary + '">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
@@ -472,11 +501,11 @@
       var galleryW = (contentW - galleryGap * (galleryCols - 1)) / galleryCols;
       var galleryRows = Math.ceil(draft.lines.length / galleryCols);
       var galleryH = Math.min(48, (availH - galleryGap * Math.max(0, galleryRows - 1)) / Math.max(1, galleryRows));
-      var galleryTextH = 13;   // 菜名(可两行) + 英文 预留高度
+      var galleryTextH = 11;   // 菜名（可两行）+ 备注 预留高度
       var galleryImageH = Math.min(galleryW * 0.75, galleryH - galleryTextH);
       var galleryTotalH = galleryRows * galleryH + Math.max(0, galleryRows - 1) * galleryGap;
       var galleryY = secTop + Math.max(0, (availH - galleryTotalH) / 2);
-      var gNameFs = 3.2, gEnFs = 2.0;
+      var gNameFs = 2.8, gNoteFs = 2.0;
       draft.lines.forEach(function (l, i) {
         var gx = SX + (i % galleryCols) * (galleryW + galleryGap);
         var gy = galleryY + Math.floor(i / galleryCols) * (galleryH + galleryGap);
@@ -493,13 +522,10 @@
         gcnLines.forEach(function (ln, li) {
           parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + li * 4) + '" font-family="' + FS + '" font-size="' + m(gNameFs) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
         });
-        // #4 英文对齐中文（同一起始 x），过长截断
-        var gen = (l.en || '').trim();
-        if (gen) {
-          var gmaxEn = Math.max(8, Math.floor((galleryW - 4) / (gEnFs * 0.62)));
-          if (gen.length > gmaxEn) gen = gen.slice(0, gmaxEn - 1) + '…';
-          parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + gcnLines.length * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gEnFs) + '" fill="' + C.muted + '">' + esc2(gen) + '</text>');
-        }
+        // #4 菜品下方不写英文，改为「备注：」
+        var note = '备注：' + ((l.note || '').trim());
+        if (note.length > 28) note = note.slice(0, 27) + '…';
+        parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + gcnLines.length * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gNoteFs) + '" fill="' + C.muted + '">' + esc2(note) + '</text>');
       });
     } else if (isPhoto) {
       // —— 带图版 v3.2（旧版保留，不再进入）
@@ -644,28 +670,12 @@
           // #1 不再放序号；#3 菜名单行优先（按栏宽算阈值，约19字一行放得下），仅极长才折两行
           var cnMax = Math.max(11, Math.floor((plainW - 2) / 4.2));
           var cnLines = wrapCn(l.cn || '未命名菜品', cnMax);
-          // #4 英文对齐中文（同一起始 x）；仅行高足够、且与菜名/分隔线都不挤时才画，保证不压字、不压线
-          var hasEn = (rowH2 >= 15) && (l.en || '').trim();
-          // 垂直布局：菜名在上、英文在下，全部收在 rowH2 内；分隔线固定在底部，与最低文字恒留 ≥3mm
-          var cnBase, cnStep = 4.4, enBase;
-          if (cnLines.length >= 2) {
-            // 两行菜名已占满行高：整体居中，且不再画英文，避免中/英与分隔线互相挤压
-            cnBase = ry + rowH2 * 0.5 - cnStep * 0.5;
-          } else if (hasEn) {
-            // 单行菜名偏上 + 英文贴底：英文基线恒在分隔线上方 5.1mm，与线留出 ≥3mm 距离
-            cnBase = ry + rowH2 * 0.40;
-            enBase = ry + rowH2 - 5.6;
-          } else {
-            cnBase = ry + rowH2 * 0.56;           // 单行菜名居中
-          }
+          // 垂直布局：菜名单行居中/两行居中，不再写英文
+          var cnStep = 4.4;
+          var cnBase = ry + rowH2 * 0.5 - (cnLines.length * cnStep) * 0.5 + 3.2;
           cnLines.forEach(function (ln, li) {
             parts.push('<text x="' + m(px2 + 1) + '" y="' + m(cnBase + li * cnStep) + '" font-family="' + FS + '" font-size="' + m(4.4) + '" font-weight="700" fill="' + C.ink + '">' + esc2(ln) + '</text>');
           });
-          if (hasEn) {
-            var pen = (l.en || '').trim();
-            if (pen.length > 30) pen = pen.slice(0, 29) + '…';
-            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(enBase) + '" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="' + C.muted + '">' + esc2(pen) + '</text>');
-          }
           // 分隔线：整行宽、底部统一位置，不随菜名行数抖动
           parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
         });
@@ -674,12 +684,14 @@
       parts.push('<line x1="' + m(105) + '" y1="' + m(secTop) + '" x2="' + m(105) + '" y2="' + m(Math.max(plainY[0], plainY[1]) - 4) + '" stroke="' + C.goldHair + '" stroke-width="' + m(0.35) + '"/>');
     }
 
-    // —— 页脚：左、右两根金线，中间放免责语（去掉菱形图标）——
+    // —— 页脚：左、右两根短金线与文字居中对齐，线条不碰到文字 ——
     var fy = footerY;
     var fcx = 105;
-    parts.push('<line x1="' + m(SX) + '" y1="' + m(fy) + '" x2="' + m(fcx - 22) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
-    parts.push('<line x1="' + m(fcx + 22) + '" y1="' + m(fy) + '" x2="' + m(contentR) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
-    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 3.6) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.9) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
+    var lineGap = 30;
+    var lineW = 18;
+    parts.push('<line x1="' + m(fcx - lineGap - lineW) + '" y1="' + m(fy) + '" x2="' + m(fcx - lineGap) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<line x1="' + m(fcx + lineGap) + '" y1="' + m(fy) + '" x2="' + m(fcx + lineGap + lineW) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 1.0) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
 
     parts.push('</svg>');
     return parts.join('');
@@ -1016,12 +1028,12 @@
 
     // —— 抬头 ——
     var hy = PAD_T + 2;
-    parts.push('<rect x="' + m(SX) + '" y="' + m(hy) + '" width="' + m(13) + '" height="' + m(13) + '" rx="' + m(3) + '" fill="' + C.primary + '"/>');
-    parts.push('<text x="' + m(SX + 6.5) + '" y="' + m(hy + 9.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="#fff">S</text>');
+    parts.push(brandMarkSvg(SX, hy, 13, 3, m, C, FS));
     parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc('山水S酒店') + '</text>');
     parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 13) + '" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '" letter-spacing="' + m(1.6) + '">SHANSHUI HOTEL</text>');
-    parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 9) + '" text-anchor="end" font-family="' + FK + '" font-size="' + m(9.5) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.6) + '">宴席菜单</text>');
-    parts.push('<text x="' + m(contentR) + '" y="' + m(hy + 13.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.goldDeep + '" letter-spacing="' + m(1.8) + '">BANQUET MENU</text>');
+    var titleX = contentR - 44;
+    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.2) + '">宴席菜单</text>');
+    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 13.2) + '" text-anchor="start" font-family="' + FN + '" font-size="' + m(1.6) + '" fill="' + C.goldDeep + '" letter-spacing="' + m(0.3) + '">BANQUET MENU</text>');
 
     // —— 信息条：左(宴席名) / 中(套餐名) / 右(价格) ——
     var iy = hy + 15, infoH = 17;
@@ -1030,7 +1042,6 @@
     parts.push('<text x="' + m(SX + 6.5) + '" y="' + m(iy + 11.5) + '" font-family="' + FS + '" font-size="' + m(6.4) + '" font-weight="700" fill="' + C.ink + '">' + esc(bName) + '</text>');
     var infoCx = contentL + contentW / 2;
     parts.push('<text x="' + m(infoCx) + '" y="' + m(iy + 11.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(7.2) + '" font-weight="700" fill="' + C.goldDeep + '" letter-spacing="' + m(0.6) + '">' + esc(pkName) + '</text>');
-    parts.push('<rect x="' + m(infoCx - 12) + '" y="' + m(iy + 14) + '" width="' + m(24) + '" height="' + m(0.5) + '" fill="' + C.gold + '"/>');
     parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 6.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(1) + '">套餐价格</text>');
     parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 14.5) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="' + C.primary + '">' + esc(price ? '¥' + price : '—') + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
 
@@ -1039,11 +1050,11 @@
     var cellW = (contentW - gap * (cols - 1)) / cols;
     var rows = Math.max(1, Math.ceil(dishes.length / cols));
     var cellH = Math.min(48, (availH - gap * Math.max(0, rows - 1)) / rows);
-    var textH = 13;
+    var textH = 11;
     var imgH = Math.min(cellW * 0.75, cellH - textH);
     var totalH = rows * cellH + Math.max(0, rows - 1) * gap;
     var gridY = secTop + Math.max(0, (availH - totalH) / 2);
-    var nameFs = 3.2, enFs = 2.0;
+    var nameFs = 2.8, gNoteFs = 2.0;
 
     dishes.forEach(function (d, i) {
       var gx = SX + (i % cols) * (cellW + gap);
@@ -1062,17 +1073,20 @@
       lines.forEach(function (ln, li) {
         parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(ny + li * 4) + '" font-family="' + FS + '" font-size="' + m(nameFs) + '" font-weight="700" fill="' + C.ink + '">' + esc(ln) + '</text>');
       });
-      var en = (d.en || '').trim();
-      if (en) {
-        var maxEn = Math.max(8, Math.floor((cellW - 4) / (enFs * 0.62)));
-        if (en.length > maxEn) en = en.slice(0, maxEn - 1) + '…';
-        parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(ny + lines.length * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(enFs) + '" fill="' + C.muted + '">' + esc(en) + '</text>');
-      }
+      // 不写英文，改为「备注：」
+      var note = '备注：' + ((d.note || '').trim());
+      if (note.length > 28) note = note.slice(0, 27) + '…';
+      parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(ny + lines.length * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gNoteFs) + '" fill="' + C.muted + '">' + esc(note) + '</text>');
     });
 
-    // —— 页脚：金线 + 菜品数 / 扫码提示 ——
-    parts.push('<rect x="' + m(SX) + '" y="' + m(footerY - 3) + '" width="' + m(contentW) + '" height="' + m(0.3) + '" fill="' + C.goldHair + '"/>');
-    parts.push('<text x="' + m(SX) + '" y="' + m(footerY + 1.5) + '" font-family="' + FN + '" font-size="' + m(2.8) + '" fill="' + C.muted + '">共 ' + dishes.length + ' 道菜</text>');
+    // —— 页脚：左、右两根短金线与文字居中对齐，线条不碰到文字 ——
+    var fy = footerY;
+    var fcx = 105;
+    var lineGap = 30;
+    var lineW = 18;
+    parts.push('<line x1="' + m(fcx - lineGap - lineW) + '" y1="' + m(fy) + '" x2="' + m(fcx - lineGap) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<line x1="' + m(fcx + lineGap) + '" y1="' + m(fy) + '" x2="' + m(fcx + lineGap + lineW) + '" y2="' + m(fy) + '" stroke="' + C.gold + '" stroke-width="' + m(0.5) + '"/>');
+    parts.push('<text x="' + m(fcx) + '" y="' + m(fy + 1.0) + '" text-anchor="middle" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(0.6) + '">本单仅作报价参考，菜品请以实物为主</text>');
     parts.push('</svg>');
     return parts.join('');
   }

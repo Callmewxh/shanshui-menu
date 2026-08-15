@@ -49,7 +49,9 @@
   let heroPinned = localStorage.getItem('ss_pinhdr') !== '0';  // 红色菜单条是否固定（默认固定）
   let viewList = [];      // 当前点菜页可见菜品的展示顺序（大图循环浏览用）
   let cropTemp = null; // 图片展示位置临时值 {x,y,w,h}
-  let cropAspect = 1;  // 当前编辑图片宽高比（IW/IH），用于把 4:3 裁剪框换算成图片归一化高度
+  let cropAspect = 1;  // 当前编辑图片宽高比（IW/IH），用于把裁剪框换算成图片归一化高度
+  let cropMode = 'dish'; // 'dish' | 'logo'
+  let cropDoneFn = null; // logo 裁剪完成回调
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -1257,24 +1259,38 @@
   // ---------- 图片展示位置编辑（截图框式：4:3 框可上下左右拖动 + 缩放） ----------
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
-  function openCrop() {
-    if (!mg.pendingImage) { alert('请先上传图片再调整展示位置'); return; }
+  function openCrop(opts) {
+    opts = opts || {};
+    cropMode = opts.mode === 'logo' ? 'logo' : 'dish';
+    cropDoneFn = (typeof opts.done === 'function') ? opts.done : null;
+    const src = opts.src || mg.pendingImage;
+    const currentCrop = opts.crop || (cropMode === 'logo' ? null : mg.pendingCrop);
+    if (!src) { alert(cropMode === 'logo' ? '请先选择 LOGO 图片' : '请先上传图片再调整展示位置'); return; }
+    const title = $('#cropModal').querySelector('h3');
+    const hint = $('#cropModal').querySelector('.crop-hint');
+    if (title) title.textContent = cropMode === 'logo' ? '调整 LOGO 显示区域' : '调整图片展示位置';
+    if (hint) hint.textContent = cropMode === 'logo'
+      ? '拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（LOGO 固定 1:1，不变形）'
+      : '拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（展示框固定 4:3，不变形）';
     const img = $('#cropImg');
-    const c = (mg.pendingCrop && typeof mg.pendingCrop.w === 'number') ? mg.pendingCrop : defaultCrop();
+    const c = (currentCrop && typeof currentCrop.w === 'number') ? currentCrop : defaultCrop();
+    const targetAspect = cropMode === 'logo' ? 1 : 0.75;
     const apply = () => {
       const win = $('#cropWin');
       if (win && img.naturalWidth) {
         cropAspect = img.naturalWidth / img.naturalHeight;
         win.style.aspectRatio = cropAspect.toFixed(4);
       }
-      const h = (typeof c.h === 'number') ? c.h : c.w * 0.75 * (cropAspect || 1);
+      const h = (typeof c.h === 'number') ? c.h : c.w * targetAspect * (cropAspect || 1);
       cropTemp = { x: c.x, y: c.y, w: c.w, h: clamp(h, 0.05, 1) };
       syncZoomSlider();
       positionCropFrame();
     };
     img.onload = apply;
-    img.src = mg.pendingImage;
+    img.src = src;
     $('#cropModal').hidden = false;
+    const frame = $('.crop-frame');
+    if (frame) frame.classList.toggle('logo-crop', cropMode === 'logo');
     if (img.complete && img.naturalWidth) apply();   // dataURL 可能同步完成
   }
 
@@ -1304,13 +1320,14 @@
 
   function setCropZoom(zoomPct) {
     if (!cropTemp) return;
+    const targetAspect = cropMode === 'logo' ? 1 : 0.75;
     const nw = clamp(100 / zoomPct, 0.05, 1);
-    const nh = nw * 0.75 * cropAspect;
+    const nh = nw * targetAspect * cropAspect;
     const cx = cropTemp.x + cropTemp.w / 2;
     const cy = cropTemp.y + cropTemp.h / 2;
-    cropTemp.w = nw; cropTemp.h = nh;
+    cropTemp.w = nw; cropTemp.h = clamp(nh, 0.05, 1);
     cropTemp.x = clamp(cx - nw / 2, 0, 1 - nw);
-    cropTemp.y = clamp(cy - nh / 2, 0, 1 - nh);
+    cropTemp.y = clamp(cy - cropTemp.h / 2, 0, 1 - cropTemp.h);
     const zv = $('#cropZoomVal'); if (zv) zv.textContent = Math.round(zoomPct) + '%';
     positionCropFrame();
   }
@@ -1342,9 +1359,10 @@
       if (mode === 'pan') {
         setCropXY(sc.x + (e.clientX - sx) / r.width, sc.y + (e.clientY - sy) / r.height);
       } else {
+        const targetAspect = cropMode === 'logo' ? 1 : 0.75;
         const dd = ((e.clientX - sx) + (e.clientY - sy)) / 2;   // 拖右下角手柄往外 = 框变大（zoom out）；往内 = 框变小（放大）
         const nw = clamp(sc.w + dd / r.width, 0.05, 1);
-        const nh = nw * 0.75 * cropAspect;
+        const nh = clamp(nw * targetAspect * cropAspect, 0.05, 1);
         cropTemp = { x: clamp(sc.x, 0, 1 - nw), y: clamp(sc.y, 0, 1 - nh), w: nw, h: nh };
         syncZoomSlider();
         positionCropFrame();
@@ -1360,7 +1378,14 @@
 
   function applyCrop() {
     if (!cropTemp) return;
-    mg.pendingCrop = { x: +cropTemp.x.toFixed(4), y: +cropTemp.y.toFixed(4), w: +cropTemp.w.toFixed(4), h: +cropTemp.h.toFixed(4) };
+    const next = { x: +cropTemp.x.toFixed(4), y: +cropTemp.y.toFixed(4), w: +cropTemp.w.toFixed(4), h: +cropTemp.h.toFixed(4) };
+    if (cropMode === 'logo' && cropDoneFn) {
+      cropDoneFn(next);
+      cropDoneFn = null;
+      $('#cropModal').hidden = true;
+      return;
+    }
+    mg.pendingCrop = next;
     renderImgPrev();
     $('#cropModal').hidden = true;
     toast('展示位置已调整');
@@ -1912,29 +1937,64 @@
       await publishToWebDAV();
     });
 
+    // LOGO 背景样式（支持裁剪）
+    function logoBgStyle(url, crop) {
+      const c = (crop && typeof crop.w === 'number') ? crop : null;
+      if (c) {
+        const w = clamp(c.w, 0.05, 1);
+        const h = clamp((typeof c.h === 'number' ? c.h : c.w), 0.05, 1);
+        const x = clamp(c.x, 0, 1 - w), y = clamp(c.y, 0, 1 - h);
+        const sizeW = (100 / w).toFixed(3), sizeH = (100 / h).toFixed(3);
+        const posX = (1 - w < 1e-4) ? '0' : (x / (1 - w) * 100).toFixed(2);
+        const posY = (1 - h < 1e-4) ? '0' : (y / (1 - h) * 100).toFixed(2);
+        return { backgroundImage: `url('${url}')`, backgroundSize: `${sizeW}% ${sizeH}%`, backgroundPosition: `${posX}% ${posY}%`, backgroundRepeat: 'no-repeat', backgroundColor: 'transparent' };
+      }
+      return { backgroundImage: `url('${url}')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: 'transparent' };
+    }
+
     // —— 品牌设置（LOGO 图片 + 酒店名称）——
     var BrandConfig = {
       KEY_LOGO: 'ss_brand_logo',   // base64 dataURL of uploaded logo PNG
+      KEY_LOGO_CROP: 'ss_brand_logo_crop',
       KEY_NAME: 'ss_brand_name',
       DEF_NAME: '山水S酒店',
       DEF_MARK: 'S',
       get logo() { try { return localStorage.getItem(this.KEY_LOGO) || ''; } catch(e){return '';} },
       get name() { try { return localStorage.getItem(this.KEY_NAME) || this.DEF_NAME; } catch(e){return this.DEF_NAME;} },
+      get logoCrop() {
+        try {
+          var raw = localStorage.getItem(this.KEY_LOGO_CROP);
+          if (!raw) return null;
+          var o = JSON.parse(raw);
+          if (o && typeof o.w === 'number') {
+            var c = { x: o.x, y: o.y, w: o.w };
+            if (typeof o.h === 'number') c.h = o.h;
+            return c;
+          }
+        } catch (e) {}
+        return null;
+      },
       set logo(v) { try { localStorage.setItem(this.KEY_LOGO, v||''); } catch(_) {} },
       set name(v) { try { localStorage.setItem(this.KEY_NAME, (v||'').trim() || this.DEF_NAME); } catch(_) {} },
+      set logoCrop(v) {
+        try {
+          if (v && typeof v.w === 'number') localStorage.setItem(this.KEY_LOGO_CROP, JSON.stringify({ x: v.x, y: v.y, w: v.w, h: v.h }));
+          else localStorage.removeItem(this.KEY_LOGO_CROP);
+        } catch (_) {}
+      },
       hasLogo: function() { return !!this.logo; },
       apply: function() {
         var m = $('.mark');
         if (m) {
           if (this.hasLogo()) {
-            m.style.backgroundImage = 'url(' + this.logo + ')';
-            m.style.backgroundSize = 'contain';
-            m.style.backgroundRepeat = 'no-repeat';
-            m.style.backgroundPosition = 'center';
+            Object.assign(m.style, logoBgStyle(this.logo, this.logoCrop));
             m.textContent = '';
             m.classList.add('has-logo');
           } else {
             m.style.backgroundImage = '';
+            m.style.backgroundSize = '';
+            m.style.backgroundPosition = '';
+            m.style.backgroundRepeat = '';
             m.classList.remove('has-logo');
             m.textContent = this.DEF_MARK;
           }
@@ -1945,17 +2005,15 @@
         var prev = $('#brandLogoPreview');
         if (prev) {
           if (this.hasLogo()) {
-            prev.style.backgroundImage = 'url(' + this.logo + ')';
-            prev.style.backgroundSize = 'contain';
-            prev.style.backgroundRepeat = 'no-repeat';
-            prev.style.backgroundPosition = 'center';
-            prev.style.backgroundColor = '#fff';
+            Object.assign(prev.style, logoBgStyle(this.logo, this.logoCrop));
             prev.textContent = '';
             var wrap = $('#brandLogoWrap');
             if (wrap) wrap.classList.add('has-img');
           } else {
             prev.style.backgroundImage = '';
-            prev.style.backgroundColor = '';
+            prev.style.backgroundSize = '';
+            prev.style.backgroundPosition = '';
+            prev.style.backgroundRepeat = '';
             prev.textContent = this.DEF_MARK;
             var wrap = $('#brandLogoWrap');
             if (wrap) wrap.classList.remove('has-img');
@@ -1969,7 +2027,7 @@
     var bnInput = $('#setBrandName');
     if (bnInput) { bnInput.value = BrandConfig.name; }
     if (bnInput) bnInput.addEventListener('input', function() { BrandConfig.name = bnInput.value; BrandConfig.apply(); });
-    // LOGO 图片上传
+    // LOGO 图片上传（带截图框裁剪，类似菜品库）
     var logoInput = $('#brandLogoInput');
     var logoBtn = $('#setBrandLogoBtn');
     var logoClear = $('#setBrandLogoClear');
@@ -1980,15 +2038,20 @@
       if (!f.type.match(/^image\/(png|gif|jpeg|webp)$/)) { alert('请上传 PNG/GIF/JPG/WebP 格式的图片'); return; }
       var reader = new FileReader();
       reader.onload = function(e) {
-        BrandConfig.logo = e.target.result;
-        BrandConfig.apply();
-        toast('LOGO 已更新');
+        var src = e.target.result;
+        openCrop({ mode: 'logo', src: src, crop: BrandConfig.logoCrop, done: function(crop) {
+          BrandConfig.logo = src;
+          BrandConfig.logoCrop = crop;
+          BrandConfig.apply();
+          toast('LOGO 已更新');
+        } });
       };
       reader.readAsDataURL(f);
       logoInput.value = ''; // 允许重复选同一文件
     });
     if (logoClear) logoClear.addEventListener('click', function() {
       BrandConfig.logo = '';
+      BrandConfig.logoCrop = null;
       BrandConfig.apply();
       toast('已清除 LOGO，恢复默认标记');
     });
