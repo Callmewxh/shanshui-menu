@@ -1133,11 +1133,18 @@
 
   function exportConfig() {
     // 品牌 LOGO 跟随导出：与 importConfig 配对，使「从云端拉取菜单」能一并带过 LOGO
+    // 直接读 localStorage 的 logo 键（与 importConfig 写入键一致），避免依赖 BrandConfig 内层作用域
     const cfg = { menu: Store.MENU, library: Store.LIBRARY };
-    if (BrandConfig.logo) {
-      cfg.logo = BrandConfig.logo;
-      cfg.logoCrop = BrandConfig.logoCrop || null;
-    }
+    try {
+      const logo = (localStorage.getItem('ss_brand_logo') || '').trim();
+      if (logo) {
+        cfg.logo = logo;
+        const raw = localStorage.getItem('ss_brand_logo_crop');
+        let crop = null;
+        if (raw) { try { const o = JSON.parse(raw); if (o && typeof o.w === 'number') crop = { x: o.x, y: o.y, w: o.w, h: o.h }; } catch (_) {} }
+        cfg.logoCrop = crop;
+      }
+    } catch (_) { /* logo 读取失败不影响菜单导出 */ }
     const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
