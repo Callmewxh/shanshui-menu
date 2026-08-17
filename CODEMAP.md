@@ -139,7 +139,10 @@ STATE = {
 | **单套餐一页 SVG** | `buildPackageSVG(banquetId, pkgId, k)` | 抬头「宴席菜单」、信息条 = 宴席名/套餐名/套餐价、4 列画册（与 `buildSVG` 同参数） |
 | **整份菜单导出** | `exportWholeMenu(banquetId, {withQr, scale})` | 每套餐一页 → 逐页栅格化 → 可选烧码 → 合成多页 PDF 下载 |
 | 分享二维码弹窗 | `showQrModal(url)` | 填 `#qrImg`/`#qrLink` 并展开 `#qrModal` |
+| **总厨定制单（无图）** | `buildChefSVG()` `exportChef()` | 仅无图版；换菜/加菜直接在菜名后 inline 标注（`旧菜 ——→ 新菜`、`菜名（新增）`），主体为无图双栏清单 |
 
+> **内置加减计算器**：`#csCalc` = `基价(菜单原价) ＋ [输入]`；点击计算框光标落入 + 号后输入框，输入数字回车＝加、`-N` 回车＝减，结果作为新运行总价并清空输入框继续累加。基价存 `draft.total`，显示于 `#csCalcBase`；草案行新增 `swappedFromCn`(换前菜名) / `added`(新增) 字段，用于 `renderDishName` 生成 inline 换/加标注。**无图版(plain)、带图版(gallery/thumb)、总厨单(chef) 三版均通过 `renderDishName` 在菜名后 inline 标注**（`旧菜 ——→ 新菜` 箭头+新菜红字、`菜名（新增）` 新增红字），不再有顶部变更卡。导出菜单顶部英文（`SHANSHUI HOTEL` / `BANQUET ...` / `CHEF'S ORDER`）已全部移除。
+> **带图版渲染路径提醒**：`buildSVG` 中 `isPhoto = ver!=='plain'`，带图版走 `if(isPhoto)` 的 gallery 分支（原 `l.cn` 直出，现已改为调用 `renderDishName` 以显示换/加标注）；其后 `else if(isPhoto)` 的印章分类段分支为历史死代码（永不进入），不要在此处误改。
 **两个必须记住的坑：**
 1. `Store.resolvePackage()` **直接返回菜品数组**，不是 `{dishes:[...]}`。按对象取值会静默拿到空列表 → 导出页「有框无图」。
 2. 二维码里放的是**网址**不是菜单数据。整份菜单含图 3.4 MB，二维码上限仅 ~3 KB，物理上放不进去；放网址还顺带让客户永远看到线上最新版。

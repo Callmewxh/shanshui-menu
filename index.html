@@ -130,7 +130,13 @@
         </div>
         <div class="cs-head-right">
           <span class="cs-source" id="csSource"></span>
-          <button class="mg-btn primary" id="csExportBtn" type="button">存为图片</button>
+          <div class="cs-export-dropdown" id="csExportDropdown">
+            <button class="mg-btn primary" id="csExportBtn" type="button">存为图片</button>
+            <button class="mg-btn primary cs-export-caret" id="csExportCaret" type="button" aria-label="更多导出选项" aria-haspopup="true" aria-expanded="false">▾</button>
+            <div class="cs-export-menu" id="csExportMenu" hidden>
+              <button type="button" class="cs-export-item" id="csExportChef">导出给总厨（无图）</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="cs-body" id="csBody"></div>
@@ -139,7 +145,11 @@
         <div class="cs-total-wrap">
           <div class="cs-total">
             <label>本单总价（元 / 桌）</label>
-            <input id="csTotal" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+            <div class="cs-calc" id="csCalc" title="点击输入加 / 减金额，回车计算">
+              <span class="cs-calc-base" id="csCalcBase">0</span>
+              <span class="cs-calc-plus">＋</span>
+              <input id="csTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="加/减">
+            </div>
           </div>
           <span class="cs-price-hint" id="csPriceHint">请先填写价格</span>
         </div>
