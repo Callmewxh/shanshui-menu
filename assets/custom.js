@@ -66,12 +66,14 @@
     var b = Store.getBanquet(banquetId);
     var pkg = Store.getPackage(banquetId, pkgId);
     var dishes = Store.resolvePackage(banquetId, pkgId) || [];
+    var pkgPrice = (pkg && typeof pkg.price !== 'undefined') ? String(pkg.price) : '';
     draft = {
       banquetId: banquetId,
       pkgId: pkgId,
       type: (b && b.name) ? b.name : '宴席',
       client: '',
-      total: (pkg && typeof pkg.price !== 'undefined') ? String(pkg.price) : '',
+      total: pkgPrice,
+      basePrice: pkgPrice,   // 套餐原价，用于总厨单显示价格变化
       source: pkg ? (pkg.name || pkgId) : '',
       lines: dishes.map(function (d, i) {
         return {
@@ -381,9 +383,9 @@
   }
 
   // 在 SVG 中渲染菜名，自动追加换菜/加菜标注。
-  //   换菜：旧菜名 ——→ 新菜名（箭头与新菜名为红色）
-  //   加菜：菜名（新增）（红色新增标记）
-  // opts: { m, FS, C, maxChars, fs, step, colorInk, colorMark, anchor, singleLine }
+  //   普通模式：换菜 A ——→ B（红箭头），加菜 A（新增）
+  //   总厨模式(chefMode)：原菜名带删除线，下方红色写换后菜名；加菜用红色「（加菜）」后缀
+  // opts: { m, FS, C, maxChars, fs, step, colorInk, colorMark, anchor, singleLine, chefMode, rowWidth }
   function renderDishName(parts, x, y, l, opts) {
     opts = opts || {};
     var m = opts.m, FS = opts.FS, C = opts.C;
@@ -394,8 +396,10 @@
     var colorMark = opts.colorMark || C.primary;
     var anchorAttr = opts.anchor === 'middle' ? ' text-anchor="middle"' : '';
     var singleLine = opts.singleLine;
+    var chefMode = opts.chefMode;
+    var rowWidth = opts.rowWidth;
     var arrow = ' ——→ ';
-    var addMark = '（新增）';
+    var addMark = chefMode ? '（加菜）' : '（新增）';
 
     // 单行模式：标注后若超长，按比例缩小字号把整句（含换/加标注）压进一行，绝不截断 —— 确保有图版也完整显示变更
     function fitFs(full) {
@@ -403,9 +407,27 @@
       return Math.max(2.2, fs * maxChars / full.length);
     }
 
+    function textWidth(text, ufs) {
+      ufs = ufs || fs;
+      var w = 0;
+      for (var i = 0; i < text.length; i++) {
+        w += (text.charCodeAt(i) > 127) ? ufs : ufs * 0.58;
+      }
+      return w;
+    }
     function drawText(text, ly, fill, ufs) {
       ufs = ufs || fs;
       parts.push('<text x="' + m(x) + '" y="' + m(ly) + '"' + anchorAttr + ' font-family="' + FS + '" font-size="' + m(ufs) + '" font-weight="700" fill="' + fill + '">' + esc(text) + '</text>');
+    }
+    function drawStrike(text, ly, fill, strikeFill, ufs) {
+      // 绘制文字并在其正中加一条删除线
+      // chefMode 下传入 rowWidth 则删除线贯穿整行，否则按文字宽度
+      ufs = ufs || fs;
+      drawText(text, ly, fill, ufs);
+      var w = chefMode && rowWidth ? rowWidth : textWidth(text, ufs);
+      var sx = anchorAttr ? x - w / 2 : x;
+      var sy = ly - ufs * 0.32;
+      parts.push('<line x1="' + m(sx) + '" y1="' + m(sy) + '" x2="' + m(sx + w) + '" y2="' + m(sy) + '" stroke="' + (strikeFill || C.primary) + '" stroke-width="' + m(ufs * 0.11) + '"/>');
     }
     function drawSplit(text, ly, splitAt, beforeFill, afterFill, ufs) {
       ufs = ufs || fs;
@@ -415,6 +437,23 @@
     }
 
     if (l.swappedFromCn) {
+      if (chefMode) {
+        // 总厨单：原菜名带删除线，下方红色写换后菜名
+        var fromName = l.swappedFromCn || '原菜品';
+        var toName = l.cn || '未命名菜品';
+        var fromLines = wrapCn(fromName, maxChars);
+        var toLines = wrapCn(toName, maxChars);
+        var lineCount = 0;
+        fromLines.forEach(function (ln, i) {
+          drawStrike(ln, y + i * step, colorInk, fs);
+          lineCount++;
+        });
+        toLines.forEach(function (ln, i) {
+          drawText(ln, y + (fromLines.length + i) * step, colorMark, fs);
+          lineCount++;
+        });
+        return lineCount;
+      }
       var full = l.swappedFromCn + arrow + l.cn;
       var ufs0 = fitFs(full);
       if (singleLine) {
@@ -1405,7 +1444,10 @@
     var type = (draft.type || '').trim() || '宴席';
     var menuName = (draft.source || '').trim() || type;
     var total = (draft.total || '').toString().trim();
+    var basePrice = (draft.basePrice || '').toString().trim();
     var totalStr = total ? '¥' + total : '—';
+    var basePriceStr = basePrice ? '¥' + basePrice : '';
+    var priceChanged = total && basePrice && total !== basePrice;
 
     var SX = 16, contentL = SX, contentR = 210 - SX, contentW = contentR - contentL;
     var PAD_T = 11, topBandH = 5;
@@ -1436,8 +1478,27 @@
     }
     var infoCx = contentL + contentW / 2;
     parts.push('<text x="' + m(infoCx) + '" y="' + m(iy + 11.5) + '" text-anchor="middle" font-family="' + FS + '" font-size="' + m(7.2) + '" font-weight="700" fill="' + C.goldDeep + '" letter-spacing="' + m(0.6) + '">' + esc2(menuName) + '</text>');
-    parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 6.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(1) + '">本单总价</text>');
-    parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 14.5) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="' + C.primary + '">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
+    // 价格变化表示：原价删除线 + 现价红色
+    function approxWidth(s, ufs) {
+      var w = 0;
+      for (var i = 0; i < s.length; i++) w += (s.charCodeAt(i) > 127) ? ufs : ufs * 0.55;
+      return w;
+    }
+    if (priceChanged) {
+      var labelY = iy + 4.8;
+      var baseY = iy + 8.2;
+      var totalY = iy + 13.8;
+      var baseLabel = '原价 ' + basePriceStr;
+      var baseFs = 2.5;
+      var baseW = approxWidth(baseLabel, baseFs);
+      parts.push('<text x="' + m(contentR - 2) + '" y="' + m(labelY) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.4) + '" fill="' + C.muted + '" letter-spacing="' + m(0.8) + '">本单总价</text>');
+      parts.push('<text x="' + m(contentR - 2) + '" y="' + m(baseY) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(baseFs) + '" fill="' + C.muted + '">' + esc2(baseLabel) + '</text>');
+      parts.push('<line x1="' + m(contentR - 2 - baseW) + '" y1="' + m(baseY - baseFs * 0.32) + '" x2="' + m(contentR - 2) + '" y2="' + m(baseY - baseFs * 0.32) + '" stroke="' + C.primary + '" stroke-width="' + m(baseFs * 0.11) + '"/>');
+      parts.push('<text x="' + m(contentR - 2) + '" y="' + m(totalY) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(7.6) + '" font-weight="700" fill="' + C.primary + '">' + esc2(totalStr) + '<tspan font-size="' + m(2.6) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
+    } else {
+      parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 6.5) + '" text-anchor="end" font-family="' + FN + '" font-size="' + m(2.6) + '" fill="' + C.muted + '" letter-spacing="' + m(1) + '">本单总价</text>');
+      parts.push('<text x="' + m(contentR - 2) + '" y="' + m(iy + 14.5) + '" text-anchor="end" font-family="' + FS + '" font-size="' + m(8) + '" font-weight="700" fill="' + C.primary + '">' + esc2(totalStr) + '<tspan font-size="' + m(2.8) + '" font-weight="400" dx="' + m(0.8) + '">元/桌</tspan></text>');
+    }
 
     // —— 无图双栏宴席清单（换菜/加菜直接在菜名后 inline 标注）——
     var menuTop = secTop;
@@ -1472,9 +1533,12 @@
           var cnStep = 4.4;
           var tmpLines = wrapCn(l.cn || '未命名菜品', cnMax);
           var cnBase = ry + rowH2 * 0.5 - (tmpLines.length * cnStep) * 0.5 + 3.2;
+          // 总厨单：换菜画删除线、换后菜名红色；加菜红色后缀
           renderDishName(parts, px2 + 1, cnBase, l, {
             m: m, FS: FS, C: C,
-            maxChars: cnMax, fs: 4.4, step: cnStep
+            maxChars: cnMax, fs: 4.4, step: cnStep,
+            chefMode: true,
+            rowWidth: plainW - 2
           });
         parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
       });
