@@ -9,8 +9,15 @@
 
   var CATS = ['凉菜', '主菜', '主食点心'];
   var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+  // 解析当前皮肤的图片占位底色令牌（M2：避免硬编码导致非默认皮肤错位；导出取具体值）
+  var resolveImgBg = function () {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue('--img-bg');
+      return (v && v.trim()) ? v.trim() : '#EDE4D3';
+    } catch (e) { return '#EDE4D3'; }
+  };
 
-  // —— 裁剪背景（与 assets/app.js 的 cropBg 同源，自包含，保证展示/导出一致）——
+  // —— 裁剪背景（自包含兜底；运行时优先复用 assets/app.js 的 window.cropBgStyle 单一真相源，保证展示/导出一致）——
   function cropBgStyle(d) {
     var c = d && d.crop ? d.crop : null;
     if (c && typeof c.w === 'number') {
@@ -19,11 +26,13 @@
       var sizeW = (100 / w).toFixed(3), sizeH = (100 / h).toFixed(3);
       var posX = (1 - w < 1e-4) ? '0' : (x / (1 - w) * 100).toFixed(2);
       var posY = (1 - h < 1e-4) ? '0' : (y / (1 - h) * 100).toFixed(2);
-      return 'background-image:url(\'' + d.image + '\');background-size:' + sizeW + '% ' + sizeH + '%;background-position:' + posX + '% ' + posY + '%;background-repeat:no-repeat;background-color:#EDE4D3;';
+      return 'background-image:url(\'' + d.image + '\');background-size:' + sizeW + '% ' + sizeH + '%;background-position:' + posX + '% ' + posY + '%;background-repeat:no-repeat;background-color:var(--img-bg);';
     }
     var y = (c && typeof c.y === 'number') ? c.y : 50;
-    return 'background-image:url(\'' + (d.image || '') + '\');background-size:cover;background-position:50% ' + y + '%;background-repeat:no-repeat;background-color:#EDE4D3;';
+    return 'background-image:url(\'' + (d.image || '') + '\');background-size:cover;background-position:50% ' + y + '%;background-repeat:no-repeat;background-color:var(--img-bg);';
   }
+  // 优先复用 assets/app.js 的 window.cropBgStyle 单一真相源；独立/无 app.js 环境保留自包含实现（H1 去重）
+  if (typeof window !== 'undefined' && typeof window.cropBgStyle === 'function') cropBgStyle = window.cropBgStyle;
 
   // —— 品牌徽标（导出用）：跟随「设置」里上传的 LOGO 及其裁剪，无则回退红底白 "S" ——
   // 与 assets/app.js 的 logoBgStyle 同源：crop = {x,y,w,h} 归一化矩形（x/y 左上角占比，w/h 宽高占比）。
@@ -318,7 +327,7 @@
     var canvas = document.createElement('canvas');
     canvas.width = THUMB_W; canvas.height = THUMB_H;
     var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#EDE4D3';
+    ctx.fillStyle = resolveImgBg();
     ctx.fillRect(0, 0, THUMB_W, THUMB_H);
     var iw = img.naturalWidth || img.width || 0;
     var ih = img.naturalHeight || img.height || 0;
@@ -511,7 +520,7 @@
     var C = {
       bg: '#F5F0E6', surface: '#FBF7EE', ink: '#3A2E26', desc: '#5C4F45', muted: '#A88A5E',
       primary: '#B23A2E', primaryDeep: '#8F2A20', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6', line: 'rgba(58,46,38,.10)',
-      imgBg: '#EDE4D3'
+      imgBg: resolveImgBg()
     };
     var FS = FONT_SERIF;
     var FK = '&quot;KaiTi&quot;, &quot;STKaiti&quot;, &quot;楷体&quot;, serif';
@@ -1120,7 +1129,7 @@
     var C = {
       bg: '#F5F0E6', surface: '#FBF7EE', ink: '#3A2E26', muted: '#A88A5E',
       primary: '#B23A2E', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6',
-      line: 'rgba(58,46,38,.10)', imgBg: '#EDE4D3'
+      line: 'rgba(58,46,38,.10)', imgBg: resolveImgBg()
     };
     var FS = FONT_SERIF, FN = FONT_SANS;
     var FK = '&quot;KaiTi&quot;, &quot;STKaiti&quot;, &quot;楷体&quot;, serif';
@@ -1434,7 +1443,7 @@
     var C = {
       bg: '#F5F0E6', surface: '#FBF7EE', ink: '#3A2E26', desc: '#5C4F45', muted: '#A88A5E',
       primary: '#B23A2E', primaryDeep: '#8F2A20', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6',
-      line: 'rgba(58,46,38,.10)', imgBg: '#EDE4D3'
+      line: 'rgba(58,46,38,.10)', imgBg: resolveImgBg()
     };
     var FS = FONT_SERIF, FN = FONT_SANS;
     var FK = '&quot;KaiTi&quot;, &quot;STKaiti&quot;, &quot;楷体&quot;, serif';

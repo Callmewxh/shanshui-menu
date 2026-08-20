@@ -32,12 +32,14 @@
       const sizeW = (100 / w).toFixed(3), sizeH = (100 / h).toFixed(3);
       const posX = (1 - w < 1e-4) ? '0' : (x / (1 - w) * 100).toFixed(2);
       const posY = (1 - h < 1e-4) ? '0' : (y / (1 - h) * 100).toFixed(2);
-      return `background-image:url('${d.image}');background-size:${sizeW}% ${sizeH}%;background-position:${posX}% ${posY}%;background-repeat:no-repeat;background-color:#EDE4D3;`;
+      return `background-image:url('${d.image}');background-size:${sizeW}% ${sizeH}%;background-position:${posX}% ${posY}%;background-repeat:no-repeat;background-color:var(--img-bg);`;
     }
     // 旧模型 {y} / 无 crop：cover + 垂直平移（向后兼容）
     const y = (c && typeof c.y === 'number') ? c.y : 50;
-    return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:#EDE4D3;`;
+    return `background-image:url('${d.image}');background-size:cover;background-position:50% ${y}%;background-repeat:no-repeat;background-color:var(--img-bg);`;
   };
+  // 单一裁剪真相源：导出引擎 custom.js 复用此函数，杜绝展示/导出裁切漂移（H1 去重）
+  if (typeof window !== 'undefined') window.cropBgStyle = cropBg;
   // 统一展示：所有有图窗口（点菜页/详情/菜品库/菜单/选择器）共用同一裁剪渲染，保证所见一致
   const dishCropThumb = (d) => `<div class="cropimg" style="${cropBg(d)}"></div>`;
   const defaultCrop = () => ({ x: 0.1667, y: 0.1667, w: 0.6667 });  // 居中、约 150% 缩放
@@ -342,6 +344,14 @@
   const closeModal = () => {
     $('#modal').hidden = true;
     const app = document.querySelector('.app'); if (app) app.classList.remove('chrome-hidden');
+  };
+  window.setMode = setMode;        // 暴露给沉浸 pad 外壳：定制界面点击外部退出
+  window.closeModal = closeModal;  // 暴露给沉浸 pad 外壳：详情 30s 自动 / 上滑两次回封面
+  window.setBanquet = (id) => {    // 暴露给沉浸 pad 外壳：封面常驻宴席切换
+    state.banquet = id;
+    const b = banquet();
+    state.pkg = b && b.packages && b.packages.length ? b.packages[0].id : null;
+    renderAll();
   };
 
   // ================= 管理模式 =================
@@ -1861,15 +1871,6 @@
 
     // —— 设置折叠菜单（导出 / 导入 / 恢复默认） ——
     $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
-    // 皮肤主题切换（仅写 data-theme + 持久化，不影响其他功能）
-    const themeOpts = $('#themeOpts');
-    if (themeOpts) {
-      themeOpts.addEventListener('click', (e) => {
-        const b = e.target.closest('.theme-opt'); if (!b) return;
-        const t = b.getAttribute('data-theme');
-        Store.setTheme(t).then(() => { applyTheme(); toast('已切换皮肤：' + b.textContent.trim()); });
-      });
-    }
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
     $('#setRestore').addEventListener('click', () => {
@@ -1936,8 +1937,14 @@
       st.textContent = '连接中…'; st.className = 'webdav-status';
       WebDAV.saveFullConfig(collectWebDAVForm());
       const r = await WebDAV.testConnection();
-      st.textContent = r.msg;
-      st.className = 'webdav-status ' + (r.ok ? 'ok' : 'err');
+      let msg = r.msg, cls = r.ok ? 'ok' : 'err';
+      if (!r.ok && /fetch|network|Failed|timeout|ERR_/i.test(r.msg || '')) {
+        msg = '代理不可用：请确认 Cloudflare Worker 已部署且网络可达（' + r.msg + '）';
+      } else if (!r.ok) {
+        msg = '连接失败：检查服务器地址 / 令牌是否正确（' + r.msg + '）';
+      }
+      st.textContent = msg;
+      st.className = 'webdav-status ' + cls;
     });
     // 保存并返回
     const wfSave = $('#wfSave');
@@ -2346,12 +2353,41 @@
     } catch (e) {}
   }
 
-  // ---------- 皮肤主题：仅切换 data-theme 变量，骨架 / DOM / 业务逻辑不变 ----------
+  // ---------- 设备识别：平板自动启用 pad 沉浸外壳 ----------
+  // ⚠️ PAD 上线开关：false = 线上禁用沉浸 pad 外壳（平板/大屏触屏走经典版）。
+  //    pad 代码（index.html cover 层 / immersive.js / style.css body.shell-pad）完整保留，
+  //    日后修改 pad 端：本地预览用 ?shell=pad 强制打开；改好想上线时把本常量改为 true 再部署即可。
+  const PAD_ENABLED = false;
+  function detectDevice() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const maxTP = navigator.maxTouchPoints || 0;
+    const iPad = /iPad/.test(ua) || (platform === 'MacIntel' && maxTP > 1);
+    const isPhone = /iPhone|iPod|Android.*Mobile|Windows Phone/.test(ua);
+    const isAndroidTablet = /Android/.test(ua) && !/Mobile/.test(ua) && maxTP > 0;
+    const W = Math.max(window.innerWidth || 0, window.innerHeight || 0);
+    const H = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+    const isBigTouch = maxTP > 0 && W >= 1024 && H >= 600;
+    // URL 覆盖优先
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('shell') === 'pad') return 'tablet';
+    if (qs.get('shell') === 'classic') return 'desktop';
+    if (iPad || isAndroidTablet || isBigTouch) return 'tablet';
+    if (isPhone || (maxTP > 0 && W < 768)) return 'phone';
+    return 'desktop';
+  }
+
+  // ---------- 皮肤：固定默认 shanshui（四套可选皮肤已移除） ----------
   function applyTheme() {
-    const t = Store.getTheme();
+    const shell = detectDevice();
+    // PAD 上线开关：仅当 PAD_ENABLED 且设备为平板时才启用沉浸外壳；
+    // 显式 ?shell=pad 仍可强制打开（本地开发/日后调试用，与线上开关无关）
+    const qs = new URLSearchParams(location.search);
+    const padOn = (PAD_ENABLED && shell === 'tablet') || qs.get('shell') === 'pad';
+    document.body.classList.toggle('shell-pad', padOn);
+    // 仅默认新中式红（shanshui）皮肤；四套可选皮肤已移除
+    const t = 'shanshui';
     document.documentElement.setAttribute('data-theme', t);
-    const opts = document.querySelectorAll('#themeOpts .theme-opt');
-    for (const b of opts) b.classList.toggle('on', b.getAttribute('data-theme') === t);
   }
 
   // ---------- 启动 ----------
@@ -2359,8 +2395,9 @@
     try {
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
+    applyTheme();   // 先识别设备 + 设置 body.shell-pad + 应用皮肤
     bindStatic();
-    applyTheme();   // 尽早套用皮肤，保证首屏即正确
+    applyTheme();   // 再刷一次皮肤按钮高亮，确保按钮事件已绑定后状态正确
     // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子
     // 拉取成功时 pullFromCloud 内部已渲染，避免首屏重复渲染；拉取失败再统一渲染种子
     let pulled = false;
@@ -2372,6 +2409,7 @@
     if (!pulled) renderAll();
     applyHeroPin();
     initImmersive();
+    if (window.initImmersiveShell) window.initImmersiveShell();
     handleDeepLink();
   });
 })();

@@ -13,7 +13,7 @@ const Store = (function () {
 
   const LS_KEY = 'ss_menu_v1'; // 沿用 v1 键名，load 时自动把旧版内嵌数据迁移为菜品库
   const BACKUP_KEY = 'ss_menu_v1_backup'; // 自动备份（防丢）：每次保存后同步一份带时间戳的副本到独立键
-  const THEME_KEY = 'ss_theme';           // 皮肤主题（四风格：shanshui / apple / glass / wabi）
+  const THEME_KEY = 'ss_theme';           // 皮肤主题（仅默认 shanshui；四套可选皮肤已移除）
 
   function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 

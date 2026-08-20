@@ -2,7 +2,7 @@
 // ⚠️ 每次发布新版本请同步 +1 本版本号（v7→v8→v9→…），并在 index.html 的 register 选项中保持 updateViaCache:'none'。
 //    原因：本系统纯静态部署，若 CACHE 键不变，已安装 PWA 的设备会一直跑缓存里的旧 app.js / custom.js，
 //    表现为「代码改了但设备上没反应」。版本号一变 → 激活时自动清掉旧缓存，设备下次打开即拉取最新代码。
-const CACHE = 'ss-menu-v16';
+const CACHE = 'ss-menu-v20';
 const ASSETS = [
   './',
   './index.html',

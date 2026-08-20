@@ -53,19 +53,20 @@
   .cover-ui .sub{font-size:14px;opacity:.9;margin-top:10px;}
   .cover-ui .price{font-size:30px;font-weight:700;margin-top:14px;}
   .cover-ui .price small{font-size:14px;font-weight:400;opacity:.85;margin-left:4px;}
-  .cover-pin{position:absolute;top:18px;right:20px;width:36px;height:36px;border-radius:6px;background:var(--seal);color:#F5F0E3;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;box-shadow:0 6px 16px rgba(158,59,46,.35);}
+  .cover-pin{position:absolute;top:18px;right:20px;min-width:48px;height:34px;padding:0 10px;border-radius:6px;background:var(--seal);color:#F5F0E3;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;letter-spacing:1px;box-shadow:0 6px 16px rgba(158,59,46,.35);}
   .dots{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:9px;z-index:6;}
   .dots i{width:8px;height:8px;border-radius:50%;background:rgba(245,240,227,.5);transition:.3s;}
   .dots i.on{background:#F5F0E3;width:22px;border-radius:4px;}
-  .hint-up{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);color:var(--paper-2);font-size:13px;opacity:.85;z-index:6;text-shadow:0 1px 8px rgba(40,36,28,.5);letter-spacing:1px;}
+  .hint-up{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);color:var(--paper-2);font-size:13px;opacity:0;transition:opacity .45s;z-index:6;text-shadow:0 1px 8px rgba(40,36,28,.5);letter-spacing:1px;}
+  .hint-up.show{opacity:.85;}
 
   /* 顶部把手 + 毛玻璃渐隐顶栏 */
   .pull-tab{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9;width:56px;height:6px;border-radius:3px;background:var(--gold);opacity:.55;cursor:pointer;}
   .chrome{position:absolute;top:0;left:0;right:0;z-index:8;
-    background:linear-gradient(180deg,rgba(245,240,227,.96) 0%,rgba(245,240,227,.82) 52%,rgba(245,240,227,0) 100%);
-    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-    transform:translateY(-100%);transition:transform .42s var(--ease);box-shadow:inset 0 1px 0 rgba(187,167,126,.45);}
-  .chrome.s1,.chrome.s2{transform:translateY(0);}
+    background:var(--paper-2);border-bottom:1px solid var(--gold);
+    transform:translateY(-100%);transition:transform .42s var(--ease);}
+  .chrome.s1{transform:translateY(-55%);}
+  .chrome.s2{transform:translateY(0);}
   .chrome-top{display:flex;align-items:center;gap:14px;padding:16px 22px 12px;}
   .seal{width:32px;height:32px;border-radius:5px;background:var(--seal);color:#F5F0E3;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;box-shadow:0 4px 12px rgba(158,59,46,.3);}
   .brand-name{font-size:16px;font-weight:600;letter-spacing:.5px;color:var(--ink);}
@@ -73,10 +74,13 @@
   .chrome.s2 .chrome-bottom{max-height:120px;opacity:1;padding:0 22px 18px;}
   .search{display:flex;align-items:center;gap:8px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:9px 16px;color:var(--muted);font-size:13px;margin-bottom:12px;}
   .search svg{opacity:.5}
-  .banquets{display:flex;gap:10px;flex-wrap:wrap;}
-  .bq{border:1px solid var(--green);background:var(--green-soft);color:var(--green-deep);border-radius:999px;padding:7px 16px;font-size:13px;cursor:pointer;font-family:var(--serif);transition:.2s;}
-  .bq:hover{background:var(--green);color:#F5F0E3;}
-  .bq.on{background:var(--green-deep);border-color:var(--green-deep);color:#F5F0E3;}
+  .banquet-select{position:relative;margin-left:auto;}
+  .bs-trigger{border:1px solid var(--green);background:var(--green-soft);color:var(--green-deep);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:var(--serif);display:flex;align-items:center;gap:6px;}
+  .bs-menu{position:absolute;top:calc(100% + 8px);left:0;z-index:20;background:var(--paper-2);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:140px;}
+  .bs-menu[hidden]{display:none;}
+  .bs-item{border:0;background:transparent;text-align:left;padding:9px 12px;border-radius:8px;font-size:13px;color:var(--ink);cursor:pointer;white-space:nowrap;font-family:var(--serif);}
+  .bs-item:hover{background:var(--green-soft);}
+  .bs-item.on{background:var(--green);color:#F5F0E3;}
 
   /* 菜品详情页（全屏） */
   .detail{position:absolute;inset:0;z-index:20;background:var(--paper);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");display:none;flex-direction:column;align-items:center;justify-content:center;animation:fade .35s var(--ease);}
@@ -115,7 +119,7 @@
       <div class="cover-ui" id="coverUi"></div>
       <div class="cover-pin" id="coverPin" title="当前宴席">婚</div>
       <div class="dots" id="dots"></div>
-      <div class="hint-up" id="hintUp">↑↑ 上滑两次查看菜单</div>
+      <div class="hint-up" id="hintUp">再上滑一次进入菜单</div>
     </div>
 
     <!-- 顶部把手 + 毛玻璃顶栏 -->
@@ -123,10 +127,10 @@
     <header class="chrome" id="chrome">
       <div class="chrome-top">
         <span class="seal">山</span><span class="brand-name">山水S酒店</span>
-      </div>
-      <div class="chrome-bottom">
-        <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>搜索菜品…</div>
-        <div class="banquets" id="banquets"></div>
+        <div class="banquet-select">
+          <button class="bs-trigger" id="bsTrigger" type="button"><span id="bsName">婚宴</span> ▾</button>
+          <div class="bs-menu" id="bsMenu" hidden></div>
+        </div>
       </div>
     </header>
 
@@ -184,11 +188,18 @@
     const p=pkgs[idx];coverUi.innerHTML=`<div class="kick">${banquets[curBanquet].kick}</div><h1>${p.title}</h1><div class="sub">${p.sub}</div><div class="price">${p.price}<small>/桌</small></div>`;
     menuLabel.textContent=`${curBanquet} · ${p.title}`;}
 
-  // 宴席选择按钮
-  Object.keys(banquets).forEach(b=>{const el=document.createElement('button');el.className='bq'+(b===curBanquet?' on':'');el.textContent=b;
-    el.onclick=e=>{e.stopPropagation();curBanquet=b;pkgs=banquets[b].pkgs;coverPin.textContent=banquets[b].seal;
-      [...banquetsEl.children].forEach(x=>x.classList.toggle('on',x.textContent===b));buildCarousel();startAuto();};
-    banquetsEl.appendChild(el);});
+  // 宴席选择（折叠下拉，放在名字旁）
+  const bsTrigger=document.getElementById('bsTrigger'),bsMenu=document.getElementById('bsMenu'),bsName=document.getElementById('bsName');
+  function buildBanquetMenu(){
+    bsMenu.innerHTML='';
+    Object.keys(banquets).forEach(b=>{const el=document.createElement('button');el.className='bs-item'+(b===curBanquet?' on':'');el.textContent=b;
+      el.onclick=e=>{e.stopPropagation();curBanquet=b;pkgs=banquets[b].pkgs;coverPin.textContent=b;bsName.textContent=b;
+        [...bsMenu.children].forEach(x=>x.classList.toggle('on',x.textContent===b));bsMenu.hidden=true;buildCarousel();startAuto();};
+      bsMenu.appendChild(el);});
+  }
+  bsTrigger.onclick=e=>{e.stopPropagation();bsMenu.hidden=!bsMenu.hidden;};
+  document.addEventListener('click',()=>{bsMenu.hidden=true;});
+  buildBanquetMenu();
 
   // 菜单（菜品网格）
   const menuBody=document.getElementById('menuBody');
@@ -201,13 +212,13 @@
     menuBody.appendChild(sec);});
 
   // 状态
-  let idx=0,stage=0,upStreak=0,lifted=false;
+  let idx=0,stage=0,upStreak=0,lifted=false,hintTimer=null;
   const cover=document.getElementById('cover'),chrome=document.getElementById('chrome'),hintUp=document.getElementById('hintUp');
   function applyChrome(){chrome.className='chrome'+(stage?' s'+stage:'');}
-  function enterMenu(){if(lifted)return;lifted=true;cover.classList.add('lifted');hintUp.style.display='none';stopAuto();}
-  function exitMenu(){lifted=false;cover.classList.remove('lifted');hintUp.style.display='';upStreak=0;stage=0;applyChrome();startAuto();}
+  function enterMenu(){if(lifted)return;lifted=true;cover.classList.add('lifted');hintUp.classList.remove('show');stopAuto();}
+  function exitMenu(){lifted=false;cover.classList.remove('lifted');upStreak=0;stage=0;applyChrome();startAuto();}
   buildCarousel();applyChrome();
-  coverPin.textContent=banquets[curBanquet].seal;
+  coverPin.textContent=curBanquet;
 
   // 自动连播
   let autoTimer=null;
@@ -227,23 +238,16 @@
     if(axis==='x'){if(sdx<-60)idx=Math.min(idx+1,pkgs.length-1);else if(sdx>60)idx=Math.max(idx-1,0);setSlide();}
     else if(axis==='y'){
       if(sdy>0){if(stage<2){stage++;applyChrome();}upStreak=0;chrome.style.transform='';}
-      else if(sdy<0){upStreak++;hintUp.textContent=upStreak>=1?'再上滑一次进入菜单':'↑↑ 上滑两次查看菜单';if(upStreak>=2)enterMenu();chrome.style.transform='';}
+      else if(sdy<0){upStreak++;if(upStreak===1){hintUp.textContent='再上滑一次进入菜单';hintUp.classList.add('show');if(hintTimer)clearTimeout(hintTimer);hintTimer=setTimeout(()=>hintUp.classList.remove('show'),6000);}else if(upStreak>=2){upStreak=0;enterMenu();}chrome.style.transform='';}
     }
     startAuto();axis=null;
   });
-  cover.addEventListener('wheel',e=>{if(lifted)return;e.preventDefault();
-    if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){if(stage>0){stage=0;applyChrome();}if(e.deltaX>0)idx=Math.min(idx+1,pkgs.length-1);else idx=Math.max(idx-1,0);setSlide();startAuto();return;}
-    if(e.deltaY>0){if(stage<2){stage++;applyChrome();}upStreak=0;}
-    else{if(stage>0){stage=0;applyChrome();}upStreak++;hintUp.textContent=upStreak>=1?'再上滑一次进入菜单':'↑↑ 上滑两次查看菜单';if(upStreak>=2)enterMenu();}
-  },{passive:false});
-
   // 详情/菜单：上滑返回封面
   const menu=document.getElementById('menu');
   let msx,msy,mdrag=false,maxis=null;
   menu.addEventListener('pointerdown',e=>{if(menu.scrollTop>0)return;mdrag=true;msx=e.clientX;msy=e.clientY;maxis=null;});
   menu.addEventListener('pointerup',e=>{if(!mdrag)return;mdrag=false;const dy=e.clientY-msy;if(maxis==='y'&&dy<-70&&menu.scrollTop<=0)exitMenu();});
   menu.addEventListener('pointermove',e=>{if(!mdrag)return;if(!maxis&&Math.abs(e.clientY-msy)>8)maxis='y';});
-  menu.addEventListener('wheel',e=>{if(e.deltaY<0&&menu.scrollTop<=0){e.preventDefault();exitMenu();}},{passive:false});
 
   // 把手 / 圆点
   document.getElementById('pullTab').onclick=()=>{if(lifted)return;if(stage<2){stage++;applyChrome();}upStreak=0;};

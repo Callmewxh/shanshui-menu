@@ -6,6 +6,11 @@ __*.js
 *.tmp
 .cache/
 
+# 调试探针与预览截图（非源码，归档于 tools/_archive/）
+tools/*.png
+tools/edge-*.js
+tools/_archive/
+
 # 系统 & 依赖
 .DS_Store
 node_modules/
