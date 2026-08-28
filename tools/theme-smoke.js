@@ -2,10 +2,11 @@
 // 复用 custom-order.test.js 的 jsdom 注入机制（runScripts:dangerously + 手动注入本地 JS）
 const fs = require('fs');
 const path = require('path');
-const jsdomPath = 'C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom';
-const { JSDOM, VirtualConsole } = require(jsdomPath);
+let jsdom;
+try { jsdom = require('jsdom'); } catch (_) { jsdom = require('C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom'); }
+const { JSDOM, VirtualConsole } = jsdom;
 
-const PROJ = 'E:/山水S酒店/菜单系统';
+const PROJ = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(PROJ, 'index.html'), 'utf8');
 
 let failures = 0;

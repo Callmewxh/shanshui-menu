@@ -12,14 +12,18 @@
 | `index.html` | 302 | 全部 DOM 结构：顶栏 / 点菜屏 / 管理屏 / 6 个弹窗 |
 | `assets/app.js` | 1782 | 全部交互逻辑（点菜端 + 管理端 + 手势 + 事件绑定） |
 | `assets/store.js` | 502 | 数据层：localStorage 读写、菜品库/菜单 CRUD、迁移、备份 |
-| `assets/custom.js` | ~1270 | **定制单 + 导出引擎**：自选菜品草案、A4 SVG 排版、栅格化、PDF 生成、**二维码分享 / 整份菜单多页 PDF** |
+| `assets/custom.js` | ~1270 | **定制单 + 导出引擎**：自选菜品草案、A4 SVG 排版、栅格化、PDF 生成、整份菜单多页 PDF |
 | `assets/style.css` | ~740 | 全部样式，含手机端 3 处 `@media` 适配 |
 | `assets/data.js` | 61 | 种子数据（仅新设备首次打开且云端拉取失败时用） |
-| `assets/qrcode.js` | — | **内置二维码库**（qrcode-generator 1.4.4，MIT，无外部依赖/离线可用），全局函数 `qrcode(0,'M')` |
+| `assets/qrcode.js` | — | 历史遗留库，当前页面不加载；远程分享能力已弃用，禁止重新接入 |
 | `assets/webdav.js` | — | WebDAV 同步（设置里的备份通道） |
-| `data/menu-config.json` | — | **已发布的真实菜单**（3.4 MB，含 base64 图），新设备首次打开自动拉取 |
-| `sw.js` | 40 | PWA Service Worker，网络优先。**改版本号要同步改 `CACHE`** |
+| `data/menu-config.json` | — | **已发布的真实菜单**（仅图片路径，不内嵌 base64），新设备首次打开自动拉取 |
+| `data/img/` | — | 已发布菜图；文件名按菜品 id，构建时自动加入 Service Worker 离线缓存 |
+| `sw.js` | 40 | PWA Service Worker，网络优先；`npm run build` 按核心文件内容自动生成 `CACHE` |
 | `tools/publish-menu.js` | 178 | 发布脚本：扫描下载目录最新导出 → 校验 → 覆盖 `data/menu-config.json` |
+| `tools/externalize-menu-images.js` | — | 一次性/手动迁移：把 JSON 中的 base64 菜图提取到 `data/img/` |
+
+配置顶层采用 schema v3：`tenant` 标识门店，`banquets/categories` 驱动业务选项，`revision/syncedRevision` 用于发布冲突检测。旧配置若含 `pitch/talkingPoint` 会在载入时清理，不进入展示界面。
 | `tools/render-package-preview.js` | — | 用**真实菜单数据**渲出整份菜单每页 SVG + 对照 HTML（人眼验收视觉保真） |
 
 ---
@@ -128,32 +132,29 @@ STATE = {
 | canvas → 单页 PDF | `canvasToPdfBlob` `buildPdfWithJpeg` |
 | 导出主流程 | `doExport` `openExport` `renderExpPreview` |
 
-### 二维码分享 / 整份菜单（本次新增）
+### 整份菜单导出
 
 | 功能 | 函数 | 说明 |
 |---|---|---|
-| 生成二维码 canvas | `makeQRCanvas(text, size)` | 容错级 M，四周留 4 模块静区；无 canvas 环境 resolve(null) |
-| 线上菜单深链 | `shareUrl(banquetId)` | `origin + pathname + ?banquet=xxx`（不用 hash，防扫码 App 截断） |
-| 烧码进导出物 | `burnQR(canvas, banquetId)` | 右下角 ~15%，白底 + 金线框 + 「扫码看菜单」字样 |
 | **多页 PDF** | `buildMultiPagePdf(pages)` | `pages=[{bytes,w,h}]`；1=Catalog、2=Pages，每页占 3 个对象（Page/Image/Contents） |
 | **单套餐一页 SVG** | `buildPackageSVG(banquetId, pkgId, k)` | 抬头「宴席菜单」、信息条 = 宴席名/套餐名/套餐价、4 列画册（与 `buildSVG` 同参数） |
-| **整份菜单导出** | `exportWholeMenu(banquetId, {withQr, scale})` | 每套餐一页 → 逐页栅格化 → 可选烧码 → 合成多页 PDF 下载 |
-| 分享二维码弹窗 | `showQrModal(url)` | 填 `#qrImg`/`#qrLink` 并展开 `#qrModal` |
+| **整份菜单导出** | `exportWholeMenu(banquetId, {scale})` | 每套餐一页 → 逐页栅格化 → 合成多页 PDF 下载 |
 | **总厨定制单（无图）** | `buildChefSVG()` `exportChef()` | 仅无图版；换菜/加菜直接在菜名后 inline 标注（`旧菜 ——→ 新菜`、`菜名（新增）`），主体为无图双栏清单 |
 
 > **内置加减计算器**：`#csCalc` = `基价(菜单原价) ＋ [输入]`；点击计算框光标落入 + 号后输入框，输入数字回车＝加、`-N` 回车＝减，结果作为新运行总价并清空输入框继续累加。基价存 `draft.total`，显示于 `#csCalcBase`；草案行新增 `swappedFromCn`(换前菜名) / `added`(新增) 字段，用于 `renderDishName` 生成 inline 换/加标注。**无图版(plain)、带图版(gallery/thumb)、总厨单(chef) 三版均通过 `renderDishName` 在菜名后 inline 标注**（`旧菜 ——→ 新菜` 箭头+新菜红字、`菜名（新增）` 新增红字），不再有顶部变更卡。导出菜单顶部英文（`SHANSHUI HOTEL` / `BANQUET ...` / `CHEF'S ORDER`）已全部移除。
 > **带图版渲染路径提醒**：`buildSVG` 中 `isPhoto = ver!=='plain'`，带图版走 `if(isPhoto)` 的 gallery 分支（原 `l.cn` 直出，现已改为调用 `renderDishName` 以显示换/加标注）；其后 `else if(isPhoto)` 的印章分类段分支为历史死代码（永不进入），不要在此处误改。
 **两个必须记住的坑：**
 1. `Store.resolvePackage()` **直接返回菜品数组**，不是 `{dishes:[...]}`。按对象取值会静默拿到空列表 → 导出页「有框无图」。
-2. 二维码里放的是**网址**不是菜单数据。整份菜单含图 3.4 MB，二维码上限仅 ~3 KB，物理上放不进去；放网址还顺带让客户永远看到线上最新版。
+2. 导出文件是唯一对外交付物；二维码、线上菜单网址与客人端深链均已弃用。
 
 ### 深链参数（`app.js` `handleDeepLink`）
 
 | 参数 | 作用 |
 |---|---|
-| `?banquet=wedding` | 打开即切到指定宴席（二维码默认指向） |
+| `?banquet=wedding` | 内部快速定位：打开即切到指定宴席 |
 | `?pkg=A1` | 再定位到指定套餐 |
-| `?export=pdf` | 打开后自动触发整份菜单 PDF 下载（扫码即下载，无需托管文件） |
+
+> `?guest=`、`?data=`、`?export=pdf` 已按内部工具产品定义移除，禁止恢复。
 
 ---
 

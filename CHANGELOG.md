@@ -3,7 +3,7 @@
 > 重建自 2026-08 代码审查，记录能力演进关键节点，便于跨设备 / 跨会话对齐版本。
 > 版本号即 `sw.js` 的 `CACHE = 'ss-menu-v[N]'`；**每次部署必须 +1**，否则已安装 PWA 不会拉取新代码。
 
-## 当前状态（v20，本次发布升 v20；工作树此前 v19、上次提交部署 v16）
+## 当前状态（已发布 v20 · 2026-08-20 GitHub 推送 + CloudStudio 部署；工作树此前 v19、上次提交部署 v16）
 - **数据规模**：56 道菜品 / 42 张图 / 5 宴席类型（wedding·baby·engagement·yearEnd·housewarming）/ 20 套餐。
 - **PWA**：`manifest.webmanifest` + `sw.js`（v20，网络优先 + 离线回退，fetch 带 `no-cache`）。注册 `updateViaCache:'none'`。
 - **皮肤**：仅默认新中式红（shanshui）；原 apple/glass/wabi/zhifou 四套可选皮肤及设置内切换器已于 2026-08-20 移除。

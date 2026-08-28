@@ -1,0 +1,14 @@
+{
+  "name": "shanshui-menu-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:cache",
+    "build:cache": "node tools/build-sw-cache.js",
+    "data:externalize": "node tools/externalize-menu-images.js",
+    "test": "node tools/run-tests.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

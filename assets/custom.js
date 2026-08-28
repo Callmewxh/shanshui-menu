@@ -7,7 +7,12 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
-  var CATS = ['凉菜', '主菜', '主食点心'];
+  // 分类与品牌名均数据驱动：优先读取 Store 的配置（运营可在设置中维护），
+  // 兜底回退到默认三分类，保证菜单未初始化时导出不报错。
+  function cats() {
+    return (typeof Store !== 'undefined' && Store.CATEGORIES && Store.CATEGORIES.length) ? Store.CATEGORIES : ['凉菜', '主菜', '主食点心'];
+  }
+  function cnNum(i) { return ['壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖', '拾'][i] || (i + 1); }
   var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
   // 解析当前皮肤的图片占位底色令牌（M2：避免硬编码导致非默认皮肤错位；导出取具体值）
   var resolveImgBg = function () {
@@ -84,6 +89,8 @@
       total: pkgPrice,
       basePrice: pkgPrice,   // 套餐原价，用于总厨单显示价格变化
       source: pkg ? (pkg.name || pkgId) : '',
+      originalLines: [],
+      removedLines: [],
       lines: dishes.map(function (d, i) {
         return {
           id: newLineId(),
@@ -100,6 +107,7 @@
         };
       })
     };
+    draft.originalLines = draft.lines.map(function (l) { return Object.assign({}, l, { crop: l.crop ? Object.assign({}, l.crop) : null }); });
     var t = $('#csType'), c = $('#csClient'), src = $('#csSource'), tot = $('#csTotal'), base = $('#csCalcBase');
     if (t) t.value = draft.type;
     if (c) c.value = draft.client;
@@ -114,7 +122,7 @@
     if (!body || !draft) return;
     body.innerHTML = '';
     var hasAny = false;
-    CATS.forEach(function (cat) {
+    cats().forEach(function (cat) {
       var lines = draft.lines.filter(function (l) { return l.cat === cat; });
       if (!lines.length) return;
       hasAny = true;
@@ -275,13 +283,30 @@
 
   // —— 导出 ——
   var expFmt = 'png';
+  var expPurpose = 'original';
+  var expLayout = 'A';
+  var expSize = 'a4';
   // 品牌名（从设置读取，fallback 默认值）
   function getBrandName() {
-    try { return localStorage.getItem('ss_brand_name') || '山水S酒店'; } catch(e) { return '山水S酒店'; }
+    try {
+      if (typeof Store !== 'undefined' && Store.TENANT && Store.TENANT.name) return Store.TENANT.name;
+      return localStorage.getItem('ss_brand_name') || '山水S酒店';
+    } catch (e) { return '山水S酒店'; }
   }
   function getExpVer() {
     var r = document.querySelector('input[name="expVer"]:checked');
     return r ? r.value : 'thumb';
+  }
+
+  function getExportLines() {
+    if (!draft) return [];
+    return expPurpose === 'original' && draft.originalLines ? draft.originalLines : draft.lines;
+  }
+
+  function getExportTitle() {
+    if (expPurpose === 'chef') return '厨房报价变更单';
+    if (expPurpose === 'updated') return '宴席菜单 · 更新版';
+    return '宴席菜单 · 原始版';
   }
 
   // 去重：检查 libId 是否已在草案中（excludeId 排除当前行，用于换菜场景）
@@ -517,7 +542,11 @@
     var m = function (mm) { return +(mm * MM * k).toFixed(2); };
     var PAGE_W = m(210), PAGE_H = m(297);
 
-    var C = {
+    var C = expLayout === 'B' ? {
+      bg: '#F8F6F1', surface: '#FFFFFF', ink: '#25221F', desc: '#5D5852', muted: '#8B8278',
+      primary: '#7E302B', primaryDeep: '#55201D', gold: '#A98B52', goldDeep: '#725D35', goldHair: '#D9D1C3', line: 'rgba(37,34,31,.12)',
+      imgBg: resolveImgBg()
+    } : {
       bg: '#F5F0E6', surface: '#FBF7EE', ink: '#3A2E26', desc: '#5C4F45', muted: '#A88A5E',
       primary: '#B23A2E', primaryDeep: '#8F2A20', gold: '#C2A15A', goldDeep: '#8A6D1F', goldHair: '#D8C7A6', line: 'rgba(58,46,38,.10)',
       imgBg: resolveImgBg()
@@ -581,10 +610,10 @@
       // 无图版：按分类段累计自然高度（段头9 + 间距2 + 行高8×N + 尾间距4）
       var rowHnat = 8, catHeadHnat = 9;
       var plainNat = 0;
-      for (var ci = 0; ci < CATS.length; ci++) {
+      for (var ci = 0; ci < cats().length; ci++) {
         var cr = 0;
         for (var di = 0; di < draft.lines.length; di++) {
-          if (draft.lines[di].cat === CATS[ci]) cr++;
+          if (draft.lines[di].cat === cats()[ci]) cr++;
         }
         if (cr) plainNat += (catHeadHnat + 2) + cr * rowHnat + 4;
       }
@@ -597,15 +626,15 @@
     // 外框
     parts.push('<rect x="' + m(8) + '" y="' + m(8) + '" width="' + (PAGE_W - 2 * m(8)) + '" height="' + (PAGE_H - 2 * m(8)) + '" rx="' + m(4) + '" fill="none" stroke="' + C.goldHair + '" stroke-width="' + m(0.4) + '"/>');
     // 顶部品牌条
-    parts.push('<rect x="0" y="0" width="' + PAGE_W + '" height="' + m(topBandH) + '" fill="' + C.primary + '"/>');
+    parts.push('<rect x="0" y="0" width="' + PAGE_W + '" height="' + m(topBandH) + '" fill="' + (expLayout === 'B' ? C.ink : C.primary) + '"/>');
     parts.push('<rect x="0" y="' + m(topBandH) + '" width="' + PAGE_W + '" height="' + m(0.8) + '" fill="' + C.gold + '"/>');
 
     // —— 抬头 ——
     var hy = PAD_T + 2;
     parts.push(brandMarkSvg(SX, hy, 13, 3, m, C, FS));
-    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2('山水S酒店') + '</text>');
+    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2(getBrandName()) + '</text>');
     var titleX = contentR - 44;
-    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.2) + '">宴席定制单</text>');
+    parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + (expLayout === 'B' ? FN : FK) + '" font-size="' + m(expLayout === 'B' ? 5.8 : 7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(expLayout === 'B' ? .3 : 1.2) + '">' + esc2(getExportTitle()) + '</text>');
 
     // —— 信息条：左(客户，未填则不写) / 中(菜单名称，放大) / 右(红色价格，不框) ——
     var iy = hy + 15, infoH = 17;
@@ -671,7 +700,7 @@
       var cardHnat = padY * 2 + thumbHnat + metaHnat;
 
       // 各分类段（含菜品为空则跳过）
-      var segs = CATS.map(function (cat) {
+      var segs = cats().map(function (cat) {
         var ls = draft.lines.filter(function (l) { return l.cat === cat; });
         return ls.length ? { cat: cat, lines: ls, nRow: Math.ceil(ls.length / pcols) } : null;
       }).filter(Boolean);
@@ -770,10 +799,10 @@
       });
     } else {
       // 新版无图：双栏宴席菜单。减少表格感，让菜名成为主视觉。
-      var segs = CATS.map(function (cat) {
+      var segs = cats().map(function (cat) {
         return { cat: cat, rows: draft.lines.filter(function (l) { return l.cat === cat; }) };
       }).filter(function (s) { return s.rows.length; });
-      var CN = { '凉菜': '壹', '主菜': '贰', '主食点心': '叁' };
+      var CN = {}; cats().forEach(function (c, i) { CN[c] = cnNum(i); });
       var plainCols = 2, plainGap = 8, plainW = (contentW - plainGap) / 2;
       var plainX = [SX, SX + plainW + plainGap];
       var plainY = [secTop, secTop];
@@ -825,6 +854,58 @@
 
     parts.push('</svg>');
     return parts.join('');
+  }
+
+  // 手机长图：拟物化餐厅小票。宽度固定 750px，高度随菜品数量自动增长。
+  function buildMobileSVG(ver) {
+    var lines = draft.lines || [];
+    var photo = ver !== 'plain';
+    var groups = cats().map(function (cat) {
+      return { cat: cat, rows: lines.filter(function (l) { return l.cat === cat; }) };
+    }).filter(function (g) { return g.rows.length; });
+    var W = 750, pad = 58, rowH = photo ? 154 : 78, groupHead = 58;
+    var bodyH = groups.reduce(function (n, g) { return n + groupHead + g.rows.length * rowH + 22; }, 0);
+    if (expPurpose === 'chef' && draft.removedLines && draft.removedLines.length) bodyH += 74 + draft.removedLines.length * 56;
+    var H = 400 + bodyH + 110;
+    var C = expLayout === 'B'
+      ? { paper:'#FCFBF7', ink:'#282522', muted:'#8A8178', primary:'#74322E', gold:'#A98B52', line:'#DED8CF' }
+      : { paper:'#F8F1E5', ink:'#392E27', muted:'#9B8061', primary:'#B23A2E', gold:'#C2A15A', line:'#DDD0BA' };
+    var p = [];
+    p.push('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">');
+    p.push('<defs><filter id="s"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-opacity=".12"/></filter><pattern id="grain" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="3" r=".7" fill="#000" opacity=".025"/></pattern></defs>');
+    p.push('<rect width="'+W+'" height="'+H+'" fill="#DED8CE"/>');
+    p.push('<path d="M25 20 H725 V'+(H-22)+' L710 '+(H-10)+' 695 '+(H-22)+' 680 '+(H-10)+' 665 '+(H-22)+' 650 '+(H-10)+' 635 '+(H-22)+' 620 '+(H-10)+' 605 '+(H-22)+' 590 '+(H-10)+' 575 '+(H-22)+' 560 '+(H-10)+' 545 '+(H-22)+' 530 '+(H-10)+' 515 '+(H-22)+' 500 '+(H-10)+' 485 '+(H-22)+' 470 '+(H-10)+' 455 '+(H-22)+' 440 '+(H-10)+' 425 '+(H-22)+' 410 '+(H-10)+' 395 '+(H-22)+' 380 '+(H-10)+' 365 '+(H-22)+' 350 '+(H-10)+' 335 '+(H-22)+' 320 '+(H-10)+' 305 '+(H-22)+' 290 '+(H-10)+' 275 '+(H-22)+' 260 '+(H-10)+' 245 '+(H-22)+' 230 '+(H-10)+' 215 '+(H-22)+' 200 '+(H-10)+' 185 '+(H-22)+' 170 '+(H-10)+' 155 '+(H-22)+' 140 '+(H-10)+' 125 '+(H-22)+' 110 '+(H-10)+' 95 '+(H-22)+' 80 '+(H-10)+' 65 '+(H-22)+' 50 '+(H-10)+' 25 '+(H-22)+' Z" fill="'+C.paper+'" filter="url(#s)"/>');
+    p.push('<rect x="25" y="20" width="700" height="'+(H-42)+'" fill="url(#grain)"/>');
+    p.push('<text x="375" y="82" text-anchor="middle" font-family="'+FONT_SERIF+'" font-size="34" font-weight="700" fill="'+C.primary+'">'+esc(getBrandName())+'</text>');
+    p.push('<text x="375" y="124" text-anchor="middle" font-family="'+FONT_SANS+'" font-size="18" letter-spacing="4" fill="'+C.muted+'">'+esc(getExportTitle())+'</text>');
+    p.push('<line x1="'+pad+'" y1="154" x2="'+(W-pad)+'" y2="154" stroke="'+C.gold+'" stroke-width="2" stroke-dasharray="8 7"/>');
+    p.push('<text x="'+pad+'" y="198" font-family="'+FONT_SANS+'" font-size="20" fill="'+C.muted+'">宴会类型</text><text x="'+(W-pad)+'" y="198" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="24" fill="'+C.ink+'">'+esc(draft.type||'宴席')+'</text>');
+    p.push('<text x="'+pad+'" y="238" font-family="'+FONT_SANS+'" font-size="20" fill="'+C.muted+'">客户 / 贵宾</text><text x="'+(W-pad)+'" y="238" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="24" fill="'+C.ink+'">'+esc(draft.client||'—')+'</text>');
+    p.push('<text x="'+pad+'" y="278" font-family="'+FONT_SANS+'" font-size="20" fill="'+C.muted+'">菜单名称</text><text x="'+(W-pad)+'" y="278" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="24" fill="'+C.ink+'">'+esc(draft.source||draft.type||'菜单')+'</text>');
+    p.push('<rect x="'+pad+'" y="302" width="'+(W-pad*2)+'" height="66" rx="14" fill="'+C.primary+'"/><text x="'+(pad+22)+'" y="344" font-family="'+FONT_SANS+'" font-size="18" fill="#fff" opacity=".8">本单总价</text><text x="'+(W-pad-20)+'" y="347" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="34" font-weight="700" fill="#fff">¥'+esc(draft.total||'—')+' / 桌</text>');
+    var y = 402, seq = 0;
+    groups.forEach(function (g) {
+      p.push('<text x="'+pad+'" y="'+(y+34)+'" font-family="'+FONT_SERIF+'" font-size="25" font-weight="700" fill="'+C.primary+'">'+esc(g.cat)+'</text><text x="'+(W-pad)+'" y="'+(y+34)+'" text-anchor="end" font-family="'+FONT_SANS+'" font-size="17" fill="'+C.muted+'">'+g.rows.length+' 道</text>');
+      y += groupHead;
+      g.rows.forEach(function (l) {
+        seq++;
+        if (photo) {
+          var src=l._thumb||l.image, clip='mob_'+seq;
+          p.push('<clipPath id="'+clip+'"><rect x="'+pad+'" y="'+y+'" width="156" height="117" rx="12"/></clipPath><rect x="'+pad+'" y="'+y+'" width="156" height="117" rx="12" fill="'+resolveImgBg()+'"/>');
+          if(src)p.push('<image href="'+src+'" xlink:href="'+src+'" x="'+pad+'" y="'+y+'" width="156" height="117" preserveAspectRatio="xMidYMid slice" clip-path="url(#'+clip+')"/>');
+          p.push('<text x="'+(pad+178)+'" y="'+(y+40)+'" font-family="'+FONT_SERIF+'" font-size="24" font-weight="600" fill="'+C.ink+'">'+esc(l.cn||'未命名菜品')+'</text>');
+          p.push('<text x="'+(pad+178)+'" y="'+(y+77)+'" font-family="'+FONT_SANS+'" font-size="18" fill="'+(l.note?C.primary:C.muted)+'">备注：'+esc(l.note||'—')+'</text>');
+        } else {
+          var mark=l.swappedFromCn?'原 '+l.swappedFromCn+' → '+l.cn:(l.added?'新增 · '+l.cn:l.cn);
+          p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">'+String(seq).padStart(2,'0')+'</text><text x="'+(pad+54)+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="25" fill="'+(l.swappedFromCn||l.added?C.primary:C.ink)+'">'+esc(mark)+'</text>');
+          if(l.note)p.push('<text x="'+(pad+54)+'" y="'+(y+59)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">备注：'+esc(l.note)+'</text>');
+        }
+        p.push('<line x1="'+pad+'" y1="'+(y+rowH-14)+'" x2="'+(W-pad)+'" y2="'+(y+rowH-14)+'" stroke="'+C.line+'"/>'); y += rowH;
+      }); y += 22;
+    });
+    if(expPurpose==='chef'&&draft.removedLines&&draft.removedLines.length){p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="23" font-weight="700" fill="'+C.primary+'">删减菜品</text>');y+=64;draft.removedLines.forEach(function(l){p.push('<text x="'+(pad+16)+'" y="'+(y+26)+'" font-family="'+FONT_SERIF+'" font-size="22" fill="'+C.muted+'" text-decoration="line-through">'+esc(l.cn)+'</text>');y+=56;});}
+    p.push('<line x1="'+pad+'" y1="'+(H-86)+'" x2="'+(W-pad)+'" y2="'+(H-86)+'" stroke="'+C.gold+'" stroke-dasharray="8 7"/><text x="375" y="'+(H-52)+'" text-anchor="middle" font-family="'+FONT_SANS+'" font-size="15" fill="'+C.muted+'">共 '+lines.length+' 道 · 本单仅作报价参考，菜品请以实物为主</text></svg>');
+    return p.join('');
   }
 
   // 字号档位 UI 已从定制导出弹窗移除，固定使用标准比例 1（内部 buildSVG 仍支持显式传 k 缩放）
@@ -954,117 +1035,10 @@
   }
 
   // ============================================================
-  // 二维码分享 + 整份宴席菜单多页 PDF 导出
-  // 设计取舍：二维码里放「线上菜单网址」而非菜单数据本身
-  //   —— 整份菜单含图约 3.4MB，二维码上限仅 ~3KB，物理上放不进去；
-  //      放网址后客户扫码看到的永远是线上最新版，且天然支持深链（?banquet=/?pkg=/?export=pdf）。
+  // 整份宴席菜单多页 PDF 导出（每套餐一页）
+  // 说明：二维码分享 / 线上深链已按《产品背景与需求定义》v1 移除——
+  //   本产品为内部销售工具，导出物是离线自包含 PNG/PDF 文件，应用外交付，无任何远程链接。
   // ============================================================
-
-  // 生成二维码到 canvas。qrcode(0,'M') 由库自动选版本，容错级 M（约 15%，印在纸上够用）
-  // jsdom 等无 canvas 后端的环境会 resolve(null)，调用方需容忍。
-  function makeQRCanvas(text, size) {
-    return new Promise(function (resolve) {
-      try {
-        if (typeof qrcode !== 'function') { resolve(null); return; }
-        var qr = qrcode(0, 'M');
-        qr.addData(String(text));
-        qr.make();
-        var count = qr.getModuleCount();
-        var px = Math.max(1, Math.floor((size || 480) / (count + 8)));  // 四周留 4 模块静区
-        var quiet = px * 4;
-        var side = px * count + quiet * 2;
-        var cv = document.createElement('canvas');
-        cv.width = side; cv.height = side;
-        var ctx = cv.getContext('2d');
-        if (!ctx) { resolve(null); return; }
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, side, side);
-        ctx.fillStyle = '#000000';
-        for (var r = 0; r < count; r++) {
-          for (var c = 0; c < count; c++) {
-            if (qr.isDark(r, c)) ctx.fillRect(quiet + c * px, quiet + r * px, px, px);
-          }
-        }
-        resolve(cv);
-      } catch (e) { resolve(null); }
-    });
-  }
-
-  // 线上菜单深链：origin + pathname + ?banquet=xxx（不带 hash，避免部分扫码 App 截断）
-  function shareUrl(banquetId) {
-    try {
-      return location.origin + location.pathname + '?banquet=' + encodeURIComponent(banquetId || 'wedding');
-    } catch (e) {
-      return '?banquet=' + (banquetId || 'wedding');
-    }
-  }
-
-  // 客人专享深链：扫码只能查看/下载当前套餐，进不了管理/定制（受限单套餐界面）
-  function guestUrl(banquetId, pkgId) {
-    try {
-      return location.origin + location.pathname + '?guest=1&banquet=' +
-        encodeURIComponent(banquetId || 'wedding') + '&pkg=' + encodeURIComponent(pkgId || '');
-    } catch (e) {
-      return '?guest=1&banquet=' + (banquetId || 'wedding') + '&pkg=' + (pkgId || '');
-    }
-  }
-  // 把当前定制草案（改价 / 换菜 / 增删）编码进客人深链，让扫码端看到的就是修改后的版本
-  function guestUrlForDraft() {
-    if (!draft) return guestUrl(state.banquet, state.pkg);
-    var payload = {
-      v: 1,
-      id: draft.pkgId,
-      n: draft.source || draft.pkgId,
-      pr: draft.total,
-      d: 0,
-      ds: draft.lines.map(function (l) { return l.libId; }).filter(Boolean),
-      ov: null
-    };
-    try {
-      return location.origin + location.pathname + '?guest=1&banquet=' +
-        encodeURIComponent(draft.banquetId || 'wedding') + '&pkg=' + encodeURIComponent(draft.pkgId || '') +
-        '&data=' + encodeURIComponent(JSON.stringify(payload));
-    } catch (e) {
-      return guestUrl(draft.banquetId, draft.pkgId);
-    }
-  }
-  function showGuestQr() {
-    if (!draft) return;
-    showQrModal(guestUrlForDraft());
-  }
-
-  // 把二维码烧进已栅格化的 canvas 右下角（白底留白，保证扫码识别率）
-  function burnQR(canvas, banquetId) {
-    return new Promise(function (resolve) {
-      if (!canvas) { resolve(canvas); return; }
-      var target = Math.round(Math.min(canvas.width, canvas.height) * 0.15);
-      makeQRCanvas(shareUrl(banquetId), target * 2).then(function (qrCv) {
-        if (!qrCv) { resolve(canvas); return; }
-        try {
-          var ctx = canvas.getContext('2d');
-          if (!ctx) { resolve(canvas); return; }
-          var pad = Math.round(target * 0.10);
-          var margin = Math.round(Math.min(canvas.width, canvas.height) * 0.028);
-          var boxW = target + pad * 2;
-          var capH = Math.round(target * 0.20);
-          var x = canvas.width - margin - boxW;
-          var y = canvas.height - margin - boxW - capH;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(x, y, boxW, boxW + capH);
-          ctx.strokeStyle = '#D8C7A6';
-          ctx.lineWidth = Math.max(1, Math.round(target * 0.012));
-          ctx.strokeRect(x, y, boxW, boxW + capH);
-          ctx.drawImage(qrCv, x + pad, y + pad, target, target);
-          ctx.fillStyle = '#8A6D1F';
-          ctx.font = '600 ' + Math.round(capH * 0.62) + 'px "PingFang SC", "Microsoft YaHei", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('扫码看菜单', x + boxW / 2, y + boxW + capH * 0.72);
-          ctx.textAlign = 'start';
-        } catch (e) { /* 烧码失败不影响主体导出 */ }
-        resolve(canvas);
-      });
-    });
-  }
 
   // 多页 PDF：pages = [{bytes: JPEG字节, w, h}]
   // 对象编号规则：1=Catalog，2=Pages，之后每页占 3 个对象（Page / Image XObject / Contents）
@@ -1119,7 +1093,7 @@
   }
 
   // 单套餐一页 A4 SVG（复用定制单的设计语言：宣纸底 + 金线外框 + 品牌条 + 4 列画册网格）
-  // 与 buildSVG 的差别：抬头写「宴席菜单」、信息条中部写套餐名、右侧写套餐价格，页脚提示扫码。
+  // 与 buildSVG 的差别：抬头写「宴席菜单」、信息条中部写套餐名、右侧写套餐价格，页脚为报价提示语。
   function buildPackageSVG(banquetId, pkgId, k) {
     k = k || 1;
     var MM = 5.90476;
@@ -1159,7 +1133,7 @@
     // —— 抬头 ——
     var hy = PAD_T + 2;
     parts.push(brandMarkSvg(SX, hy, 13, 3, m, C, FS));
-    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc('山水S酒店') + '</text>');
+    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc(getBrandName()) + '</text>');
     var titleX = contentR - 44;
     parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.2) + '">宴席菜单</text>');
 
@@ -1219,10 +1193,9 @@
     return parts.join('');
   }
 
-  // 整份宴席菜单 → 多页 PDF（每套餐一页），可选每页烧入二维码
+  // 整份宴席菜单 → 多页 PDF（每套餐一页）；opts.pkgId 传单个套餐 id 时只导出该套餐
   function exportWholeMenu(banquetId, opts) {
     opts = opts || {};
-    var withQr = opts.withQr === true;   // 默认不烧二维码（导出物保持干净、客人界面也不带码）
     var k = opts.scale || 1;
     var b = Store ? Store.getBanquet(banquetId) : null;
     if (!b || !b.packages || !b.packages.length) {
@@ -1272,36 +1245,17 @@
         var svg = buildPackageSVG(banquetId, pkg.id, k);
         rasterize(svg, function (canvas) {
           if (!canvas) { next(); return; }
-          var after = function (cv) {
-            try {
-              var jpg = cv.toDataURL('image/jpeg', 0.92);
-              var bin = atob(jpg.split(',')[1]);
-              var bytes = new Uint8Array(bin.length);
-              for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-              pages.push({ bytes: bytes, w: cv.width, h: cv.height });
-            } catch (e) { /* 单页失败则跳过该页 */ }
-            next();
-          };
-          if (withQr) burnQR(canvas, banquetId).then(after);
-          else after(canvas);
+          try {
+            var jpg = canvas.toDataURL('image/jpeg', 0.92);
+            var bin = atob(jpg.split(',')[1]);
+            var bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            pages.push({ bytes: bytes, w: canvas.width, h: canvas.height });
+          } catch (e) { /* 单页失败则跳过该页 */ }
+          next();
         });
       }
       next();
-    });
-  }
-
-  // 分享二维码弹窗
-  function showQrModal(url) {
-    var modal = document.getElementById('qrModal');
-    var img = document.getElementById('qrImg');
-    var link = document.getElementById('qrLink');
-    if (link) link.textContent = url;
-    makeQRCanvas(url, 480).then(function (cv) {
-      if (img) {
-        if (cv) { try { img.src = cv.toDataURL('image/png'); } catch (e) {} }
-        else img.removeAttribute('src');
-      }
-      if (modal) modal.hidden = false;
     });
   }
 
@@ -1365,10 +1319,16 @@
     }
     var ver = getExpVer();
     var k = getExpScale();
-    var base = safeName(draft.client) + '-' + safeName(draft.type) + '-定制单';
+    var purposeName = expPurpose === 'chef' ? '厨房报价变更单' : (expPurpose === 'updated' ? '客户更新版' : '原始菜单');
+    var sizeName = expSize === 'mobile' ? '手机长图' : 'A4';
+    var base = safeName(draft.client) + '-' + safeName(draft.type) + '-' + purposeName + '-' + sizeName + '-' + expLayout;
+    var exportLines = getExportLines();
     // 预加载所有菜品图片获取原始尺寸，确保 SVG 裁切与菜品库一致
-    preloadImages(draft.lines, function () {
-      var svg = buildSVG(ver, k);
+    preloadImages(exportLines, function () {
+      var liveLines = draft.lines;
+      draft.lines = exportLines;
+      var svg = expSize === 'mobile' ? buildMobileSVG(ver) : buildSVG(ver, k);
+      draft.lines = liveLines;
       rasterize(svg, function (canvas) {
         if (!canvas) { alert('导出失败，请重试'); return; }
         var output = function (cv) {
@@ -1412,13 +1372,17 @@
     var ver = getExpVer();
     var k = getExpScale();
     container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">渲染预览中…</div>';
-    preloadImages(draft.lines, function () {
-      var svg = buildSVG(ver, k);
+    var exportLines = getExportLines();
+    preloadImages(exportLines, function () {
+      var liveLines = draft.lines;
+      draft.lines = exportLines;
+      var svg = expSize === 'mobile' ? buildMobileSVG(ver) : buildSVG(ver, k);
+      draft.lines = liveLines;
       container.innerHTML = svg;
       // 预览：按高度等比缩放，保证整页 A4 完整可见（不裁切、不压扁）
       var svgs = container.querySelector('svg');
       if (svgs) {
-        svgs.style.height = '260px';
+        svgs.style.height = expSize === 'mobile' ? '360px' : '260px';
         svgs.style.width = 'auto';
         svgs.style.maxWidth = '100%';
         svgs.style.display = 'block';
@@ -1474,7 +1438,7 @@
     // —— 抬头 ——
     var hy = PAD_T + 2;
     parts.push(brandMarkSvg(SX, hy, 13, 3, m, C, FS));
-    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2('山水S酒店') + '</text>');
+    parts.push('<text x="' + m(SX + 17) + '" y="' + m(hy + 9) + '" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.primary + '" letter-spacing="' + m(0.8) + '">' + esc2(getBrandName()) + '</text>');
     var titleX = contentR - 44;
     parts.push('<text x="' + m(titleX) + '" y="' + m(hy + 9) + '" text-anchor="start" font-family="' + FK + '" font-size="' + m(7.4) + '" font-weight="700" fill="' + C.ink + '" letter-spacing="' + m(1.2) + '">总厨定制单</text>');
 
@@ -1513,7 +1477,7 @@
     var menuTop = secTop;
     var availH = footerY - 4 - menuTop - BOTTOM_MARGIN;
 
-    var segs = CATS.map(function (cat) {
+    var segs = cats().map(function (cat) {
       return { cat: cat, rows: draft.lines.filter(function (l) { return l.cat === cat; }) };
     }).filter(function (s) { return s.rows.length; });
     var CN = { '凉菜': '壹', '主菜': '贰', '主食点心': '叁' };
@@ -1621,6 +1585,7 @@
             render();
           }, line.id);
         } else if (act === 'del') {
+          if (!line.added) draft.removedLines.push(Object.assign({}, line));
           draft.lines = draft.lines.filter(function (l) { return l.id !== id; });
           render();
         }
@@ -1670,8 +1635,6 @@
     if (expBtn) expBtn.addEventListener('click', function () { closeExpMenu(); openExport(); });
     var expConfirm = $('#expConfirm');
     if (expConfirm) expConfirm.addEventListener('click', function () { doExport(); closeExport(); });
-    var expShareQr = $('#expShareQr');
-    if (expShareQr) expShareQr.addEventListener('click', showGuestQr);
 
     // 导出下拉（存为图片 / 导出给总厨）
     var expCaret = $('#csExportCaret');
@@ -1716,6 +1679,28 @@
       });
     });
 
+    function activateChoice(selector, current) {
+      $$(selector).forEach(function (b) { b.classList.toggle('on', b === current); });
+    }
+    $$('[data-exp-purpose]').forEach(function (b) { b.addEventListener('click', function () {
+      expPurpose = b.getAttribute('data-exp-purpose') || 'original';
+      activateChoice('[data-exp-purpose]', b);
+      var hint = $('#expPurposeHint');
+      if (hint) hint.textContent = expPurpose === 'chef' ? '突出换菜、新增、删减和备注，供厨房核价。' : (expPurpose === 'updated' ? '导出客户确认后的最新菜单。' : '导出修改前的标准菜单，便于客户留档。');
+      if (expPurpose === 'chef') {
+        var plain = document.querySelector('input[name="expVer"][value="plain"]');
+        if (plain) { plain.checked = true; activateChoice('.exp-opt', plain.closest('.exp-opt')); }
+      }
+      renderExpPreview();
+    }); });
+    $$('[data-exp-layout]').forEach(function (b) { b.addEventListener('click', function () { expLayout=b.getAttribute('data-exp-layout')||'A'; activateChoice('[data-exp-layout]',b); renderExpPreview(); }); });
+    $$('[data-exp-size]').forEach(function (b) { b.addEventListener('click', function () {
+      expSize=b.getAttribute('data-exp-size')||'a4'; activateChoice('[data-exp-size]',b);
+      var pdf=$('.exp-fmt[data-fmt="pdf"]'); if(pdf) pdf.disabled=expSize==='mobile';
+      if(expSize==='mobile'&&expFmt==='pdf'){expFmt='png';var png=$('.exp-fmt[data-fmt="png"]');if(png){activateChoice('.exp-fmt',png);}}
+      renderExpPreview();
+    }); });
+
     // 字号档位已从定制导出弹窗移除，保留空槽位不绑定任何按钮
 
     // 弹窗关闭（data-close）
@@ -1736,16 +1721,15 @@
 
   window.CustomOrder = {
     enter: enter, render: render,
-    // —— 二维码分享 / 整份菜单导出（供 app.js 调用）——
-    makeQRCanvas: makeQRCanvas, shareUrl: shareUrl, guestUrl: guestUrl, guestUrlForDraft: guestUrlForDraft, burnQR: burnQR,
+    // —— 整份菜单导出（供 app.js 调用；二维码分享已按产品定义移除）——
     buildPackageSVG: buildPackageSVG, buildMultiPagePdf: buildMultiPagePdf,
-    exportWholeMenu: exportWholeMenu, showQrModal: showQrModal,
+    exportWholeMenu: exportWholeMenu,
     // —— 总厨单（无图 + 变更说明）——
     buildChefSVG: buildChefSVG, exportChef: exportChef,
     // —— 下载（供测试钩子）——
     downloadBlob: downloadBlob, isIOS: isIOS, isWeChat: isWeChat,
     // —— 测试钩子 ——
-    _buildSVG: buildSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _buildChefSVG: buildChefSVG,
+    _buildSVG: buildSVG, _buildMobileSVG: buildMobileSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _buildChefSVG: buildChefSVG,
     _setTotal: function (v) { if (draft) { draft.total = v; var b = document.getElementById('csCalcBase'); if (b) b.textContent = v || '0'; } },
     _openExport: openExport, _preloadImages: preloadImages, _getDraft: function () { return draft; },
     getDraftBanquet: function () { return draft ? draft.banquetId : null; },

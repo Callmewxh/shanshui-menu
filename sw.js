@@ -1,8 +1,7 @@
 // 山水S酒店 · 菜单系统 Service Worker（离线缓存 + 安装为 App）
-// ⚠️ 每次发布新版本请同步 +1 本版本号（v7→v8→v9→…），并在 index.html 的 register 选项中保持 updateViaCache:'none'。
-//    原因：本系统纯静态部署，若 CACHE 键不变，已安装 PWA 的设备会一直跑缓存里的旧 app.js / custom.js，
-//    表现为「代码改了但设备上没反应」。版本号一变 → 激活时自动清掉旧缓存，设备下次打开即拉取最新代码。
-const CACHE = 'ss-menu-v20';
+// CACHE 由 `npm run build:cache` 按核心静态文件内容生成；`npm test` 会拦截过期缓存键。
+// 发布流程先执行 `npm run build`，无需也不得手动递增版本号。
+const CACHE = 'ss-menu-46aae4059d60';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +10,51 @@ const ASSETS = [
   './assets/store.js',
   './assets/app.js',
   './assets/custom.js',
+  './data/menu-config.json',
+  // BEGIN GENERATED IMAGE ASSETS
+  './data/img/lib01.jpg',
+  './data/img/lib017.jpg',
+  './data/img/lib018.jpg',
+  './data/img/lib019.jpg',
+  './data/img/lib02.jpg',
+  './data/img/lib020.jpg',
+  './data/img/lib021.jpg',
+  './data/img/lib022.jpg',
+  './data/img/lib023.jpg',
+  './data/img/lib024.jpg',
+  './data/img/lib025.jpg',
+  './data/img/lib026.jpg',
+  './data/img/lib027.jpg',
+  './data/img/lib028.jpg',
+  './data/img/lib029.jpg',
+  './data/img/lib03.jpg',
+  './data/img/lib033.jpg',
+  './data/img/lib034.jpg',
+  './data/img/lib035.jpg',
+  './data/img/lib036.jpg',
+  './data/img/lib037.jpg',
+  './data/img/lib038.jpg',
+  './data/img/lib039.jpg',
+  './data/img/lib04.jpg',
+  './data/img/lib040.jpg',
+  './data/img/lib041.jpg',
+  './data/img/lib042.jpg',
+  './data/img/lib043.jpg',
+  './data/img/lib048.jpg',
+  './data/img/lib05.jpg',
+  './data/img/lib053.jpg',
+  './data/img/lib055.jpg',
+  './data/img/lib06.jpg',
+  './data/img/lib08.jpg',
+  './data/img/lib09.jpg',
+  './data/img/lib10.jpg',
+  './data/img/lib11.jpg',
+  './data/img/lib12.jpg',
+  './data/img/lib13.jpg',
+  './data/img/lib14.jpg',
+  './data/img/lib15.jpg',
+  './data/img/lib16.jpg',
+  // END GENERATED IMAGE ASSETS
   './manifest.webmanifest',
   './icon.svg',
 ];

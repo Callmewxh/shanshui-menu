@@ -72,11 +72,12 @@
 
 | 特性 | 验证级别 | 回归测试入口 | 关键坑（必记） |
 |------|---------|-------------|---------------|
-| 二维码分享（弹窗预览，烧进导出图已移除） | **T2** | `tools/menu-export.test.js`（`makeQRCanvas`/`guestUrl` 编码断言） | 二维码指向**客人专享深链** `?guest=1&banquet=&pkg=`（仅查看+下载当前套餐），不是把整份菜单数据塞进二维码；jsdom 无 canvas 后端，`makeQRCanvas` 优雅降级 `resolve(null)`，断言需过滤 `getContext` 噪声 |
+| 产品范围守卫（无客人端/远程分享） | **T3** | `tools/guest.test.js` | 禁止 `guest/data/export` 对外深链、客人 UI、二维码分享函数回流；仅保留内部 `banquet/pkg` 定位 |
+| 菜品图片外置 | **T3** | `tools/data-images.test.js` | `menu-config.json` 禁止出现 `data:image`；每个 `./data/img/` 引用必须有实体文件，发布后由 SW 预缓存 |
+| 战略数据模型 | **T3** | `tools/strategic-model.test.js` | schema v3、tenant、数据驱动宴席/分类、发布冲突检测与销售话术字段必须同时保留 |
 | 整份菜单多页 PDF（每套餐一页） | **T3** | `tools/menu-export.test.js`（`/Kids` 引用计数、DCTDecode 对象数、xref 完整性） | `Store.resolvePackage(banquetId,pkgId)` 直接返回**菜品数组**，不是 `{dishes:[...]}`（store.js:334）；多页 PDF 对象编号规则（1=Catalog、2=Pages、每页占 3 对象：Page/Image XObject(DCTDecode)/Contents）须严格递增 |
 | 单页定制单 SVG 导出（buildSVG） | **T2** | `tools/custom-order.test.js` | 菜单名=套餐名优先于宴席类型；`fScale` 自适应字号（特大档/标准档比值≈1.6），断言不能硬编码字号 |
-| 客人专享（guest）受限界面 | **T3** | `tools/menu-export.test.js`（`guestUrl` 断言）+ `tools/custom-order.test.js`（点定制单链路无回归） | 深链 `?guest=1&banquet=X&pkg=Y` 进入受限单套餐界面：`setMode` 加 `if(state.guest && mode!=='order') return` 守卫防客人切管理/定制；导出物**不再烧二维码**（`#expQr`/`#meQr` 已移除，`exportWholeMenu` 默认 `withQr:false`）；访客下载走单套餐 PDF（`opts.pkgId`）；`#guestDownload` 仅 `body.guest-mode` 下显示 |
 
-**真机验收（T3 必做）**：云端部署后，用 iPad/手机实际走一遍「管理 → 分享套餐二维码 → 扫码打开 `?guest=1&...` 受限界面 → 仅查看当前套餐 + 点底部下载本套餐 PDF；确认顶栏管理/定制入口不可见、无法切到其他套餐/宴席」。回归测试只能覆盖逻辑，视觉保真（金线/排版/缩略图裁切/guest 界面洁净度）须在部署链接人眼验收。
+**真机验收（T3 必做）**：云端部署后，用销售平板走一遍展示、演示锁定、长按解锁、定制与离线 PNG/PDF 导出；确认锁定期间管理/设置/定制入口不可用。视觉保真（金线/排版/缩略图裁切）仍须人眼验收。
 
 > 维护约定：本文件与 `CODEMAP.md` 配套。改动涉及验证级别判定或分类维度调整时，顺手更新此处；新增导出/同步类特性时同步登记第 4 节。

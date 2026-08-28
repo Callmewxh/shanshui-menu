@@ -1,19 +1,15 @@
-// 整份菜单导出 + 二维码分享 — 端到端冒烟测试（T3）
-// 在 jsdom 中加载 data/store/app/custom/qrcode 五件套，验证：
-//  1) 二维码库已注入（全局 qrcode 可用）
-//  2) shareUrl(banquetId) 编码出可访问的线上网址（深链参数）
-//  3) buildMultiPagePdf 产出合法「多页」PDF（Pages/Kids、N 个 Page 与 Image XObject、xref）
-//  4) buildPackageSVG 单套餐 → 合法 SVG（含宴席名/套餐名/价格/页脚二维码提示/菜品缩略图）
-//  5) exportWholeMenu / makeQRCanvas 可调用且不抛同步异常
+// 整份菜单离线导出 — 端到端冒烟测试（T3）
+// 验证多页 PDF、单套餐 SVG 与导出入口，并防止线上分享能力回流。
 // 运行：node tools/menu-export.test.js
 // 依赖 jsdom（位于隔离的 node workspace）：NODE_PATH 指过去即可。
 
 const fs = require('fs');
 const path = require('path');
-const jsdomPath = 'C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom';
-const { JSDOM, VirtualConsole } = require(jsdomPath);
+let jsdom;
+try { jsdom = require('jsdom'); } catch (_) { jsdom = require('C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom'); }
+const { JSDOM, VirtualConsole } = jsdom;
 
-const PROJ = 'E:/山水S酒店/菜单系统';
+const PROJ = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(PROJ, 'index.html'), 'utf8');
 
 let failures = 0;
@@ -45,8 +41,8 @@ const dom = new JSDOM(html, {
 const { window } = dom;
 const document = window.document;
 
-// jsdom 不自动加载外部 <script src>，手动按依赖顺序注入本地 JS（含二维码库）
-['assets/qrcode.js', 'assets/data.js', 'assets/store.js', 'assets/app.js', 'assets/custom.js'].forEach(f => {
+// jsdom 不自动加载外部 <script src>，手动按依赖顺序注入本地 JS
+['assets/data.js', 'assets/store.js', 'assets/app.js', 'assets/custom.js'].forEach(f => {
   const code = fs.readFileSync(path.join(PROJ, f), 'utf8');
   const s = document.createElement('script');
   s.textContent = code;
@@ -56,20 +52,13 @@ const document = window.document;
 setTimeout(run, 120);
 
 function run() {
-  console.log('\n[整份菜单导出 + 二维码分享测试]');
+  console.log('\n[整份菜单离线导出测试]');
   try {
-    // 1) 二维码库已注入
-    const qrLib = (function () { try { return window.eval('typeof qrcode'); } catch (e) { return 'error'; } })();
-    assert(qrLib === 'function', '二维码库 qrcode 已注入（typeof=' + qrLib + '）');
     assert(window.CustomOrder && typeof window.CustomOrder.exportWholeMenu === 'function', 'CustomOrder.exportWholeMenu 已暴露');
     assert(typeof window.CustomOrder.buildMultiPagePdf === 'function', 'CustomOrder.buildMultiPagePdf 已暴露');
     assert(typeof window.CustomOrder.buildPackageSVG === 'function', 'CustomOrder.buildPackageSVG 已暴露');
-    assert(typeof window.CustomOrder.makeQRCanvas === 'function', 'CustomOrder.makeQRCanvas 已暴露');
-
-    // 2) 深链分享网址
-    const url = window.CustomOrder.shareUrl('wedding');
-    assert(/banquet=wedding/.test(url), 'shareUrl 编码 ?banquet=wedding 深链参数：' + url);
-    assert(/^https?:\/\//.test(url), 'shareUrl 输出可访问网址（http(s) 开头）');
+    assert(typeof window.CustomOrder.shareUrl === 'undefined', '线上分享 shareUrl 未暴露');
+    assert(typeof window.CustomOrder.makeQRCanvas === 'undefined', '二维码生成入口未暴露');
 
     // 3) 多页 PDF 生成器
     const fakeJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9]);
@@ -132,19 +121,11 @@ function run() {
     // 5) 调用不抛同步异常（栅格化依赖真实 canvas，jsdom 下异步完成，此处仅验证入口安全）
     let threw = false;
     try {
-      window.CustomOrder.exportWholeMenu('wedding', { withQr: true, scale: 1 });
+      window.CustomOrder.exportWholeMenu('wedding', { scale: 1 });
     } catch (e) { threw = true; console.error('    exportWholeMenu threw:', e && e.message); }
     assert(!threw, 'exportWholeMenu 可调用（异步栅格化在浏览器 canvas 中完成）');
 
-    // makeQRCanvas 在 jsdom（无 canvas 后端）应安全 resolve（不 reject/throw）
-    let qrResolved = false, qrVal = 'pending';
-    try {
-      window.CustomOrder.makeQRCanvas('http://localhost/?banquet=wedding', 100)
-        .then(function (r) { qrResolved = true; qrVal = (r === null) ? 'null(jsdom无canvas)' : 'canvas'; })
-        .catch(function () { qrVal = 'rejected'; });
-    } catch (e) { qrVal = 'threw'; }
     setTimeout(function () {
-      assert(qrResolved, 'makeQRCanvas 返回 Promise 且已 resolve（jsdom 下为 null，实得 ' + qrVal + '）');
       // jsdom 没有 canvas 后端，getContext('2d') 必然抛「Not implemented」——真实浏览器不会出现，
       // 且代码已 try/catch 优雅降级（上一条断言 resolve null 即为证），故从错误清单中剔除该已知环境噪声。
       const realErrors = consoleErrors.filter(function (m) {
@@ -156,7 +137,7 @@ function run() {
       assert(realErrors.length === 0, '运行期无 jsdom 报错' + (realErrors.length ? '：' + realErrors.join(' | ') : ''));
       console.log('\n' + (failures === 0 ? '✅ 全部通过' : '❌ 失败 ' + failures + ' 项'));
       process.exit(failures === 0 ? 0 : 1);
-    }, 60);
+    }, 20);
   } catch (e) {
     console.error('  ✗ THREW: ' + (e && e.stack ? e.stack : e));
     failures++;

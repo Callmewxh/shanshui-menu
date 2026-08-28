@@ -11,6 +11,53 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="assets/style.css">
+  <!-- #18 全局错误兜底：任何未捕获异常/未处理的 Promise 拒绝都给出可见反馈，
+       杜绝销售面前「点了没反应」。刻意自带内联样式：即使 style.css 加载失败也能弹出提示。 -->
+  <script>
+  (function () {
+    'use strict';
+    var lastShown = 0, pendingTimer = null;
+    function fmt(src) { return src ? ('（' + String(src).split('/').pop() + '）') : ''; }
+    function show(message, src) {
+      try {
+        var now = Date.now();
+        if (now - lastShown < 3000) return;   // 错误风暴节流：3 秒只弹一次
+        lastShown = now;
+        var t = document.getElementById('fatalToast');
+        if (!t) {
+          if (!document.body) {
+            if (!pendingTimer) pendingTimer = setTimeout(function () { show(message, src); }, 300);
+            return;
+          }
+          t = document.createElement('div');
+          t.id = 'fatalToast';
+          t.setAttribute('style', [
+            'position:fixed;left:50%;bottom:64px;transform:translateX(-50%)',
+            'z-index:99999;max-width:82vw;padding:12px 20px',
+            'background:#B23A2E;color:#fff;border-radius:10px',
+            'font:600 14px/1.6 "PingFang SC","Microsoft YaHei",sans-serif',
+            'box-shadow:0 8px 24px rgba(60,40,30,.35)',
+            'opacity:0;transition:opacity .2s;pointer-events:none;text-align:center'
+          ].join(';'));
+          document.body.appendChild(t);
+        }
+        clearTimeout(t._hideTimer);
+        t.textContent = '⚠ 出错了，请截图反馈给运营同事';
+        if (message) {
+          var detail = String(message).slice(0, 120) + fmt(src);
+          t.setAttribute('data-detail', detail);
+          t.title = detail;
+        }
+        t.style.opacity = '1';
+        t._hideTimer = setTimeout(function () { try { t.style.opacity = '0'; } catch (_) {} }, 5000);
+      } catch (_) { /* 兜底器自身出错时保持静默，避免二次崩溃 */ }
+    }
+    window.onerror = function (msg, source) { show(msg, source); };
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason; show(r && r.message ? r.message : String(r || '未知异常'));
+    });
+  })();
+  </script>
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
 (function(){
@@ -118,6 +165,8 @@
 
         <!-- 设置入口 -->
         <div class="mg-setwrap" id="mgSetWrap">
+          <button class="mg-btn ghost small" id="mgQuickLock" type="button">🔒 演示锁定</button>
+          <button class="mg-btn ghost small" id="mgQuickExport" type="button">⤓ 导出菜单</button>
           <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置</button>
           <button class="mg-btn ghost small mg-done" id="mgDone" type="button" aria-label="退出管理">✕ 完成</button>
         </div>
@@ -403,17 +452,42 @@
   <div class="modal" id="exportModal" hidden>
     <div class="modal-card exp-modal-card">
       <button class="modal-close" aria-label="关闭" data-close="exportModal">✕</button>
-      <h3>导出宴席定制报价单</h3>
+      <h3>导出电子菜单</h3>
+      <div class="exp-builder-grid">
+        <section class="exp-builder-section">
+          <b>用途</b>
+          <div class="exp-choice-row" data-exp-group="purpose">
+            <button type="button" class="exp-choice on" data-exp-purpose="original">原始菜单留底</button>
+            <button type="button" class="exp-choice" data-exp-purpose="updated">客户更新版</button>
+            <button type="button" class="exp-choice" data-exp-purpose="chef">厨房报价版</button>
+          </div>
+          <small id="expPurposeHint">导出修改前的标准菜单，便于客户留档。</small>
+        </section>
+        <section class="exp-builder-section">
+          <b>版式方案</b>
+          <div class="exp-layout-cards">
+            <button type="button" class="exp-layout-card on" data-exp-layout="A"><i>A</i><span>雅宴画册</span><small>朱红金线 · 仪式感</small></button>
+            <button type="button" class="exp-layout-card" data-exp-layout="B"><i>B</i><span>现代席单</span><small>留白克制 · 信息清晰</small></button>
+          </div>
+        </section>
+        <section class="exp-builder-section">
+          <b>输出尺寸</b>
+          <div class="exp-choice-row">
+            <button type="button" class="exp-choice on" data-exp-size="a4">A4 纸版</button>
+            <button type="button" class="exp-choice" data-exp-size="mobile">手机长图 · 小票</button>
+          </div>
+        </section>
+      </div>
       <div class="exp-options">
         <label class="exp-opt on" data-exp-ver="thumb">
           <input type="radio" name="expVer" value="thumb" checked>
           <span class="exp-opt-title">带图版</span>
-          <span class="exp-opt-desc">A4 竖版 · 分品类段 · 每道菜配缩略图，单页打印</span>
+          <span class="exp-opt-desc">保留菜品库 4:3 图片比例与原始裁切位置</span>
         </label>
         <label class="exp-opt" data-exp-ver="plain">
           <input type="radio" name="expVer" value="plain">
           <span class="exp-opt-title">无图版</span>
-          <span class="exp-opt-desc">A4 竖版 · 纯文字分品类清单，省墨正式</span>
+          <span class="exp-opt-desc">分组清单，适合打印、确认与厨房报价</span>
         </label>
       </div>
       <!-- 预览区 -->
@@ -430,18 +504,8 @@
       </div>
       <div class="edit-actions">
         <button class="mg-btn" data-close="exportModal" type="button">取消</button>
-        <button class="mg-btn ghost" id="expShareQr" type="button">分享本套餐二维码</button>
         <button class="mg-btn primary" id="expConfirm" type="button">生成图片</button>
       </div>
-    </div>
-  </div>
-
-  <!-- 分享二维码弹窗 -->
-  <div class="modal" id="qrModal" hidden>
-    <div class="modal-card exp-modal-card qr-only-card">
-      <button class="modal-close" aria-label="关闭" data-close="qrModal">✕</button>
-      <h3>扫码查看本套餐</h3>
-      <div class="qr-wrap"><img id="qrImg" alt="套餐二维码"></div>
     </div>
   </div>
 
@@ -475,15 +539,26 @@
   <div class="modal" id="settingsModal" hidden>
     <div class="modal-card settings-card">
       <button class="modal-close" aria-label="关闭" data-close="settingsModal">✕</button>
-      <h3 class="settings-title">设置</h3>
+      <div class="settings-head"><div><h3 class="settings-title">设置</h3><p>管理展示、导出、菜单配置与本机数据</p></div><span class="settings-save-state" id="settingsSaveState" aria-live="polite">已同步至本机</span></div>
       <div class="settings-body">
+        <nav class="settings-nav" aria-label="设置分类">
+          <button type="button" class="settings-nav-item on" data-settings-target="display" aria-selected="true"><span>▣</span><b>展示设置</b><i>显示偏好与演示保护</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="export" aria-selected="false"><span>⇩</span><b>导出与文件</b><i>菜单 PDF 与文件生成</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="brand" aria-selected="false"><span>◇</span><b>品牌与门店</b><i>名称、LOGO 与门店</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="business" aria-selected="false"><span>宴</span><b>菜单配置</b><i>宴席、分类与批量建菜</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="data" aria-selected="false"><span>↥</span><b>数据与安全</b><i>备份、导入和恢复</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="advanced" aria-selected="false"><span>!</span><b>高级与重置</b><i>内部标识与危险操作</i></button>
+        </nav>
+        <div class="settings-panels">
         <!-- 数据同步 -->
-        <div class="settings-section">
-          <div class="settings-section-title">数据同步</div>
+        <div class="settings-section settings-data" data-settings-section>
+          <div class="settings-section-title"><span>数据与安全</span><i>备份、导入和恢复</i></div>
+          <div class="settings-section-content">
           <button class="set-row primary-row" id="setPull" type="button" hidden><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
-          <button class="set-row primary-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入配置（JSON）</b><i>主路径：从本地文件整体替换本机</i></span></button>
-          <button class="set-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出配置（JSON）</b><i>备份当前全部菜品与菜单</i></span></button>
+          <button class="set-row primary-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出菜单备份</b><i>推荐：备份当前全部菜品与菜单</i></span></button>
+          <button class="set-row" id="setImportJson" type="button"><span class="set-ic">⤒</span><span><b>导入菜单备份</b><i>导入前会展示内容摘要，并覆盖本机数据</i></span></button>
           <button class="set-row" id="setRestore" type="button"><span class="set-ic">⟲</span><span><b>恢复自动备份</b><i>从最近一次自动保存恢复</i></span></button>
+          </div>
         </div>
         <!-- WebDAV 云端同步（solo 模式隐藏，代码保留于 assets/webdav.js + worker/） -->
         <div class="settings-section" hidden>
@@ -492,20 +567,44 @@
           <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端</i></span></button>
         </div>
         <!-- 品牌信息 -->
-        <div class="settings-section">
-          <div class="settings-section-title">品牌信息</div>
+        <div class="settings-section settings-brand" data-settings-section>
+          <div class="settings-section-title"><span>品牌与门店</span><i>控制标题、标识和导出署名</i></div>
+          <div class="settings-section-content">
           <div class="set-row set-brand"><span class="set-ic">🖼</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 无背景图（建议 120×120 以上）</i><div class="brand-logo-wrap" id="brandLogoWrap"><div class="brand-logo-preview" id="brandLogoPreview">S</div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="清除恢复默认">✕ 清除</button></span></div>
           <input type="file" id="brandLogoInput" accept="image/png,image/*" hidden>
           <div class="set-row set-brand"><span class="set-ic">✎</span><span class="set-txt"><label for="setBrandName">酒店/品牌名称</label><i>用于标题栏、导出报价单等</i><input type="text" id="setBrandName" maxlength="20" placeholder="山水S酒店" class="set-input"></span></div>
+          <div class="set-row set-brand"><span class="set-ic">⌂</span><span class="set-txt"><label for="setTenantId">门店标识</label><i>英文字母开头，可包含数字、短横线和下划线</i><input type="text" id="setTenantId" maxlength="32" placeholder="shanshui-s" class="set-input"><em class="set-field-error" id="tenantIdError" hidden></em></span></div>
+          <div class="set-row set-brand"><span class="set-ic">店</span><span class="set-txt"><label for="setStoreName">门店名称</label><i>随配置导出，便于集团内识别</i><input type="text" id="setStoreName" maxlength="30" placeholder="默认门店" class="set-input"></span></div>
+          </div>
+        </div>
+        <div class="settings-section settings-business" data-settings-section>
+          <div class="settings-section-title"><span>菜单配置</span><i>配置可选宴席、菜品分类及展示顺序</i></div>
+          <div class="settings-section-content">
+          <div class="set-row set-brand"><span class="set-ic">宴</span><span class="set-txt"><label for="setBanquets">宴席类型</label><i>格式：英文ID:中文名，多个用逗号分隔</i><input type="text" id="setBanquets" class="set-input" placeholder="wedding:婚宴,baby:宝宝宴"><em class="set-field-error" id="banquetsError" hidden></em></span></div>
+          <div class="set-row set-brand"><span class="set-ic">类</span><span class="set-txt"><label for="setCategories">菜品分类</label><i>多个分类用逗号分隔，顺序即展示顺序</i><input type="text" id="setCategories" class="set-input" placeholder="凉菜,主菜,主食点心"><em class="set-field-error" id="categoriesError" hidden></em></span></div>
+          <button class="set-row primary-row" id="setCatalogSave" type="button"><span class="set-ic">✓</span><span><b>保存业务配置</b><i>立即更新宴席选择与菜品分类</i></span></button>
+          </div>
         </div>
         <!-- 显示与其他 -->
-        <div class="settings-section">
-          <div class="settings-section-title">显示与其他</div>
+        <div class="settings-section settings-display" data-settings-section>
+          <div class="settings-section-title"><span>展示设置</span><i>控制销售展示时的内容与防误触状态</i></div>
+          <div class="settings-section-content">
           <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
-          <button class="set-row" id="setShareQr" type="button"><span class="set-ic">▦</span><span><b>分享套餐二维码</b><i>扫码查看并下载当前套餐</i></span></button>
+          <label class="set-row set-toggle" id="setDemoLock"><span class="set-ic">🔒</span><span class="set-txt"><b>演示锁定模式</b><i>当面讲解时防误触（禁改数据）；长按左上角品牌名可解除</i></span><input type="checkbox" id="setDemoLockCb"></label>
           <button class="set-row" id="setExportMenu" type="button"><span class="set-ic">⤓</span><span><b>导出整份菜单（PDF）</b><i>本宴席所有套餐打包成多页 PDF</i></span></button>
           <button class="set-row" id="setBatch" type="button"><span class="set-ic">⧉</span><span><b>批量新建菜品</b><i>一次导入多张图片，自动建「待命名」菜品</i></span></button>
           <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
+          </div>
+        </div>
+        <div class="settings-section settings-export" data-settings-section>
+          <div class="settings-section-title"><span>导出与文件</span><i>生成供客人离线查看的菜单文件</i></div>
+          <div class="settings-section-content" id="settingsExportContent"></div>
+        </div>
+        <div class="settings-section settings-advanced" data-settings-section>
+          <div class="settings-section-title"><span>高级与重置</span><i>以下操作可能影响门店数据归属或清除本机修改</i></div>
+          <div class="settings-danger-note">谨慎操作：修改门店内部编号可能切换数据归属；恢复默认会清除本机全部修改。</div>
+          <div class="settings-section-content" id="settingsAdvancedContent"></div>
+        </div>
         </div>
       </div>
     </div>
@@ -533,7 +632,6 @@
     </div>
   </div>
 
-  <script src="assets/qrcode.js"></script>
   <script src="assets/data.js"></script>
   <script src="assets/store.js"></script>
   <script src="assets/webdav.js"></script>
@@ -544,17 +642,21 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         // updateViaCache:'none' 确保每次导航都向网络重新拉取 sw.js（不被 HTTP 缓存挡住），
-        // 配合 sw.js 内 CACHE 版本号自增，设备才能拿到最新代码。
+        // 配合发布时按内容生成的 sw.js CACHE 键，设备才能拿到最新代码。
         navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(function () {});
       });
     }
   </script>
 
-  <!-- 访客模式底部下载条：仅 ?guest=1 时显示 -->
-  <div class="guest-bar" id="guestBar" hidden>
-    <div class="guest-bar-inner">
-      <span class="guest-bar-brand">山水S酒店 · 套餐菜单</span>
-      <button class="mg-btn primary" id="guestDownload" type="button">下载本套餐（PDF）</button>
+  <!-- 演示锁定 确认弹窗（进入/退出共用，必须显式确认，防误触） -->
+  <div class="modal" id="demoLockModal" hidden>
+    <div class="modal-card conf-card">
+      <h3 class="conf-title" id="demoLockTitle">进入演示锁定？</h3>
+      <p class="conf-text" id="demoLockText">锁定后仅可浏览、切换宴席/套餐与搜索；管理、设置、定制单等编辑入口全部停用。解除方式：长按左上角品牌名。</p>
+      <div class="edit-actions">
+        <button type="button" class="mg-btn" id="demoLockCancel">取消</button>
+        <button type="button" class="mg-btn primary" id="demoLockConfirm">进入锁定</button>
+      </div>
     </div>
   </div>
 
@@ -580,5 +682,8 @@
       </div>
     </div>
   </div>
+
+  <!-- 演示锁定提示徽标（仅 body.demo-lock 时显示，置顶悬浮不遮内容） -->
+  <div class="demo-lock-badge" id="demoLockBadge" hidden>🔒 演示中 · 长按左上角品牌名可解锁</div>
 </body>
 </html>

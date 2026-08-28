@@ -5,8 +5,8 @@
 //  - 当前实现：以 localStorage 持久化（无后端）。所有增删改查都经本层，
 //    已标注「后端接入点」，后续接入服务端只需替换对应 localStorage 调用为 API 请求。
 //
-// ⚠️ 本地存储配额约 5MB。菜品图片压缩后存为 base64；过多/过大导致写入失败时，
-//    save() 会自动再压一轮；仍失败才向上抛错。接后端后大图应走服务端，本地只存 URL。
+// 已发布菜图使用同源 URL，不占 localStorage；新上传图片在发布前暂存 base64。
+// 达到保守配额估算的 75% 时主动预警，写入失败时再压缩暂存图片后重试。
 
 const Store = (function () {
   'use strict';
@@ -19,15 +19,36 @@ const Store = (function () {
 
   function seed() {
     return {
+      schemaVersion: 3,
+      revision: 0,
+      syncedRevision: 0,
+      updatedAt: null,
+      tenant: { id: 'shanshui-s', name: '山水S酒店', storeName: '默认门店' },
+      banquets: deepClone(typeof BANQUETS !== 'undefined' ? BANQUETS : []),
+      categories: deepClone(typeof CATEGORIES !== 'undefined' ? CATEGORIES : ['凉菜', '主菜', '主食点心']),
       library: deepClone(typeof LIBRARY_SEED !== 'undefined' ? LIBRARY_SEED : []),
       menu: deepClone(typeof MENU_DATA !== 'undefined' ? MENU_DATA : {}),
     };
   }
 
   // 载入：优先读取已保存副本；旧版（菜品内嵌）自动迁移；否则以种子数据初始化
-  let STATE = stripLegacyFields(load());
+  let STATE = normalizeState(stripLegacyFields(load()));
 
-  const BANQUET_LIST = deepClone(typeof BANQUETS !== 'undefined' ? BANQUETS : []);
+  function normalizeState(state) {
+    state = state || {};
+    const defaults = seed();
+    state.schemaVersion = 3;
+    state.revision = Number.isFinite(+state.revision) ? +state.revision : 0;
+    state.syncedRevision = Number.isFinite(+state.syncedRevision) ? +state.syncedRevision : state.revision;
+    state.updatedAt = state.updatedAt || null;
+    state.tenant = Object.assign({}, defaults.tenant, state.tenant || {});
+    state.banquets = Array.isArray(state.banquets) && state.banquets.length ? state.banquets : defaults.banquets;
+    state.categories = Array.isArray(state.categories) && state.categories.length ? state.categories : defaults.categories;
+    state.library = Array.isArray(state.library) ? state.library : [];
+    state.menu = state.menu && typeof state.menu === 'object' ? state.menu : {};
+    state.library.forEach((dish) => { delete dish.pitch; delete dish.talkingPoint; });
+    return state;
+  }
 
   function load() {
     try {
@@ -126,10 +147,24 @@ const Store = (function () {
     return String(max + 1);
   }
 
+  function getStorageUsage() {
+    let bytes = 0;
+    try { bytes = new Blob([JSON.stringify(STATE)]).size; }
+    catch (_) { bytes = JSON.stringify(STATE).length * 2; }
+    const assumedQuota = 5 * 1024 * 1024;
+    return { bytes, assumedQuota, ratio: bytes / assumedQuota };
+  }
+
   // 持久化（异步：配额超限时自动把图片再压一轮后重试）
   async function save() {
     // TODO 后端接入点：将 STATE 提交至服务端
     // return fetch('/api/menu', { method:'PUT', body: JSON.stringify(STATE), headers:{'Content-Type':'application/json'} });
+    STATE.revision = (STATE.revision || 0) + 1;
+    STATE.updatedAt = new Date().toISOString();
+    const usage = getStorageUsage();
+    if (usage.ratio >= 0.75 && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try { window.dispatchEvent(new CustomEvent('ss-storage-warning', { detail: usage })); } catch (_) {}
+    }
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(STATE));
     } catch (e) {
@@ -499,13 +534,28 @@ const Store = (function () {
   function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'shanshui'; } catch (_) { return 'shanshui'; } }
   async function setTheme(t) { try { localStorage.setItem(THEME_KEY, t || 'shanshui'); } catch (_) {} }
 
+  async function setCatalogConfig(banquets, categories) {
+    if (!Array.isArray(banquets) || !banquets.length) return { ok: false, msg: '至少保留一种宴席类型' };
+    if (!Array.isArray(categories) || !categories.length) return { ok: false, msg: '至少保留一个菜品分类' };
+    const ids = new Set();
+    for (const item of banquets) {
+      if (!item.id || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(item.id) || !item.name) return { ok: false, msg: '宴席格式应为 英文ID:中文名' };
+      if (ids.has(item.id)) return { ok: false, msg: `宴席 ID「${item.id}」重复` };
+      ids.add(item.id);
+      ensureBanquet(item.id, item.name).name = item.name;
+    }
+    STATE.banquets = banquets;
+    STATE.categories = categories;
+    await save();
+    return { ok: true };
+  }
+
   // 导入整份配置（与 exportConfig 配对）：用于跨设备搬运菜单（各设备独立存储时）
   async function importConfig(data) {
     if (!data || !Array.isArray(data.library) || typeof data.menu !== 'object') {
       return { ok: false, msg: '配置格式不正确（需包含 library 与 menu）' };
     }
-    STATE.library = data.library;
-    STATE.menu = data.menu;
+    STATE = normalizeState(deepClone(data));
     stripLegacyFields(STATE);
     // 品牌 LOGO 跟随配置一起搬运：从云端拉取菜单时一并带过去（与 exportConfig 配对）。
     // 仅在导出里确实带 logo 时才覆盖本机 logo，避免误清空设备已有 logo。
@@ -521,6 +571,11 @@ const Store = (function () {
         }
       }
     } catch (_) { /* logo 写入失败不影响菜单导入 */ }
+    // 品牌名随配置一起搬运：从云端拉取菜单时同步到 ss_brand_name，
+    // 使导出物（custom.js 读 ss_brand_name）与顶栏（BrandConfig 读 ss_brand_name）同步更新
+    try {
+      if (STATE.tenant && STATE.tenant.name) localStorage.setItem('ss_brand_name', STATE.tenant.name);
+    } catch (_) {}
     await save();
     return { ok: true };
   }
@@ -531,8 +586,17 @@ const Store = (function () {
       return { ok: false, msg: '未配置 WebDAV 代理地址' };
     }
     try {
-      await WebDAV.davPut(WebDAV.DEFAULT_FILE, { library: STATE.library, menu: STATE.menu });
-      return { ok: true };
+      let remote = null;
+      try { remote = await WebDAV.davGet(WebDAV.DEFAULT_FILE, { cacheBust: true }); } catch (_) {}
+      if (remote && remote.tenant && remote.tenant.id === STATE.tenant.id && (+remote.revision || 0) > (+STATE.syncedRevision || 0)) {
+        return { ok: false, conflict: true, msg: '云端已有更新版本，请先拉取并确认后再发布，避免覆盖其他销售的修改' };
+      }
+      const payload = deepClone(STATE);
+      payload.syncedRevision = payload.revision;
+      await WebDAV.davPut(WebDAV.DEFAULT_FILE, payload);
+      STATE.syncedRevision = STATE.revision;
+      localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+      return { ok: true, revision: STATE.revision };
     } catch (e) {
       return { ok: false, msg: e.message || 'WebDAV 写入失败' };
     }
@@ -542,7 +606,9 @@ const Store = (function () {
     get STATE() { return STATE; },
     get MENU() { return STATE.menu; },        // 兼容旧调用
     get LIBRARY() { return STATE.library; },
-    get BANQUETS() { return BANQUET_LIST; },
+    get BANQUETS() { return STATE.banquets; },
+    get CATEGORIES() { return STATE.categories; },
+    get TENANT() { return STATE.tenant; },
     save,
     getBanquet, ensureBanquet, nextNum,
     getPackage, addPackage, buildPackageCopy, updatePackage, renamePackage, removePackage, movePackage, reorderPackages,
@@ -551,6 +617,6 @@ const Store = (function () {
     setDishNameOverride, setDishEnOverride, clearDishNameOverride,
     uploadImage, importConfig, reset, publishToWebDAV,
     getBackupMeta, restoreBackup, getUsages, restoreLibDish, restoreRefs, restorePackage,
-    getTheme, setTheme,
+    getTheme, setTheme, getStorageUsage, setCatalogConfig,
   };
 })();

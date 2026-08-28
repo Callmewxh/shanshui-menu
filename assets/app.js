@@ -41,7 +41,9 @@
   // 单一裁剪真相源：导出引擎 custom.js 复用此函数，杜绝展示/导出裁切漂移（H1 去重）
   if (typeof window !== 'undefined') window.cropBgStyle = cropBg;
   // 统一展示：所有有图窗口（点菜页/详情/菜品库/菜单/选择器）共用同一裁剪渲染，保证所见一致
-  const dishCropThumb = (d) => `<div class="cropimg" style="${cropBg(d)}"></div>`;
+  const dishCropThumb = (d, lazy) => lazy
+    ? `<div class="cropimg lazy-dish-image" data-image-id="${d.id}"></div>`
+    : `<div class="cropimg" style="${cropBg(d)}"></div>`;
   const defaultCrop = () => ({ x: 0.1667, y: 0.1667, w: 0.6667 });  // 居中、约 150% 缩放
   const ICON_KEYS = Object.keys(ICONS);
   const randomIcon = () => ICON_KEYS[Math.floor(Math.random() * ICON_KEYS.length)];
@@ -101,6 +103,36 @@
     t._timer = setTimeout(() => t.classList.remove('show'), 6000);
   }
 
+  // ---------- 演示锁定（内部工具防护：销售当客面讲解时防止误触改数据） ----------
+  // 锁定范围 = 管理端 / 设置 / 定制单 等一切编辑入口；浏览、切宴席套餐、搜索不受影响。
+  // 解锁方式 = 长按左上角「品牌名」→ 显式确认退出（防误触进入，也防误触解除）。
+  let demoLock = false;
+  try { demoLock = localStorage.getItem('ss_demo_lock') === '1'; } catch (_) {}
+  const LOCK_HINT = '演示锁定中：长按左上角品牌名可解除';
+  function applyDemoLockUI() {
+    document.body.classList.toggle('demo-lock', demoLock);
+    const badge = $('#demoLockBadge'); if (badge) badge.hidden = !demoLock;
+    const cb = $('#setDemoLockCb'); if (cb) cb.checked = demoLock;
+  }
+  async function setDemoLock(on) {
+    demoLock = !!on;
+    try { localStorage.setItem('ss_demo_lock', on ? '1' : '0'); } catch (_) {}
+    applyDemoLockUI();
+    if (on && state.mode !== 'order') setMode('order');   // 锁定瞬间离开管理/定制屏，回到点菜屏
+    toast(on ? '已进入演示锁定' : '已退出演示锁定');
+  }
+  // 进入/退出共用一个显式确认弹窗（长按是较易误触的手势，必须二次确认）
+  function openDemoLockConfirm() {
+    const m = $('#demoLockModal');
+    if (!m || m.hidden === false) return;
+    $('#demoLockTitle').textContent = demoLock ? '退出演示锁定？' : '进入演示锁定？';
+    $('#demoLockText').textContent = demoLock
+      ? '解锁后将恢复全部编辑能力（菜品库 / 套餐 / 定制单 / 设置）。'
+      : '锁定后仅可浏览、切换宴席/套餐与搜索；管理、设置、定制单等编辑入口全部停用。解除方式：长按左上角品牌名。';
+    $('#demoLockConfirm').textContent = demoLock ? '退出锁定' : '进入锁定';
+    m.hidden = false;
+  }
+
   // ---------- 数据访问（统一走 Store 层） ----------
   const banquet = () => MENU()[state.banquet] || null;
   const pkg = () => { const b = banquet(); return b ? (b.packages.find((p) => p.id === state.pkg) || b.packages[0]) : null; };
@@ -122,16 +154,16 @@
   }
 
   // ---------- 点菜模式渲染 ----------
-  // 客人端只列出「已配置套餐」的宴席；未配置的（null / 空 packages）不暴露给客人，避免点进空态
-  function guestBanquets() {
+  // 展示端只列出已配置套餐的宴席，避免销售演示时进入空态。
+  function availableBanquets() {
     return Store.BANQUETS.filter((b) => {
       const banq = MENU()[b.id];
       return banq && Array.isArray(banq.packages) && banq.packages.length > 0;
     });
   }
   function renderTopTabs() {
-    const list = guestBanquets();
-    // 当前宴席若已不可见（被清空/未配置），回落到第一个可见宴席，避免客人停在空态
+    const list = availableBanquets();
+    // 当前宴席若已不可见（被清空/未配置），回落到第一个可见宴席。
     if (!list.some((b) => b.id === state.banquet) && list.length) state.banquet = list[0].id;
     const cur = Store.BANQUETS.find((b) => b.id === state.banquet);
     const name = cur ? cur.name : '婚宴';
@@ -202,7 +234,7 @@
   // 缩略图：有图片用 img（固定 4:3 + object-fit:cover 不变形），否则用占位插画
   function thumbHTML(d, idx) {
     if (d.image) {
-      return `<div class="thumb">${dishCropThumb(d)}</div>`;
+      return `<div class="thumb">${dishCropThumb(d, true)}</div>`;
     }
     const col = CAT_COLORS[d.cat] || '#eee';
     return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${dishNo(d.id, idx)}</span></div>`;
@@ -228,7 +260,7 @@
     if (!ds.length) { list.innerHTML = '<div class="empty-state">未找到相关菜品</div>'; viewList = []; return; }
 
     // 点菜页按分类分组展示（凉菜 / 主菜 / 主食点心），各区块独立标题 + 金色细线
-    const CAT_ORDER = ['凉菜', '主菜', '主食点心'];
+    const CAT_ORDER = Store.CATEGORIES;
     const CN_NUM = ['壹', '贰', '叁'];
     viewList = ds.slice();
     const sections = CAT_ORDER.map((cat, ci) => {
@@ -244,6 +276,28 @@
       </section>`;
     }).join('');
     list.innerHTML = sections || '<div class="empty-state">未找到相关菜品</div>';
+    hydrateLazyDishImages(list);
+  }
+
+  // 首屏只解码进入视口附近的菜图；详情与管理端仍即时加载，避免影响编辑操作。
+  function hydrateLazyDishImages(root) {
+    const nodes = Array.from(root.querySelectorAll('.lazy-dish-image'));
+    if (!nodes.length) return;
+    const byId = new Map(resolvedDishes().map((d) => [d.id, d]));
+    const load = (el) => {
+      const d = byId.get(el.dataset.imageId);
+      if (d && d.image) el.style.cssText = cropBg(d);
+      el.classList.remove('lazy-dish-image');
+    };
+    if (!('IntersectionObserver' in window)) { nodes.forEach(load); return; }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        load(entry.target);
+      });
+    }, { root: $('#content'), rootMargin: '240px 0px' });
+    nodes.forEach((node) => observer.observe(node));
   }
 
   function renderAll() {
@@ -356,8 +410,8 @@
 
   // ================= 管理模式 =================
   function setMode(mode) {
-    // 访客（客人）模式：二维码分享进来的受限单套餐界面，禁止切到管理/定制，避免把后台暴露给客人
-    if (state.guest && mode !== 'order') return;
+    // 演示锁定：展示期间禁用管理端 / 定制单等编辑入口（点菜屏浏览不受影响）
+    if (demoLock && mode !== 'order') { toast(LOCK_HINT); return; }
     const app = document.querySelector('.app');
     if (app) app.classList.remove('chrome-hidden', 'mg-chrome-hidden');
     closeSettings();
@@ -417,6 +471,17 @@
       renderPkgRow();
       renderMgList();
     }
+  }
+
+  function syncCategoryOptions() {
+    [['libCat', '全部分类'], ['pickCat', '全部分类'], ['csPickCat', '全部分类']].forEach(([id, first]) => {
+      const el = $('#' + id); if (!el) return;
+      const value = el.value;
+      el.innerHTML = `<option value="">${first}</option>` + Store.CATEGORIES.map((cat) => `<option value="${cat}">${cat}</option>`).join('');
+      if (Store.CATEGORIES.includes(value)) el.value = value;
+    });
+    const edit = $('#eCat');
+    if (edit) edit.innerHTML = Store.CATEGORIES.map((cat) => `<option value="${cat}">${cat}</option>`).join('');
   }
 
   // ---------- 套餐条：点击切换 + 拖动排序 ----------
@@ -520,7 +585,7 @@
     pkgCtxId = null;
   }
   function openPkgCtx(chip, cx, cy) {
-    if (!chip) return;
+    if (!chip || demoLock) return;
     pkgCtxId = chip.dataset.pkg;
     const m = $('#pkgCtxMenu');
     m.hidden = false;
@@ -1144,7 +1209,7 @@
   function exportConfig() {
     // 品牌 LOGO 跟随导出：与 importConfig 配对，使「从云端拉取菜单」能一并带过 LOGO
     // 直接读 localStorage 的 logo 键（与 importConfig 写入键一致），避免依赖 BrandConfig 内层作用域
-    const cfg = { menu: Store.MENU, library: Store.LIBRARY };
+    const cfg = JSON.parse(JSON.stringify(Store.STATE));
     try {
       const logo = (localStorage.getItem('ss_brand_logo') || '').trim();
       if (logo) {
@@ -1230,9 +1295,10 @@
   // ---------- 设置：居中弹窗 ----------
   function toggleSettings(force) {
     const m = $('#settingsModal');
-    const show = (typeof force === 'boolean') ? force : m.hidden;
-    m.hidden = !show;
-    if (show) updateSettingsDavSummary();
+    const wantOpen = (typeof force === 'boolean') ? force : m.hidden;
+    if (wantOpen && demoLock) { toast(LOCK_HINT); return; }   // 演示锁定时设置入口停用
+    m.hidden = !wantOpen;
+    if (wantOpen) { updateSettingsDavSummary(); requestAnimationFrame(() => window.dispatchEvent(new Event('ss-settings-open'))); }
   }
   function closeSettings() { $('#settingsModal').hidden = true; }
   function updateSettingsDavSummary() {
@@ -1502,8 +1568,14 @@
       brandBtn.setAttribute('aria-expanded', String(open));
     };
     if (brandBtn) {
+      // 长按品牌键 → 演示锁定确认弹窗（锁定中=退出，未锁定=进入；850ms 触发）
+      let lpLockTimer = null;
+      const clearLpLock = () => { if (lpLockTimer) { clearTimeout(lpLockTimer); lpLockTimer = null; } };
+      brandBtn.addEventListener('pointerdown', () => { clearLpLock(); lpLockTimer = setTimeout(() => { lpLockTimer = null; if (!$('#demoLockModal').hidden) return; openDemoLockConfirm(); }, 850); });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => brandBtn.addEventListener(ev, clearLpLock));
       brandBtn.addEventListener('click', (e) => {
         if (e.target.closest('.brand-item')) return; // 菜单项点击交给下面处理
+        if (demoLock) { toast(LOCK_HINT); return; }   // 锁定时不弹模式菜单，避免误进管理
         toggleBrandMenu();
       });
       brandMenu.addEventListener('click', (e) => {
@@ -1516,7 +1588,6 @@
         if (!e.target.closest('#brandBtn')) toggleBrandMenu(false);
       });
     }
-
     // 红条左右滑动切换套餐（同一宴席下不同套餐）
     const heroEl = $('#hero');
     let heroSX = 0, heroSY = 0, heroSwiped = false;
@@ -1595,6 +1666,7 @@
     // 点菜界面：桌面右键 / 平板长按 套餐 chip → 呼出「定制菜单」选项（不直接进，给用户确认）
     let pkgbarCtxPkg = null;
     function showPkgbarCtx(clientX, clientY, pkg) {
+      if (demoLock) { toast(LOCK_HINT); return; }   // 定制单是编辑入口，演示锁定时停用
       pkgbarCtxPkg = pkg;
       const m = $('#pkgbarCtxMenu');
       m.hidden = false;
@@ -1671,7 +1743,7 @@
       }
       if (e.key === 'Escape') {
         if (!$('#webdavFormModal').hidden) { closeWebDAVForm(); return; }
-        closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; $('#menuDishModal').hidden = true;
+        closeModal(); closeSettings(); $('#editModal').hidden = true; $('#pkgModal').hidden = true; $('#pickModal').hidden = true; $('#resetConfirmModal').hidden = true; $('#menuDishModal').hidden = true; $('#demoLockModal').hidden = true;
       }
     });
     // 详情弹窗：左右滑动循环切换菜品（横向位移明显大于纵向才算滑动）
@@ -1840,6 +1912,11 @@
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result);
+          const tenantName = data.tenant ? (data.tenant.storeName || data.tenant.name || data.tenant.id) : '未标注门店';
+          const dishCount = Array.isArray(data.library) ? data.library.length : 0;
+          const banquetCount = data.menu && typeof data.menu === 'object' ? Object.values(data.menu).filter((b) => b && Array.isArray(b.packages)).length : 0;
+          const updated = data.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : '未知';
+          if (!confirm(`即将导入菜单备份：\n门店：${tenantName}\n菜品：${dishCount} 道\n宴席：${banquetCount} 类\n更新时间：${updated}\n\n导入会覆盖本机当前菜单，是否继续？`)) return;
           Store.importConfig(data).then((res) => {
             if (!res.ok) { alert(res.msg); return; }
             BrandConfig.apply(); // 导入可能含品牌 LOGO，刷新界面徽标/预览
@@ -1869,7 +1946,67 @@
       try { localStorage.setItem('ss_ob_edit', '1'); } catch (_) {}
     });
 
-    // —— 设置折叠菜单（导出 / 导入 / 恢复默认） ——
+    // —— 设置面板：分组折叠、滑动收起、保存状态与表单反馈 ——
+    const settingsState = (kind, text) => {
+      const el = $('#settingsSaveState'); if (!el) return;
+      el.className = 'settings-save-state ' + (kind || '');
+      el.textContent = text || '已同步至本机';
+      clearTimeout(el._resetTimer);
+      if (kind) el._resetTimer = setTimeout(() => { el.className = 'settings-save-state'; el.textContent = '已同步至本机'; }, 2200);
+    };
+    const setFieldError = (input, errorEl, message) => {
+      if (!input || !errorEl) return;
+      input.classList.toggle('invalid', !!message);
+      input.setAttribute('aria-invalid', message ? 'true' : 'false');
+      errorEl.hidden = !message; errorEl.textContent = message || '';
+    };
+    // 将功能按任务归位：导出、批量建菜和危险操作不再混在展示设置中。
+    const exportContent = $('#settingsExportContent'); if (exportContent) exportContent.appendChild($('#setExportMenu'));
+    const businessContent = document.querySelector('.settings-business .settings-section-content'); if (businessContent) businessContent.appendChild($('#setBatch'));
+    const advancedContent = $('#settingsAdvancedContent');
+    if (advancedContent) {
+      const tenantRow = $('#setTenantId') && $('#setTenantId').closest('.set-row'); if (tenantRow) advancedContent.appendChild(tenantRow);
+      advancedContent.appendChild($('#setReset'));
+    }
+    let catalogDirty = false;
+    let currentSettingsPanel = 'display';
+    const markCatalogDirty = (dirty) => {
+      catalogDirty = !!dirty;
+      const nav = document.querySelector('[data-settings-target="business"]'); if (nav) nav.classList.toggle('dirty', catalogDirty);
+      if (catalogDirty) settingsState('saving', '有未保存修改');
+    };
+    const selectSettingsPanel = (key, focusPanel) => {
+      if (catalogDirty && currentSettingsPanel === 'business' && key !== 'business') {
+        if (!confirm('宴席与分类有未保存修改。放弃修改并切换分类？')) return false;
+        const banquetInput = $('#setBanquets'); if (banquetInput) banquetInput.value = Store.BANQUETS.map((b) => b.id + ':' + b.name).join(',');
+        const categoryInput = $('#setCategories'); if (categoryInput) categoryInput.value = Store.CATEGORIES.join(',');
+        markCatalogDirty(false);
+      }
+      currentSettingsPanel = key;
+      document.querySelectorAll('.settings-nav-item').forEach((item) => {
+        const on = item.dataset.settingsTarget === key;
+        item.classList.toggle('on', on); item.setAttribute('aria-selected', String(on));
+        if (on) { item.classList.remove('switching'); void item.offsetWidth; item.classList.add('switching'); setTimeout(() => item.classList.remove('switching'), 260); }
+      });
+      document.querySelectorAll('[data-settings-section]').forEach((section) => {
+        const on = section.classList.contains('settings-' + key);
+        section.classList.toggle('active', on);
+      });
+      try { sessionStorage.setItem('ss_settings_tab', key); } catch (_) {}
+      const panels = $('.settings-panels'); if (panels) panels.scrollTop = 0;
+      if (focusPanel) {
+        const heading = document.querySelector('.settings-section.active .settings-section-title');
+        if (heading) heading.focus({ preventScroll: true });
+      }
+      return true;
+    };
+    document.querySelectorAll('.settings-nav-item').forEach((item) => {
+      item.addEventListener('click', () => selectSettingsPanel(item.dataset.settingsTarget, false));
+    });
+    let initialSettingsTab = 'display';
+    try { initialSettingsTab = sessionStorage.getItem('ss_settings_tab') || initialSettingsTab; } catch (_) {}
+    selectSettingsPanel(initialSettingsTab, false);
+
     $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
     $('#setExport').addEventListener('click', () => { exportConfig(); closeSettings(); });
     $('#setImportJson').addEventListener('click', () => { closeSettings(); $('#importFile').click(); });
@@ -2049,7 +2186,55 @@
     // 名称输入框回显+实时保存
     var bnInput = $('#setBrandName');
     if (bnInput) { bnInput.value = BrandConfig.name; }
-    if (bnInput) bnInput.addEventListener('input', function() { BrandConfig.name = bnInput.value; BrandConfig.apply(); });
+    if (bnInput) bnInput.addEventListener('input', function() {
+      BrandConfig.name = bnInput.value;
+      BrandConfig.apply();
+    });
+    if (bnInput) bnInput.addEventListener('change', async function() {
+      settingsState('saving', '正在保存…');
+      Store.TENANT.name = bnInput.value.trim() || BrandConfig.DEF_NAME;
+      await Store.save();
+      settingsState('saved', '品牌名称已保存');
+    });
+    var tenantIdInput = $('#setTenantId');
+    var storeNameInput = $('#setStoreName');
+    if (tenantIdInput) tenantIdInput.value = Store.TENANT.id || '';
+    if (storeNameInput) storeNameInput.value = Store.TENANT.storeName || '';
+    if (tenantIdInput) tenantIdInput.addEventListener('change', async function () {
+      const value = tenantIdInput.value.trim();
+      const err = $('#tenantIdError');
+      if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(value)) { setFieldError(tenantIdInput, err, '请以英文字母开头，仅使用字母、数字、- 或 _'); settingsState('error', '请检查门店标识'); return; }
+      setFieldError(tenantIdInput, err, ''); settingsState('saving', '正在保存…');
+      Store.TENANT.id = value; await Store.save(); settingsState('saved', '门店标识已保存');
+    });
+    if (storeNameInput) storeNameInput.addEventListener('change', async function () {
+      settingsState('saving', '正在保存…'); Store.TENANT.storeName = storeNameInput.value.trim(); await Store.save(); settingsState('saved', '门店名称已保存');
+    });
+    var banquetCfg = $('#setBanquets');
+    var categoryCfg = $('#setCategories');
+    if (banquetCfg) banquetCfg.value = Store.BANQUETS.map(function (b) { return b.id + ':' + b.name; }).join(',');
+    if (categoryCfg) categoryCfg.value = Store.CATEGORIES.join(',');
+    var catalogSave = $('#setCatalogSave');
+    if (catalogSave) catalogSave.addEventListener('click', async function () {
+      var banquets = banquetCfg.value.split(/[,，]/).map(function (part) {
+        var at = part.indexOf(':'); if (at < 0) at = part.indexOf('：');
+        return { id: part.slice(0, at).trim(), name: part.slice(at + 1).trim() };
+      }).filter(function (b) { return b.id || b.name; });
+      var categories = categoryCfg.value.split(/[,，]/).map(function (x) { return x.trim(); }).filter(Boolean);
+      setFieldError(banquetCfg, $('#banquetsError'), ''); setFieldError(categoryCfg, $('#categoriesError'), '');
+      if (!banquets.length || banquets.some(function (b) { return !/^[A-Za-z][A-Za-z0-9_-]*$/.test(b.id) || !b.name; })) {
+        setFieldError(banquetCfg, $('#banquetsError'), '格式应为 wedding:婚宴,baby:宝宝宴'); settingsState('error', '请检查宴席格式'); return;
+      }
+      if (!categories.length) { setFieldError(categoryCfg, $('#categoriesError'), '至少填写一个菜品分类'); settingsState('error', '请填写菜品分类'); return; }
+      settingsState('saving', '正在保存…');
+      var result = await Store.setCatalogConfig(banquets, categories);
+      if (!result.ok) { setFieldError(banquetCfg, $('#banquetsError'), result.msg); settingsState('error', '保存失败'); return; }
+      markCatalogDirty(false); syncCategoryOptions(); renderAll(); renderManage(); settingsState('saved', '业务配置已保存'); toast('业务配置已保存');
+    });
+    [tenantIdInput, banquetCfg, categoryCfg].forEach(function (input) {
+      if (input) input.addEventListener('input', function () { input.classList.remove('invalid'); input.setAttribute('aria-invalid', 'false'); });
+    });
+    [banquetCfg, categoryCfg].forEach(function (input) { if (input) input.addEventListener('input', function () { markCatalogDirty(true); }); });
     // LOGO 图片上传（带截图框裁剪，类似菜品库）
     var logoInput = $('#brandLogoInput');
     var logoBtn = $('#setBrandLogoBtn');
@@ -2090,6 +2275,20 @@
     // 恢复默认二次确认
     $('#resetConfirm').addEventListener('click', confirmReset);
     $('#resetCancel').addEventListener('click', () => { $('#resetConfirmModal').hidden = true; });
+
+    // —— 演示锁定：设置开关行 + 确认弹窗 ——
+    const demoLockCb = $('#setDemoLockCb');
+    if (demoLockCb) {
+      applyDemoLockUI();
+      demoLockCb.addEventListener('change', () => { setDemoLock(demoLockCb.checked); });
+      // 点整行不关设置面板（同「显示菜品简介」的处理）
+      $('#setDemoLock').addEventListener('click', (e) => e.stopPropagation());
+    }
+    $('#demoLockCancel').addEventListener('click', () => { $('#demoLockModal').hidden = true; });
+    $('#demoLockConfirm').addEventListener('click', async () => {
+      $('#demoLockModal').hidden = true;
+      await setDemoLock(!demoLock);
+    });
 
     // —— 选择器弹窗 ——
     $('#pickCat').addEventListener('change', renderPickGrid);
@@ -2173,42 +2372,9 @@
     $('#cropApply').addEventListener('click', applyCrop);
     initCrop();
 
-    // —— 分享 / 整份菜单导出（二维码 + 多页 PDF）——
-    function shareUrlFor(banquetId) {
-      try { return location.origin + location.pathname + '?banquet=' + encodeURIComponent(banquetId || 'wedding'); } catch (e) { return '?banquet=' + (banquetId || 'wedding'); }
-    }
-    // 客人专享深链：扫码后只进入受限单套餐界面（无管理/定制入口）
-    function guestUrlFor(banquetId, pkgId) {
-      try {
-        var base = location.origin + location.pathname + '?guest=1&banquet=' +
-          encodeURIComponent(banquetId || 'wedding') + '&pkg=' + encodeURIComponent(pkgId || '');
-        var data = guestPkgData(banquetId, pkgId);
-        return data ? base + '&data=' + data : base;
-      } catch (e) { return '?guest=1&banquet=' + (banquetId || 'wedding') + '&pkg=' + (pkgId || ''); }
-    }
-    // 把「当前套餐」（含改过的价格 / 菜名覆盖）编码进客人深链，
-    // 使客人在无后端情况下也能看到定制版菜单与价格。只编码 libId 引用，菜品图由客人端 library 按 libId 解析。
-    function guestPkgData(banquetId, pkgId) {
-      try {
-        var p = Store && Store.getPackage ? Store.getPackage(banquetId, pkgId) : null;
-        if (!p) return '';
-        var payload = {
-          v: 1,
-          id: p.id,
-          n: p.name,
-          pr: (typeof p.price === 'number' || typeof p.price === 'string') ? p.price : 0,
-          d: p.demo ? 1 : 0,
-          ds: Array.isArray(p.dishes) ? p.dishes : [],
-          ov: p.nameOverrides || null
-        };
-        return encodeURIComponent(JSON.stringify(payload));
-      } catch (e) { return ''; }
-    }
-    // 取当前正在展示的「套餐」作为分享目标（后台看管理端、点菜端看 state）
-    function currentShareTarget() {
-      if (state.mode === 'manage' && mg && mg.pkg) return { b: mg.banquet, p: mg.pkg };
-      return { b: state.banquet, p: state.pkg };
-    }
+    // —— 整份菜单导出（多页 PDF）——
+    // 深链与二维码分享已按《产品背景与需求定义》v1 移除（无远程分享、无客人端）：
+    // 导出物 = 离线自包含 PNG/PDF 文件，应用外渠道交付；`?banquet=&pkg=` 仅供内部快速定位宴席。
     function menuExportBanquet() { return (typeof mg !== 'undefined' && mg.banquet) ? mg.banquet : state.banquet; }
     function menuExportScale() {
       var el = $('#menuExportModal .exp-size-btn.on');
@@ -2238,19 +2404,12 @@
       var m = $('#menuExportModal'); if (m) m.hidden = false;
     }
 
-    $('#setShareQr').addEventListener('click', function () {
-      closeSettings();
-      var t = currentShareTarget();
-      if (window.CustomOrder) window.CustomOrder.showQrModal(guestUrlFor(t.b, t.p));
-    });
     $('#setExportMenu').addEventListener('click', openMenuExport);
+    const quickExport = $('#mgQuickExport'); if (quickExport) quickExport.addEventListener('click', openMenuExport);
+    const quickLock = $('#mgQuickLock'); if (quickLock) quickLock.addEventListener('click', openDemoLockConfirm);
     $('#meConfirm').addEventListener('click', function () {
       if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: false, scale: menuExportScale() });
       var m = $('#menuExportModal'); if (m) m.hidden = true;
-    });
-    // 客人专享界面：下载当前套餐（单页 PDF，无二维码）
-    $('#guestDownload').addEventListener('click', function () {
-      if (window.CustomOrder) window.CustomOrder.exportWholeMenu(state.banquet, { pkgId: state.pkg, withQr: false });
     });
     $('#menuExportModal').querySelectorAll('.exp-size-btn').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -2259,7 +2418,7 @@
         renderMenuExportPreview();
       });
     });
-    ['qrModal', 'menuExportModal'].forEach(function (id) {
+    ['menuExportModal'].forEach(function (id) {
       var m = $('#' + id);
       if (m) m.addEventListener('click', function (e) { if (e.target === m) m.hidden = true; });
     });
@@ -2274,81 +2433,26 @@
     });
   }
 
-  // ---------- 深链（扫码分享入口）----------
-  // ?guest=1&banquet=wedding&pkg=A   → 客人专享单套餐界面（受限：无管理/定制入口，仅查看+下载当前套餐）
-  // ?banquet=wedding                 → 自动选中该宴席
-  // ?pkg=A                           → 同时定位到某套餐
-  // ?export=pdf                      → 加载后自动导出整份菜单 PDF（仅后台手动用，客人界面不触发）
+  // ---------- 深链（仅限内部快速定位）----------
+  // ?banquet=wedding → 打开即切到指定宴席
+  // ?pkg=A           → 同时定位到某套餐
+  // 说明：《产品背景与需求定义》v1（无客人端、无远程分享）确立后，
+  // 旧的 ?guest=1 受限客人视图、?data= 内联定制深链、?export=pdf 扫码自动下载
+  // 均**已移除**——导出物是离线 PNG/PDF 文件，由销售在应用外交付；不得再出现「扫码在线看」路径。
   // 无参数时完全不改变默认行为。
   function handleDeepLink() {
     try {
       var sp = new URLSearchParams(location.search);
       var known = Store.BANQUETS.map(function (b) { return b.id; });
 
-      // —— 客人专享模式：优先解析，命中即进入受限单套餐界面 ——
-      var g = sp.get('guest');
-      if (g === '1' || g === 'true') {
-        var gbq = sp.get('banquet') || state.banquet || 'wedding';
-        var gpk = sp.get('pkg');
-        // 解码内联定制套餐（改价/改名）：注入内存菜单，使渲染/PDF/下载自动复用定制版
-        var dataRaw = sp.get('data');
-        if (dataRaw) {
-          try {
-            var pd = JSON.parse(decodeURIComponent(dataRaw));
-            if (pd && pd.id) {
-              var inj = {
-                id: pd.id,
-                name: pd.n != null ? pd.n : pd.id,
-                price: (typeof pd.pr === 'number' || typeof pd.pr === 'string') ? pd.pr : 0,
-                demo: !!pd.d,
-                dishes: Array.isArray(pd.ds) ? pd.ds : [],
-                nameOverrides: pd.ov || {}
-              };
-              if (!Store.STATE.menu[gbq]) {
-                var bn = (Store.BANQUETS.filter(function (b) { return b.id === gbq; })[0] || {}).name || gbq;
-                Store.STATE.menu[gbq] = { name: bn, packages: [] };
-              }
-              var pkgs = Store.STATE.menu[gbq].packages;
-              var ex = -1;
-              for (var zi = 0; zi < pkgs.length; zi++) { if (pkgs[zi].id === inj.id) { ex = zi; break; } }
-              if (ex >= 0) pkgs[ex] = inj; else pkgs.push(inj);
-              if (!gpk) gpk = inj.id;
-            }
-          } catch (e) { /* 解码失败则回退默认解析 */ }
-        }
-        if (known.indexOf(gbq) >= 0) {
-          var gb = banquet(); // 先用旧 banquet 找 banquet() 依赖 state，先设 state
-          state.banquet = gbq;
-          var b = banquet();
-          if (gpk && b && b.packages.some(function (p) { return p.id === gpk; })) state.pkg = gpk;
-          else if (b && b.packages[0]) state.pkg = b.packages[0].id;
-          state.guest = true;
-          state.mode = 'order';
-          document.body.classList.add('guest-mode');
-          var gb2 = $('#guestBar'); if (gb2) gb2.hidden = false;
-          closeSettings();
-          renderAll();
-        }
-        return; // 客人界面不触发整份 PDF 自动下载
-      }
-
       var bq = sp.get('banquet');
       var pk = sp.get('pkg');
-      var exp = sp.get('export');
       if (bq && known.indexOf(bq) >= 0) {
         state.banquet = bq;
         var b2 = banquet();
         if (pk && b2 && b2.packages.some(function (p) { return p.id === pk; })) state.pkg = pk;
         else if (b2 && b2.packages[0]) state.pkg = b2.packages[0].id;
         renderAll();
-      }
-      if (exp === 'pdf') {
-        var target = (bq && known.indexOf(bq) >= 0) ? bq : (state.banquet || 'wedding');
-        setTimeout(function () {
-          if (window.CustomOrder && window.CustomOrder.exportWholeMenu) {
-            window.CustomOrder.exportWholeMenu(target, { withQr: false });
-          }
-        }, 300);
       }
     } catch (e) {}
   }
@@ -2392,10 +2496,18 @@
 
   // ---------- 启动 ----------
   document.addEventListener('DOMContentLoaded', async () => {
+    let storageWarned = false;
+    window.addEventListener('ss-storage-warning', (e) => {
+      if (storageWarned) return;
+      storageWarned = true;
+      const mb = e && e.detail ? (e.detail.bytes / 1048576).toFixed(1) : '';
+      toast(`本地菜单数据已占约 ${mb} MB，请尽快导出配置并发布，避免新增图片保存失败`);
+    });
     try {
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
     applyTheme();   // 先识别设备 + 设置 body.shell-pad + 应用皮肤
+    syncCategoryOptions();
     bindStatic();
     applyTheme();   // 再刷一次皮肤按钮高亮，确保按钮事件已绑定后状态正确
     // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子

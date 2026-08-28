@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { externalizeImages } = require('./lib/externalize-images');
 
 const ROOT = path.resolve(__dirname, '..');
 const TARGET = path.join(ROOT, 'data', 'menu-config.json');
@@ -33,7 +34,7 @@ const SEARCH_DIRS = [
 
 function parseArgs() {
   const a = process.argv.slice(2);
-  const out = { dry: a.includes('--dry'), src: null };
+  const out = { dry: a.includes('--dry'), force: a.includes('--force'), src: null };
   const i = a.indexOf('--src');
   if (i >= 0 && a[i + 1]) out.src = a[i + 1];
   return out;
@@ -141,6 +142,13 @@ function main() {
   const err = validate(data);
   if (err) { console.error(`[失败] 校验不通过：${err}`); process.exit(1); }
 
+  // 发布时自动把 App 导出的 base64 菜图落到 data/img；JSON 只保存同源路径。
+  // dry-run 只模拟字段变化，不写图片文件。
+  const imageResult = externalizeImages(data, ROOT, { dry: args.dry });
+  if (imageResult.extracted) {
+    console.log(`[图片] 外置 ${imageResult.extracted} 张（${(imageResult.bytes / 1048576).toFixed(2)} MB）到 data/img/`);
+  }
+
   const next = summarize(data);
   console.log('\n[新版本]');
   console.log(fmtSummary(next));
@@ -149,13 +157,20 @@ function main() {
   try { prevRaw = fs.readFileSync(TARGET, 'utf8'); } catch (_) {}
   if (prevRaw) {
     try {
-      const prev = summarize(JSON.parse(prevRaw));
+      const prevData = JSON.parse(prevRaw);
+      const prev = summarize(prevData);
       console.log('\n[线上当前]');
       console.log(fmtSummary(prev));
       const d = (a, b) => (b - a >= 0 ? `+${b - a}` : `${b - a}`);
       console.log(
         `\n[差异] 菜品 ${d(prev.libCount, next.libCount)} · 图片 ${d(prev.imgCount, next.imgCount)} · 套餐 ${d(prev.pkgCount, next.pkgCount)}`
       );
+      const sameTenant = !prevData.tenant || !data.tenant || prevData.tenant.id === data.tenant.id;
+      if (!args.force && sameTenant && (+prevData.revision || 0) > (+data.syncedRevision || 0)) {
+        console.error(`\n[冲突] 仓库版本 r${prevData.revision} 新于本设备上次同步版本 r${data.syncedRevision || 0}。`);
+        console.error('       请先导入仓库最新配置后合并修改；确认覆盖可显式使用 --force。');
+        process.exit(4);
+      }
     } catch (_) { console.log('\n[线上当前] 解析失败，将直接覆盖'); }
   } else {
     console.log('\n[线上当前] 文件不存在，将新建');
@@ -163,7 +178,7 @@ function main() {
 
   // 与 App exportConfig 保持一致的序列化方式（2 空格缩进），并保留顶层 logo / logoCrop
   // （品牌徽标随菜单一起搬运，否则导出带 logo 也会在搬运环节被丢掉）
-  const outObj = { menu: data.menu, library: data.library };
+  const outObj = JSON.parse(JSON.stringify(data));
   if (typeof data.logo === 'string' && data.logo) {
     outObj.logo = data.logo;
     outObj.logoCrop = data.logoCrop || null;

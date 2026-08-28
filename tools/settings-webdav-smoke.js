@@ -3,10 +3,11 @@
 //       手动「导入配置 / 导出配置 / 恢复自动备份」入口保留且可用。
 const fs = require('fs');
 const path = require('path');
-const jsdomPath = 'C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom';
-const { JSDOM, VirtualConsole } = require(jsdomPath);
+let jsdom;
+try { jsdom = require('jsdom'); } catch (_) { jsdom = require('C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/jsdom'); }
+const { JSDOM, VirtualConsole } = jsdom;
 
-const PROJ = 'E:/山水S酒店/菜单系统';
+const PROJ = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(PROJ, 'index.html'), 'utf8');
 
 let failures = 0;
@@ -82,9 +83,9 @@ async function run() {
     const setExport = document.getElementById('setExport');
     const setRestore = document.getElementById('setRestore');
     assert(!!setImportJson && !!setExport && !!setRestore, '手动导入/导出/恢复 按钮元素存在');
-    assert(setImportJson.hidden === false, '导入配置（JSON）可见（已设为推荐主路径 primary-row）');
-    assert(setImportJson.className.indexOf('primary-row') >= 0, '导入配置（JSON）已提升为 primary-row 推荐样式');
-    assert(setExport.hidden === false, '导出配置（JSON）可见');
+    assert(setImportJson.hidden === false, '导入菜单备份入口可见');
+    assert(setImportJson.className.indexOf('primary-row') < 0, '覆盖型导入不是默认推荐操作');
+    assert(setExport.hidden === false && setExport.className.indexOf('primary-row') >= 0, '导出备份为推荐主操作');
     assert(setRestore.hidden === false, '恢复自动备份可见');
 
     // 5) 点击「导入配置」应触发隐藏的文件选择（不报错）
