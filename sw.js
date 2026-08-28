@@ -1,7 +1,7 @@
 // 山水S酒店 · 菜单系统 Service Worker（离线缓存 + 安装为 App）
 // CACHE 由 `npm run build:cache` 按核心静态文件内容生成；`npm test` 会拦截过期缓存键。
 // 发布流程先执行 `npm run build`，无需也不得手动递增版本号。
-const CACHE = 'ss-menu-46aae4059d60';
+const CACHE = 'ss-menu-c534a590e549';
 const ASSETS = [
   './',
   './index.html',
