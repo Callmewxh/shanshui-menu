@@ -125,3 +125,15 @@ CI 只检出 stage1 与文档，不读取生产菜单配置；APK 不请求 INTE
 可选已有 adb 的测试人员可执行 `adb shell am force-stop hotel.shanshui.validation`、`adb shell monkey -p hotel.shanshui.validation 1`，并采集 `adb shell dumpsys meminfo hotel.shanshui.validation`。adb 非必需；不要把开发者选项“不保留活动”当作真实进程死亡或低内存的替代。
 
 退出门禁分两段：云端构建通过意味着可下载、测试签名有效且可供安装；T01–T12 的真实设备记录才用于 Android 技术路线判断。构建成功不自动通过行为门禁，也不自动进入阶段 2。
+
+### 云端构建结果：通过（2026-09-07）
+
+- [成功运行 #3](https://github.com/Callmewxh/shanshui-menu/actions/runs/34074292109)，[下载内测包 shanshui-stage1-3](https://github.com/Callmewxh/shanshui-menu/actions/runs/34074292109/artifacts/10001549965)。产物 16,103,916 字节，2026-09-21 到期，包内含独立 APK、校验和、签名证书信息与真机清单。
+- APK 版本 `0.1.3-stage1`，versionCode=3，applicationId=`hotel.shanshui.validation`；APK SHA-256：`aa3ea533242e21fecb8a39649846ce09cd99b317184e0d97ddbd77a8e056524f`。下载 ZIP 的 SHA-256：`30fc44e4cdbc60655d4927845fecc3fe743c278f52c14081639553c362028ed0`。两者均已下载到本机并重新计算比对一致。
+- 代码分支提交 `abd4763808b9f0038a72aad0c67b71754e468b97`；Actions 实际构建 PR 的临时合并提交 `676ad7fa36182206a22d231e3100a517ec5c5f18`，与包内 build-info.txt 一致。草稿 [PR #1](https://github.com/Callmewxh/shanshui-menu/pull/1) 未合并。
+- 通过：npm ci、3 项领域测试、TypeScript/Vite 构建、字体与许可哈希、合成图片生成、云端 SDK 准备、assembleDebug、APK Signature Scheme v2 验证、应用 ID/无 INTERNET/非 testOnly/无生产配置检查、资源入包检查、产物上传。测试证书 SHA-256：`118e496b2451094422e7a60900109c1b74a66711d0faa44b5d181ec349274871`。
+- 已修复失败：#1 runner 缺 sdkmanager → 改为云端下载并校验命令行工具；#2 PdfDocument 不实现 AutoCloseable → 显式关闭并在异常路径结束页面；#3 全部构建步骤成功。本机原项目 npm run build 与 npm test 亦通过，生产 menu-config.json 哈希未变。
+- 未通过验收而仍待测：T01–T12 全部真实平板行为、字体缺字与视觉、低内存、文件外部阅读器兼容、恢复效率。包内“检查”按钮可辅助验证，不能替代人工结果。当前原型只验证一个合成方案，不宣称完整报价历史、自动保存业务或菜单运营已实现。
+- 依赖审计仍有 3 条 moderate 记录，均来自开发依赖 Capacitor CLI 的 xcode/uuid 链；Android APK 不包含该 Node/iOS 工具链。保留锁定版本，未执行可能引入不兼容改动的 audit fix --force。
+
+技术路线结论：React/TypeScript/Vite + Capacitor + 原生接口已经打通云端编译、独立测试签名和可下载 APK 交付。本机 SDK 不再是阻塞项。下一步是把此包安装到真实平板，执行 T01–T12 并回填结果，再讨论阶段 2；尚不据此宣称全部 Android 行为门禁通过。
