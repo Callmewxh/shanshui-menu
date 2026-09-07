@@ -16,6 +16,8 @@ interface Bridge {
   saveFile(options: { name: string }): Promise<void>;
 }
 const Native = registerPlugin<Bridge>('StageOne');
+interface StageTwoBridge { read(): Promise<Record<string, unknown>>; scenario(options:{fail:boolean}): Promise<Record<string, unknown>>; undo(): Promise<Record<string, unknown>>; health(): Promise<Record<string, unknown>>; reset(): Promise<Record<string, unknown>>; }
+const StageTwo = registerPlugin<StageTwoBridge>('StageTwo');
 function App() {
   const [state, setState] = useState<Snapshot>();
   const [status, setStatus] = useState('正在读取原生事务数据库');
@@ -51,6 +53,13 @@ function App() {
     <button disabled={busy} onClick={()=>void run(()=>Native.write({amount:100,rows:100,fail:true}))}>注入写入中断（应回滚）</button>
     <button disabled={busy} onClick={()=>void run(()=>Native.checks())}>运行原生存储/字体检查</button>
     <button disabled={busy} onClick={()=>void run(async()=>{const s=await Native.read();setState(s);return s;})}>重新读取已提交状态</button>
+    <section aria-label="阶段2.5原生数据验证"><h2>阶段 2.5 · SQLite 数据验证</h2><p>合成数据；创建匿名洽谈、A→B→C、临时菜、报价和 V1 冻结。</p>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.scenario({fail:false}))}>提交完整业务事务</button>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.scenario({fail:true}))}>注入阶段 2.5 事务故障</button>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.read())}>读取杀进程恢复状态</button>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.undo())}>重启后 Undo（C → B）</button>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.health())}>SQLite 健康/Schema 检查</button>
+      <button disabled={busy} onClick={()=>void run(()=>StageTwo.reset())}>清空合成阶段 2.5 数据</button></section>
     <button disabled={busy} onClick={()=>void run(async()=>{setFiles([]);setStatus('');setState(await Native.restrict());return '仅客户白名单';})}>交给客户浏览</button>
     <section aria-label="基础导出">{[['kitchen','厨房版'],['receipt','客户无图小票'],['photo','客户有图']].map(([id,title])=><button key={id} disabled={busy} onClick={()=>void run(async()=>{const result=await Native.exportMenu({template:id});setFiles(result.files);return result;})}>生成 {title} PNG/PDF</button>)}</section>
     <ul>{files.map(name=><li key={name}>{name}<button disabled={busy} onClick={()=>void run(()=>Native.openFile({name}))}>重新打开</button><button disabled={busy} onClick={()=>void run(()=>Native.saveFile({name}))}>另存到系统文件</button></li>)}</ul>
