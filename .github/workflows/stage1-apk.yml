@@ -1,0 +1,69 @@
+name: Stage1 internal APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/stage1/**', '.github/workflows/stage1-apk.yml']
+  pull_request:
+    paths: ['src/stage1/**', '.github/workflows/stage1-apk.yml']
+permissions:
+  contents: read
+concurrency:
+  group: stage1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src/stage1
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            src/stage1
+            docs
+            .github
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: src/stage1/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Dependencies and bundled offline assets
+        run: |
+          npm ci
+          node tools/assets.mjs
+      - name: Domain checks and Web build
+        run: |
+          npm test
+          npm run build
+      - name: Native project from locked Capacitor template
+        run: node tools/prepare-android.mjs
+      - name: Android SDK in cloud runner only
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Build installable debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon --max-workers=2 assembleDebug
+      - name: Verify signing, package isolation and checksums
+        run: bash tools/package-apk.sh
+      - uses: actions/upload-artifact@v4
+        id: apk
+        with:
+          name: shanshui-stage1-${{ github.run_number }}
+          path: src/stage1/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Download link
+        run: printf 'Internal test APK bundle (requires repository access)\n%s\n\nAndroid behavior gates remain pending real-tablet testing.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
