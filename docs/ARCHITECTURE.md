@@ -214,3 +214,5 @@ KitchenRequest 的 UUID 与短号由原生服务自动生成，数据库唯一�
 阶段 1 在 src/stage1 建独立 applicationId 与合成数据数据库；不加载生产菜单、不迁移真实客户、不接 WebDAV。最小 React/TypeScript/Vite 页面只调用原生窄接口；用 SQLite 事务、原生文件和生命周期验证替代在旧 HTML 外套壳。SQLiteOpenHelper 可用于验证事务本身；是否采用 Room 在验证后决定，不将存储库选择等同验证结论。阶段 1 的调试故障注入不得进入正式构建。
 
 阶段 1 构建路线（2026-09-07）：GitHub Actions 云端构建，开发机不要求 JDK/SDK/adb/模拟器。锁定 Capacitor 模板生成 android 目录，再复制 native 中的原生接口；生成目录不提交，构建脚本和锁文件提交。SQLiteOpenHelper 同事务保存状态和事件，原生 PdfDocument/Canvas 提供三个基础模板；本地字体校验哈希后随包，合成图片由脚本生成。测试 APK 禁网络权限与备份，独立应用 ID `hotel.shanshui.validation`，云端临时 debug 签名。最低 Android 24，目标/编译 36。原生行为改为安装真实平板后人工/半自动验证，详见 DECISIONS 的 T01–T12；本机环境缺失不再阻塞 APK 构建。
+
+验证状态：云端运行 #3（34074292109）已成功构建并上传 `0.1.3-stage1` APK，签名与入包隔离检查通过，下载后校验和一致。原生编译链已打通；真实设备事务、恢复、显示与导出行为仍待 T01–T12 验证。下载链接、精确提交、文件与证书哈希见 DECISIONS「云端构建结果」。
