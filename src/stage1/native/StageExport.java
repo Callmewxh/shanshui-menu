@@ -37,12 +37,14 @@ final class StageExport {
         JSArray names=new JSArray();List<File> completed=new ArrayList<>();long peak=0;
         File pdf=new File(root,stem+".pdf");
         Bitmap fixture=null;
-        try(PdfDocument document=new PdfDocument()) {
+        PdfDocument document=new PdfDocument();
+        try {
             // Decode one bundled synthetic image, not any production media.
             if(photo) try(InputStream input=context.getAssets().open("public/fixture.png")){fixture=BitmapFactory.decodeStream(input);if(fixture==null)throw new IOException("Fixture decode failed");}
             for(int p=0;p<pages.size();p++) {
                 PdfDocument.Page pdfPage=document.startPage(new PdfDocument.PageInfo.Builder(width,height,p+1).create());
-                draw(pdfPage.getCanvas(),pages.get(p),paint,fixture,frozen,template,p+1,pages.size());document.finishPage(pdfPage);
+                try {draw(pdfPage.getCanvas(),pages.get(p),paint,fixture,frozen,template,p+1,pages.size());}
+                finally {document.finishPage(pdfPage);}
                 Bitmap bitmap=Bitmap.createBitmap(1190,1684,Bitmap.Config.ARGB_8888);
                 peak=Math.max(peak,bitmap.getAllocationByteCount()+(fixture==null?0:fixture.getAllocationByteCount()));
                 File png=new File(root,stem+"-"+(p+1)+".png");completed.add(png);
@@ -63,7 +65,7 @@ final class StageExport {
         } catch(Exception|OutOfMemoryError e) {
             for(File f:completed)if(f.exists())f.delete();
             throw new IOException("导出失败，未发布不完整文件",e);
-        } finally {if(fixture!=null)fixture.recycle();}
+        } finally {try{document.close();}finally{if(fixture!=null)fixture.recycle();}}
     }
     private static StaticLayout layout(String s,TextPaint paint,int width){return StaticLayout.Builder.obtain(s,0,s.length(),paint,width).setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).build();}
     private static void text(Canvas canvas,String s,TextPaint paint,int x,int y,int width){canvas.save();canvas.translate(x,y);layout(s,paint,width).draw(canvas);canvas.restore();}
@@ -82,3 +84,4 @@ final class StageExport {
         p.setTextSize(11);text(c,"第 "+page+" / "+count+" 页 · STAGE1",p,45,805,505);
     }
 }
+
