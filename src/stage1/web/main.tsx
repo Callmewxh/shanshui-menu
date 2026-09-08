@@ -16,7 +16,7 @@ interface Bridge {
   saveFile(options: { name: string }): Promise<void>;
 }
 const Native = registerPlugin<Bridge>('StageOne');
-interface StageTwoBridge { read(): Promise<Record<string, unknown>>; scenario(options:{fail:boolean}): Promise<Record<string, unknown>>; undo(): Promise<Record<string, unknown>>; health(): Promise<Record<string, unknown>>; reset(): Promise<Record<string, unknown>>; }
+interface StageTwoBridge { read(): Promise<Record<string, unknown>>; scenario(options:{fail:boolean}): Promise<Record<string, unknown>>; undo(): Promise<Record<string, unknown>>; freezeCheck(): Promise<Record<string, unknown>>; health(): Promise<Record<string, unknown>>; reset(): Promise<Record<string, unknown>>; }
 const StageTwo = registerPlugin<StageTwoBridge>('StageTwo');
 function App() {
   const [state, setState] = useState<Snapshot>();
@@ -25,6 +25,7 @@ function App() {
   const [price, setPrice] = useState('2999');
   const [rows, setRows] = useState(16);
   const [files, setFiles] = useState<string[]>([]);
+  const [stageTwoState, setStageTwoState] = useState<Record<string, unknown>>();
   const gesture = useRef({ at: 0, x: 0 });
   async function run(action: () => Promise<unknown>) {
     if (busy) return;
@@ -32,6 +33,9 @@ function App() {
     try { const value = await action(); setStatus(JSON.stringify(value, null, 2)); }
     catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
+  }
+  async function runStageTwo(label: string, action: () => Promise<Record<string, unknown>>) {
+    await run(async () => { const value = await action(); setStageTwoState(value); return { operation: label, result: value }; });
   }
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) { setStatus('需要 Android APK。浏览器不提供模拟存储成功结果。'); return; }
@@ -54,16 +58,30 @@ function App() {
     <button disabled={busy} onClick={()=>void run(()=>Native.checks())}>运行原生存储/字体检查</button>
     <button disabled={busy} onClick={()=>void run(async()=>{const s=await Native.read();setState(s);return s;})}>重新读取已提交状态</button>
     <section aria-label="阶段2.5原生数据验证"><h2>阶段 2.5 · SQLite 数据验证</h2><p>合成数据；创建匿名洽谈、A→B→C、临时菜、报价和 V1 冻结。</p>
-      <button disabled={busy} onClick={()=>void run(()=>StageTwo.scenario({fail:false}))}>提交完整业务事务</button>
-      <button disabled={busy} onClick={()=>void run(()=>StageTwo.scenario({fail:true}))}>注入阶段 2.5 事务故障</button>
-      <button disabled={busy} onClick={()=>void run(()=>StageTwo.read())}>读取杀进程恢复状态</button>
-      <button disabled={busy} onClick={()=>void run(()=>StageTwo.undo())}>重启后 Undo（C → B）</button>
+      <button disabled={busy} onClick={()=>void runStageTwo('完整业务事务已提交',()=>StageTwo.scenario({fail:false}))}>提交完整业务事务（A → B → C）</button>
+      <button disabled={busy} onClick={()=>void runStageTwo('故障注入：应显示失败且保留原状态',()=>StageTwo.scenario({fail:true}))}>注入阶段 2.5 事务故障</button>
+      <button disabled={busy} onClick={()=>void runStageTwo('已读取 Stage 2.5 SQLite 领域状态',()=>StageTwo.read())}>读取 Stage 2.5 SQLite 领域状态</button>
+      <button disabled={busy} onClick={()=>void runStageTwo('Undo 已执行：当前菜应为 B，标准原菜仍为 A',()=>StageTwo.undo())}>重启后 Undo（C → B）</button>
+      <button disabled={busy} onClick={()=>void runStageTwo('V1 冻结检查已执行',()=>StageTwo.freezeCheck())}>验证 ProposalVersion V1 冻结</button>
       <button disabled={busy} onClick={()=>void run(()=>StageTwo.health())}>SQLite 健康/Schema 检查</button>
-      <button disabled={busy} onClick={()=>void run(()=>StageTwo.reset())}>清空合成阶段 2.5 数据</button></section>
+      <button disabled={busy} onClick={()=>void run(async()=>{setStageTwoState(undefined);return StageTwo.reset();})}>清空合成阶段 2.5 数据</button>
+      <StageTwoObservation state={stageTwoState} /></section>
     <button disabled={busy} onClick={()=>void run(async()=>{setFiles([]);setStatus('');setState(await Native.restrict());return '仅客户白名单';})}>交给客户浏览</button>
     <section aria-label="基础导出">{[['kitchen','厨房版'],['receipt','客户无图小票'],['photo','客户有图']].map(([id,title])=><button key={id} disabled={busy} onClick={()=>void run(async()=>{const result=await Native.exportMenu({template:id});setFiles(result.files);return result;})}>生成 {title} PNG/PDF</button>)}</section>
     <ul>{files.map(name=><li key={name}>{name}<button disabled={busy} onClick={()=>void run(()=>Native.openFile({name}))}>重新打开</button><button disabled={busy} onClick={()=>void run(()=>Native.saveFile({name}))}>另存到系统文件</button></li>)}</ul>
     <pre role="status">{busy ? '原生操作进行中…' : status}</pre>
   </main>;
+}
+function StageTwoObservation({state}:{state?:Record<string, unknown>}) {
+  if (!state) return <p role="status">尚未读取阶段 2.5 领域状态。</p>;
+  if (state.empty) return <p role="status">阶段 2.5 数据为空。</p>;
+  const value = (key:string) => { const item=state[key]; return typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean' ? String(item) : JSON.stringify(item); };
+  return <section aria-label="阶段2.5领域状态"><h3>Stage 2.5 SQLite 领域状态（已提交值）</h3><dl>
+    <dt>Negotiation</dt><dd>{value('negotiation')}</dd><dt>Proposal</dt><dd>{value('proposal')}</dd>
+    <dt>standardOriginal</dt><dd>{value('standardOriginal')}</dd><dt>currentDish</dt><dd>{value('currentDish')}</dd>
+    <dt>TemporaryDish</dt><dd>{value('temporaryDish')}</dd><dt>customerQuote（分/桌）</dt><dd>{value('customerQuoteMinor')}</dd>
+    <dt>Timeline</dt><dd>{value('timeline')}</dd><dt>ProposalVersion V1</dt><dd>{value('versionV1')}</dd>
+    <dt>V1 冻结结论</dt><dd>{state.freezeVerification === undefined ? '未验证' : value('freezeVerification')}</dd>
+  </dl></section>;
 }
 createRoot(document.getElementById('root')!).render(<App />);

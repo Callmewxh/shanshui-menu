@@ -137,3 +137,9 @@ CI 只检出 stage1 与文档，不读取生产菜单配置；APK 不请求 INTE
 - 依赖审计仍有 3 条 moderate 记录，均来自开发依赖 Capacitor CLI 的 xcode/uuid 链；Android APK 不包含该 Node/iOS 工具链。保留锁定版本，未执行可能引入不兼容改动的 audit fix --force。
 
 技术路线结论：React/TypeScript/Vite + Capacitor + 原生接口已经打通云端编译、独立测试签名和可下载 APK 交付。本机 SDK 不再是阻塞项。下一步是把此包安装到真实平板，执行 T01–T12 并回填结果，再讨论阶段 2；尚不据此宣称全部 Android 行为门禁通过。
+
+## 阶段 2.5 真机补充证据（2026-09-08）
+
+以下结论来自用户在真实 Android 平板对测试 APK 的实际执行，保留为已取得证据：杀进程后已提交数据恢复 **PASS**；SQLite 事务故障注入完整回滚、原数据未污染 **PASS**；重启后 SQLite `integrity_check` **PASS**；重启后 `bundledFontLoaded` **PASS**。这些项目无需重复测试。
+
+当时 APK 的阶段 2.5 结果只以原始 JSON 输出，且客户受限展示态不显示内部验证区，因此以下项目仍为**未验证**：重启后 Undo（C→B）、完整 `Negotiation / Proposal / standardOriginal / currentDish / TemporaryDish / customerQuote / Timeline / ProposalVersion V1` 的持久化可观测性，以及 ProposalVersion 冻结。后续仅补充合成数据测试入口与明确字段显示；不得将这些未验证项标记为通过。
