@@ -22,7 +22,7 @@ final class StageExport {
         if (!Arrays.asList("kitchen","receipt","photo").contains(template)) throw new IllegalArgumentException("Unknown template");
         final boolean photo=template.equals("photo"), chef=template.equals("kitchen");
         final int width=595,height=842,margin=45;
-        JSArray supplied=frozen.optJSONArray("lines"); final int rows=supplied==null?frozen.getInt("rows"):supplied.length();
+        org.json.JSONArray supplied=frozen.optJSONArray("lines"); final int rows=supplied==null?frozen.getInt("rows"):supplied.length();
         TextPaint paint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
         paint.setTypeface(Typeface.createFromAsset(context.getAssets(),FONT)); paint.setColor(Color.rgb(40,38,33)); paint.setTextSize(16);
         List<List<Integer>> pages=new ArrayList<>(); List<Integer> page=new ArrayList<>();int y=135;
