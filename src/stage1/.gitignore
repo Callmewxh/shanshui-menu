@@ -1,0 +1,13 @@
+node_modules/
+android/
+public/fonts/*.ttf
+public/fixture.png
+dist/
+artifacts/
+.toolchain/
+android/.gradle/
+android/local.properties
+android/**/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json

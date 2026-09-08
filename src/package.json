@@ -6,7 +6,7 @@
     "build": "npm run build:cache",
     "build:cache": "node tools/build-sw-cache.js",
     "data:externalize": "node tools/externalize-menu-images.js",
-    "test": "node tools/run-tests.js"
+    "test": "node tools/run-tests.js && npm --prefix stage2 test"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"
