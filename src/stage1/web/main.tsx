@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { amountMinor } from './domain';
 import './style.css';
+import { StageThreeApp } from './stage3-app';
 type Snapshot = { restricted: boolean; amount: number; revision: number; rows: number; dishes: string[]; reference?: number; events?: number; request?: string };
 type FileResult = { files: string[]; pages: number; peakBitmapBytes: number; pdfPages: number };
 interface Bridge {
@@ -18,7 +19,7 @@ interface Bridge {
 const Native = registerPlugin<Bridge>('StageOne');
 interface StageTwoBridge { read(): Promise<Record<string, unknown>>; scenario(options:{fail:boolean}): Promise<Record<string, unknown>>; undo(): Promise<Record<string, unknown>>; freezeCheck(): Promise<Record<string, unknown>>; health(): Promise<Record<string, unknown>>; reset(): Promise<Record<string, unknown>>; }
 const StageTwo = registerPlugin<StageTwoBridge>('StageTwo');
-function App() {
+function TechnicalValidationApp() {
   const [state, setState] = useState<Snapshot>();
   const [status, setStatus] = useState('正在读取原生事务数据库');
   const [busy, setBusy] = useState(false);
@@ -84,4 +85,4 @@ function StageTwoObservation({state}:{state?:Record<string, unknown>}) {
     <dt>V1 冻结结论</dt><dd>{state.freezeVerification === undefined ? '未验证' : value('freezeVerification')}</dd>
   </dl></section>;
 }
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(location.search.includes('technical=1') ? <TechnicalValidationApp /> : <StageThreeApp />);

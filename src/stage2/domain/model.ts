@@ -1,5 +1,3 @@
-import { createHash, randomUUID } from 'node:crypto';
-
 export const SCHEMA_VERSION = 2;
 export type Id = string;
 export type MoneyMinor = number;
@@ -32,6 +30,7 @@ export interface TimelineEvent { id: Id; negotiationId: Id; actorId: Id; deviceI
 
 export interface Database {
   schemaVersion: number; revision: number; deviceId: Id; sequence: number;
+  presentation?: { restricted: boolean; proposalId: Id; authorizedPackageRevisionIds: Id[] };
   staff: Record<Id, StaffProfile>; banquetTypes: Record<Id, BanquetType>; mediaAssets: Record<Id, MediaAsset>;
   dishes: Record<Id, Dish>; dishRevisions: Record<Id, DishRevision>; packages: Record<Id, Package>; packageRevisions: Record<Id, PackageRevision>;
   customers: Record<Id, Customer>; negotiations: Record<Id, Negotiation>; proposals: Record<Id, Proposal>; drafts: Record<Id, ProposalDraft>; temporaryDishes: Record<Id, TemporaryDish>;
@@ -39,9 +38,20 @@ export interface Database {
   migrations: Record<string, { inputHash: string; migrationVersion: number; importedAt: string }>;
 }
 export const emptyDatabase = (deviceId = 'device-local'): Database => ({ schemaVersion: SCHEMA_VERSION, revision: 0, deviceId, sequence: 0, staff:{}, banquetTypes:{}, mediaAssets:{}, dishes:{}, dishRevisions:{}, packages:{}, packageRevisions:{}, customers:{}, negotiations:{}, proposals:{}, drafts:{}, temporaryDishes:{}, proposalVersions:{}, kitchenRequests:{}, quoteRecords:{}, confirmations:{}, timeline:[], migrations:{} });
-export const id = (): Id => randomUUID();
+export const id = (): Id => globalThis.crypto.randomUUID();
 export const now = (): string => new Date().toISOString();
-export function hash(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+/** A deterministic portable digest for content identity. It deliberately has no Node-only dependency so
+ * the same Stage 2 repository runs in the Capacitor WebView and in its Node tests. */
+export function hash(value: unknown): string {
+  const text = JSON.stringify(value);
+  let first = 0x811c9dc5, second = 0x01000193;
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193) >>> 0;
+    second = Math.imul(second ^ (code + index), 0x85ebca6b) >>> 0;
+  }
+  return `${first.toString(16).padStart(8, '0')}${second.toString(16).padStart(8, '0')}`;
+}
 export function assertMoney(value: number): asserts value is MoneyMinor { if (!Number.isSafeInteger(value) || value < 0) throw new Error('金额必须为非负整数分'); }
 export function pricingFingerprint(lines: DraftLine[]): string {
   return hash(lines.map(line => [line.source, line.dishRevisionId ?? line.temporaryDishId, line.name.normalize('NFC'), line.quantity, (line.preparation ?? '').normalize('NFC')]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en')));

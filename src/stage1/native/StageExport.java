@@ -22,7 +22,7 @@ final class StageExport {
         if (!Arrays.asList("kitchen","receipt","photo").contains(template)) throw new IllegalArgumentException("Unknown template");
         final boolean photo=template.equals("photo"), chef=template.equals("kitchen");
         final int width=595,height=842,margin=45;
-        final int rows=frozen.getInt("rows");
+        JSArray supplied=frozen.optJSONArray("lines"); final int rows=supplied==null?frozen.getInt("rows"):supplied.length();
         TextPaint paint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
         paint.setTypeface(Typeface.createFromAsset(context.getAssets(),FONT)); paint.setColor(Color.rgb(40,38,33)); paint.setTextSize(16);
         List<List<Integer>> pages=new ArrayList<>(); List<Integer> page=new ArrayList<>();int y=135;
@@ -72,14 +72,14 @@ final class StageExport {
     private static void draw(Canvas c,List<Integer> rows,TextPaint p,Bitmap image,JSObject frozen,String template,int page,int count) {
         boolean chef=template.equals("kitchen"),photo=template.equals("photo");
         c.drawColor(Color.WHITE);p.setTextSize(22);
-        text(c,chef?"厨房询价 · 合成菜单":photo?"宴席菜单 · 有图样例":"宴席菜单 · 无图小票",p,45,35,505);
+        String title=frozen.optString("title",chef?"厨房询价 · 合成菜单":photo?"宴席菜单 · 有图样例":"宴席菜单 · 无图小票");text(c,title,p,45,35,505);
         p.setTextSize(13);
         text(c,chef?"待核价 / "+frozen.optString("request")+" / 非备餐指令":"当前对客报价 ¥"+String.format(Locale.ROOT,"%.2f",frozen.optLong("amount")/100.0)+" / 桌",p,45,72,505);
         text(c,chef?"核价备注：合成样例，无客户资料":"内部技术验证样例，无真实客户资料",p,45,96,505);
         int y=135;p.setTextSize(16);
         for(int i:rows) {
-            if(photo) {c.drawBitmap(image,null,new Rect(45,y,165,y+90),p);text(c,dish(i),p,185,y+8,365);y+=122;}
-            else {StaticLayout l=layout(dish(i),p,505);text(c,dish(i),p,45,y,505);y+=l.getHeight()+16;}
+            String name=frozen.optJSONArray("lines")==null?dish(i):frozen.optJSONArray("lines").optString(i);if(photo) {c.drawBitmap(image,null,new Rect(45,y,165,y+90),p);text(c,name,p,185,y+8,365);y+=122;}
+            else {StaticLayout l=layout(name,p,505);text(c,name,p,45,y,505);y+=l.getHeight()+16;}
         }
         p.setTextSize(11);text(c,"第 "+page+" / "+count+" 页 · STAGE1",p,45,805,505);
     }
