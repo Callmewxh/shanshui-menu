@@ -140,6 +140,18 @@ CI 只检出 stage1 与文档，不读取生产菜单配置；APK 不请求 INTE
 
 ## 阶段 2.5 真机补充证据（2026-09-08）
 
-以下结论来自用户在真实 Android 平板对测试 APK 的实际执行，保留为已取得证据：杀进程后已提交数据恢复 **PASS**；SQLite 事务故障注入完整回滚、原数据未污染 **PASS**；重启后 SQLite `integrity_check` **PASS**；重启后 `bundledFontLoaded` **PASS**。这些项目无需重复测试。
+阶段 2.5 已正式通过。以下均为用户在真实 Android 平板对独立合成测试 APK 的实际执行结果，而非 Node 内存测试或云端构建推断。
 
-当时 APK 的阶段 2.5 结果只以原始 JSON 输出，且客户受限展示态不显示内部验证区，因此以下项目仍为**未验证**：重启后 Undo（C→B）、完整 `Negotiation / Proposal / standardOriginal / currentDish / TemporaryDish / customerQuote / Timeline / ProposalVersion V1` 的持久化可观测性，以及 ProposalVersion 冻结。后续仅补充合成数据测试入口与明确字段显示；不得将这些未验证项标记为通过。
+| 已真机 PASS | 实际验证结论 |
+| --- | --- |
+| 完整领域状态写入 SQLite | `Negotiation`、`Proposal`、`standardOriginal`、当前菜、临时菜、对客报价、Timeline、ProposalVersion V1 已写入并可读取。 |
+| 杀进程 / 冷启动恢复 | 已提交的阶段 2.5 领域状态可恢复。 |
+| SQLite 事务故障注入 | 中途异常完整回滚，既有数据未被污染。 |
+| 重启后 Undo | `C → B` 成功，且 `standardOriginal=A` 仍保留。 |
+| ProposalVersion V1 冻结 | 当前菜库名称/价格/图片引用及草稿变化后，V1 不漂移。 |
+| SQLite integrity | 重启后 `integrity_check` 通过。 |
+| 离线字体 | 重启后 `bundledFontLoaded` 通过。 |
+
+仍待验证，且**不得**因阶段 2.5 通过而标记为 PASS：三模板真实 PNG/PDF 全量验收与外部打开、长菜单分页、低内存压力、客户受限展示的返回/冷启动完整矩阵、低存储空间，以及真实生产数据迁移演练。阶段 2.5 的测试数据始终为独立合成数据，不触及生产数据。
+
+阶段 2.5 收口后停止；阶段 3 必须等待人工明确授权，不能由本记录自动触发。
