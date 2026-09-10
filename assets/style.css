@@ -45,7 +45,8 @@
   --pad-sidebar-texture:url("cinnabar-a-sidebar-gold-dust.png");
   --pad-sidebar-overlay:linear-gradient(180deg,rgba(90,11,9,.20),rgba(64,7,6,.45));
   --pad-sidebar-fallback:#8f160f;
-  --pad-hero-paper:rgba(255,250,243,.48);
+  /* 页头不用右侧纸感贴图，保持稳定的暖白标题区；纸感仅承载下方菜品区。 */
+  --pad-hero-paper:#fffaf3;
   --pad-hero-fade:linear-gradient(92deg,rgba(255,250,243,.92) 0%,rgba(255,250,243,.86) 46%,rgba(255,250,243,.38) 72%,rgba(255,250,243,.08) 100%);
   --pad-title:#7b1c18;
   --pad-kicker:#9b4a32;
@@ -1165,6 +1166,8 @@ body.detail-modal-open .content { overscroll-behavior: none; }
   height: 240px; display: flex; align-items: center; justify-content: center;
 }
 .exp-preview svg { display:block; width:auto; height:100%; max-width:100%; max-height:100%; object-fit:contain; }
+#menuExportModal .exp-preview { height: min(42vh, 360px); }
+#menuExportModal .exp-preview img { display:block; width:100%; height:100%; object-fit:contain; }
 
 /* 字号档位选择行 */
 .exp-size { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 4px 0 14px; }
@@ -2006,12 +2009,12 @@ body.shell-pad .topbar { display: none !important; }
 body.shell-pad .app { display: block; position: fixed; inset: 0; overflow: hidden; background: var(--pad-canvas); }
 body.shell-pad #orderScreen {
   position: absolute; inset: 0 0 0 330px; z-index: 1; display: flex;
-  transform: none; opacity: 1; transition: none; background:var(--pad-content-overlay), var(--pad-content-bg) center / cover no-repeat, var(--pad-canvas);
+  transform: none; opacity: 1; transition: none; background:var(--pad-canvas);
 }
 body.shell-pad #orderScreen.entered { transform: none; }
 body.shell-pad #orderScreen .pkgbar { display: none !important; }
 body.shell-pad #orderScreen .body { display: block; flex: 1; overflow: hidden; }
-body.shell-pad #orderScreen .content { height:100%; padding:0 54px 64px; overflow-y:auto; }
+body.shell-pad #orderScreen .content { height:100%; padding:0 54px 64px; overflow-y:auto; background:var(--pad-content-overlay), var(--pad-content-bg) center / cover no-repeat, var(--pad-canvas); }
 body.shell-pad #orderScreen .content::before { display:none; }
 body.shell-pad #orderScreen .hero { display:block !important; margin:0 -54px 24px; }
 body.shell-pad .pad-hero-card { position:relative; min-height:245px; padding:43px max(54px, calc((100% - 920px)/2)); overflow:hidden; background:var(--pad-hero-paper); border-bottom:1px solid var(--pad-list-line); }

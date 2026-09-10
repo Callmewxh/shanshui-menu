@@ -2648,11 +2648,13 @@
       var b = Store.getBanquet(bId);
       if (!b || !b.packages.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">该宴席暂无套餐</div>'; return; }
       container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">渲染预览中…</div>';
-      if (window.CustomOrder && window.CustomOrder.buildPackageSVG) {
-        var svg = window.CustomOrder.buildPackageSVG(bId, b.packages[0].id, menuExportScale());
-        container.innerHTML = svg;
-        var svgs = container.querySelector('svg');
-        if (svgs) { svgs.style.height = '260px'; svgs.style.width = 'auto'; svgs.style.maxWidth = '100%'; svgs.style.display = 'block'; svgs.style.margin = '0 auto'; }
+      if (window.CustomOrder && window.CustomOrder.renderPackageLandscapeCanvas) {
+        window.CustomOrder.renderPackageLandscapeCanvas(bId, b.packages[0].id, function (canvas, errors) {
+          if (!canvas) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#A33;font-size:14px">预览无法生成：' + (errors || []).join('；') + '</div>'; return; }
+          var img = document.createElement('img'); img.alt = '横版 A4 菜单预览'; img.src = canvas.toDataURL('image/png');
+          img.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain';
+          container.innerHTML = ''; container.appendChild(img);
+        });
       }
     }
     function openMenuExport() {

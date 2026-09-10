@@ -724,18 +724,43 @@
       canvasCover(ctx, image, x, y, size, size, crop); ctx.restore(); if (done) done();
     });
   }
-  function getLandscapeGrid(count, bounds) {
-    var best = null, maxCols = Math.min(6, Math.max(3, count));
-    for (var cols = 3; cols <= maxCols; cols++) {
-      var rows = Math.ceil(count / cols), gap = 30;
-      var maxW = Math.min(760, (bounds.w - gap * (cols - 1)) / cols);
-      var caption = Math.max(80, maxW * .17), h = maxW * .75 + caption;
-      if (h * rows + gap * (rows - 1) <= bounds.h) {
-        var candidate = { cols: cols, rows: rows, gap: gap, w: maxW, h: h, caption: caption };
-        if (!best || candidate.w > best.w) best = candidate;
-      }
+  function wrapCanvasLines(ctx, text, maxWidth) {
+    text = String(text || '').trim(); if (!text) return [];
+    var lines = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var next = line + text[i];
+      if (line && ctx.measureText(next).width > maxWidth) { lines.push(line); line = text[i]; }
+      else line = next;
     }
-    return best || { cols: 6, rows: Math.ceil(count / 6), gap: 24, w: (bounds.w - 120) / 6, h: ((bounds.w - 120) / 6) * .75 + 70, caption: 70 };
+    if (line) lines.push(line);
+    return lines;
+  }
+  // 根据每行备注的最大高度计算行高；同行卡片共享同一个 rowHeight，底边始终对齐。
+  function getLandscapeGrid(lines, bounds, ctx) {
+    var count = Math.max(1, lines.length), best = null, maxCols = Math.min(6, Math.max(3, count));
+    function measure(cols, w) {
+      var gap = 30, rows = Math.ceil(count / cols), pad = Math.max(9, w * .025), imageW = w - pad * 2, imageH = imageW * .75;
+      var titleFs = Math.max(24, Math.min(36, w * .052)), noteFs = Math.max(18, Math.min(25, w * .036)), noteStep = Math.round(noteFs * 1.42), rowHeights = [];
+      for (var r = 0; r < rows; r++) {
+        var rowH = imageH + pad + titleFs + 26;
+        for (var c = 0; c < cols; c++) {
+          var dish = lines[r * cols + c]; if (!dish || !(dish.note || '').trim()) continue;
+          ctx.font = noteFs + 'px "Microsoft YaHei", sans-serif';
+          var noteLines = wrapCanvasLines(ctx, '备注：' + dish.note.trim(), imageW);
+          rowH = Math.max(rowH, imageH + pad + titleFs + 14 + noteLines.length * noteStep + 16);
+        }
+        rowHeights.push(rowH);
+      }
+      var total = rowHeights.reduce(function (a, h) { return a + h; }, 0) + gap * (rows - 1);
+      return { cols:cols, rows:rows, gap:gap, w:w, pad:pad, imageW:imageW, imageH:imageH, titleFs:titleFs, noteFs:noteFs, noteStep:noteStep, rowHeights:rowHeights, total:total };
+    }
+    for (var cols = 3; cols <= maxCols; cols++) {
+      var maxW = Math.min(760, (bounds.w - 30 * (cols - 1)) / cols), candidate = measure(cols, maxW);
+      // 备注过多时只缩小中部菜品区，固定背景和抬头一律不动。
+      while (candidate.total > bounds.h && candidate.w > 180) candidate = measure(cols, candidate.w - 6);
+      if (candidate.total <= bounds.h && (!best || candidate.w > best.w)) best = candidate;
+    }
+    return best || measure(6, Math.max(180, (bounds.w - 150) / 6));
   }
   // 纯 Canvas 的无文字 A4 底稿。此函数只能放固定装饰，严禁出现酒店名、菜单名、报价或口号。
   function drawLandscapeTemplate(ctx, W, H, C) {
@@ -760,7 +785,8 @@
     ctx.moveTo(0, H - 135); ctx.bezierCurveTo(300, H - 290, 540, H - 110, 850, H - 180); ctx.bezierCurveTo(1130, H - 250, 1320, H - 105, 1630, H - 165); ctx.bezierCurveTo(1990, H - 235, 2250, H - 95, 2590, H - 165); ctx.bezierCurveTo(2910, H - 232, 3240, H - 125, W, H - 250); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = .12; ctx.fillStyle = '#b89650'; ctx.beginPath(); ctx.moveTo(0, H - 78); ctx.bezierCurveTo(420, H - 245, 720, H - 115, 1120, H - 150); ctx.bezierCurveTo(1580, H - 190, 1930, H - 58, 2370, H - 142); ctx.bezierCurveTo(2800, H - 215, 3160, H - 95, W, H - 170); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill(); ctx.restore();
   }
-  function buildPhotoLandscapeCanvas(lines, done) {
+  function buildPhotoLandscapeCanvas(lines, done, meta) {
+    meta = meta || {};
     var W = 3508, H = 2480, canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext('2d'), C = { bg:'#f8f3e9', ink:'#382c25', muted:'#a88d67', red:'#a52f29', gold:'#b78d40', hair:'#cfb878', card:'#fffdf8', image:'#e8dcc0' };
@@ -776,10 +802,10 @@
     var titleFamily = '"Noto Serif SC", "Songti SC", "STSong", Georgia, serif';
     var sansFamily = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
     // 左侧仅使用设置页的原始 LOGO（其内部文字、比例均随设置图像保持），不重复绘制酒店名。
-    var title = (draft.source || draft.type || '宴会菜单').trim();
+    var title = (meta.title || (draft && (draft.source || draft.type)) || '宴会菜单').trim();
     ctx.fillStyle = '#781b1b'; canvasFontToFit(ctx, '700', 60 * s, titleFamily, title, 420 * s, 35 * s); ctx.textAlign = 'center';
     ctx.fillText(title, 746 * s, 151 * s);
-    var price = String(draft.total || '—');
+    var price = String(typeof meta.price !== 'undefined' ? meta.price : ((draft && draft.total) || '—'));
     var priceText = '¥' + price, priceGap = 14 * s, deskText = '/ 桌', deskRight = 1405 * s;
     // “/ 桌”是最右固定锚点；另外两段从右向左依次排布，两个空隙严格相等。
     ctx.font = (17 * s) + 'px ' + sansFamily;
@@ -793,26 +819,29 @@
     ctx.fillStyle = C.red; canvasFontToFit(ctx, '400', 48 * s, '"Times New Roman", "Songti SC", serif', priceText, 180 * s, 30 * s); ctx.fillText(priceText, priceRight, 155 * s);
     ctx.font = (17 * s) + 'px ' + sansFamily; ctx.fillText(deskText, deskRight, 155 * s);
     ctx.textAlign = 'center'; ctx.fillStyle = C.muted; canvasFontToFit(ctx, '400', 15 * s, sansFamily, getExportHeaderSlogan(), 260 * s, 10 * s); ctx.fillText(getExportHeaderSlogan(), 746 * s, 194 * s);
-    var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines.length || 1, bounds);
-    var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.rows * grid.h + (grid.rows - 1) * grid.gap;
+    var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines, bounds, ctx);
+    var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.total;
     var startX = bounds.x + (bounds.w - gridW) / 2, startY = bounds.y + Math.max(0, (bounds.h - gridH) / 2);
     lines.forEach(function (line, i) {
-      var x = startX + (i % grid.cols) * (grid.w + grid.gap), y = startY + Math.floor(i / grid.cols) * (grid.h + grid.gap);
-      var pad = Math.max(9, grid.w * .025), imageH = grid.w * .75;
-      ctx.fillStyle = C.card; roundedRect(ctx, x, y, grid.w, grid.h, 12); ctx.fill(); ctx.strokeStyle = C.hair; ctx.lineWidth = 3; ctx.stroke();
-      ctx.save(); roundedRect(ctx, x + pad, y + pad, grid.w - pad * 2, imageH - pad, 7); ctx.clip(); ctx.fillStyle = C.image; ctx.fillRect(x + pad, y + pad, grid.w - pad * 2, imageH - pad);
+      var row = Math.floor(i / grid.cols), y = startY;
+      for (var prior = 0; prior < row; prior++) y += grid.rowHeights[prior] + grid.gap;
+      var x = startX + (i % grid.cols) * (grid.w + grid.gap), cardH = grid.rowHeights[row], pad = grid.pad;
+      ctx.fillStyle = C.card; roundedRect(ctx, x, y, grid.w, cardH, 12); ctx.fill(); ctx.strokeStyle = C.hair; ctx.lineWidth = 3; ctx.stroke();
+      ctx.save(); roundedRect(ctx, x + pad, y + pad, grid.imageW, grid.imageH, 7); ctx.clip(); ctx.fillStyle = C.image; ctx.fillRect(x + pad, y + pad, grid.imageW, grid.imageH);
       // _exportThumb 是由 renderThumb 按菜品库 cropBg 的同一算法产生的 4:3 截图。
       // 导出时等比铺满，不再二次裁切，因此取景位置与菜品库逐像素一致。
-      if (line._exportThumb) ctx.drawImage(line._exportThumb, x + pad, y + pad, grid.w - pad * 2, imageH - pad);
-      else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.w - pad * 2, imageH - pad, line.crop);
+      if (line._exportThumb) ctx.drawImage(line._exportThumb, x + pad, y + pad, grid.imageW, grid.imageH);
+      else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.imageW, grid.imageH, line.crop);
       ctx.restore();
-      var titleFs = Math.max(24, Math.min(36, grid.w * .052)), noteFs = Math.max(18, Math.min(25, grid.w * .036)), name = line.cn || '未命名菜品', note = (line.note || '').trim();
-      ctx.textAlign = 'center'; ctx.fillStyle = C.ink; ctx.font = '700 ' + titleFs + 'px "Songti SC", "STSong", SimSun, serif';
-      var textY = y + imageH + (note ? titleFs + 12 : grid.caption / 2 + titleFs / 3);
-      ctx.fillText(canvasText(ctx, name, x + grid.w / 2, textY, grid.w - pad * 4), x + grid.w / 2, textY);
-      if (note) { ctx.fillStyle = C.muted; ctx.font = noteFs + 'px "Microsoft YaHei", sans-serif'; ctx.fillText(canvasText(ctx, '备注：' + note, x + grid.w / 2, textY + noteFs + 13, grid.w - pad * 4), x + grid.w / 2, textY + noteFs + 13); }
+      var name = line.cn || '未命名菜品', note = (line.note || '').trim(), nameY = y + pad + grid.imageH + grid.titleFs + 12;
+      ctx.textAlign = 'left'; ctx.fillStyle = C.ink; ctx.font = '700 ' + grid.titleFs + 'px "Noto Serif SC", "Songti SC", "STSong", serif';
+      ctx.fillText(canvasText(ctx, name, x + pad, nameY, grid.imageW), x + pad, nameY);
+      if (note) {
+        ctx.fillStyle = C.muted; ctx.font = grid.noteFs + 'px "Microsoft YaHei", sans-serif';
+        var noteLines = wrapCanvasLines(ctx, '备注：' + note, grid.imageW), noteY = nameY + grid.noteStep;
+        noteLines.forEach(function (text, n) { ctx.fillText(text, x + pad, noteY + n * grid.noteStep); });
+      }
     });
-    ctx.fillStyle = 'rgba(248,243,233,.9)'; ctx.fillRect(1060, 2300, 1388, 82);
     ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.font = '26px "Microsoft YaHei", sans-serif'; ctx.fillText(getExportFooterSlogan(), W / 2, 2350);
     // 在 Logo 加载完成后交给下载和 PDF，保证同一张 Canvas 被两个格式复用。
     drawCanvasLogo(ctx, logoX, logoY, logoSize, function () { done(canvas); });
@@ -1489,7 +1518,22 @@
     return parts.join('');
   }
 
-  // 整份宴席菜单 → 多页 PDF（每套餐一页）；opts.pkgId 传单个套餐 id 时只导出该套餐
+  // 单套餐横版成图：与定制菜单的带图版共用同一 Canvas 底稿、抬头和卡片布局。
+  function renderPackageLandscapeCanvas(banquetId, pkgId, done) {
+    var b = Store ? Store.getBanquet(banquetId) : null;
+    var pk = Store && Store.getPackage ? Store.getPackage(banquetId, pkgId) : null;
+    var resolved = Store && Store.resolvePackage ? Store.resolvePackage(banquetId, pkgId) : [];
+    var dishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
+    preloadExportAssets(dishes, function (_, errors) {
+      if (errors && errors.length) { done(null, errors); return; }
+      buildPhotoLandscapeCanvas(dishes, function (canvas) { done(canvas, null); }, {
+        title: pk && pk.name ? pk.name : (b && b.name ? b.name : '宴会菜单'),
+        price: pk && typeof pk.price !== 'undefined' ? pk.price : '—'
+      });
+    });
+  }
+
+  // 整份宴席菜单 → 多页横版 PDF（每套餐一页）；opts.pkgId 传单个套餐 id 时只导出该套餐
   function exportWholeMenu(banquetId, opts) {
     opts = opts || {};
     var k = opts.scale || 1;
@@ -1512,7 +1556,7 @@
       try { pendingWin = window.open('', '_blank'); } catch (e) { pendingWin = null; }
     }
 
-    // 先把所有套餐用到的菜品图片预加载（拿到原始尺寸，裁切与菜品库一致）
+    // 先把所有套餐用到的菜品图片与无文字底稿预加载；任一资源失败则不输出半成品。
     var allLines = [];
     pkgs.forEach(function (p) {
       var rp = (Store.resolvePackage) ? Store.resolvePackage(banquetId, p.id) : null;
@@ -1520,7 +1564,8 @@
       list.forEach(function (d) { allLines.push(d); });
     });
 
-    preloadImages(allLines, function () {
+    preloadExportAssets(allLines, function (_, assetErrors) {
+      if (assetErrors && assetErrors.length) { try { alert('导出未生成：' + assetErrors.join('；')); } catch (e) {} return; }
       var pages = [];
       var idx = 0;
       function next() {
@@ -1538,8 +1583,9 @@
           return;
         }
         var pkg = pkgs[idx++];
-        var svg = buildPackageSVG(banquetId, pkg.id, k);
-        rasterize(svg, function (canvas) {
+        var resolved = Store.resolvePackage ? Store.resolvePackage(banquetId, pkg.id) : [];
+        var dishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
+        buildPhotoLandscapeCanvas(dishes, function (canvas) {
           if (!canvas) { next(); return; }
           try {
             var jpg = canvas.toDataURL('image/jpeg', 0.92);
@@ -1636,7 +1682,7 @@
             } else cv.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); else alert('导出失败，请重试'); }, 'image/png');
           };
           output(canvas);
-        });
+        }, { title: pkg.name || b.name, price: typeof pkg.price !== 'undefined' ? pkg.price : '—' });
         return;
       }
       var liveLines = draft.lines;
@@ -2054,7 +2100,7 @@
   window.CustomOrder = {
     enter: enter, render: render,
     // —— 整份菜单导出（供 app.js 调用；二维码分享已按产品定义移除）——
-    buildPackageSVG: buildPackageSVG, buildMultiPagePdf: buildMultiPagePdf,
+    buildPackageSVG: buildPackageSVG, buildMultiPagePdf: buildMultiPagePdf, renderPackageLandscapeCanvas: renderPackageLandscapeCanvas,
     exportWholeMenu: exportWholeMenu,
     // —— 总厨单（无图 + 变更说明）——
     buildChefSVG: buildChefSVG, exportChef: exportChef,
