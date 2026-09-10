@@ -643,7 +643,7 @@
       exportBackdropPending = false;
       callbacks.forEach(function (fn) { fn(err || null); });
     };
-    loadExportImage('assets/export/banquet-a4-fixed-template.png', function (image, error) {
+    loadExportImage('assets/export/banquet-a4-textless-background.png', function (image, error) {
       if (!image) { finish(error || '固定底稿无法读取'); return; }
       try {
         // 导出底稿是 build-export-assets.js 编译的 data URI；直接保留安全图片对象。
@@ -662,9 +662,8 @@
   function prepareExportAssets(ver, lines, cb) {
     // 无图小票不依赖图片或 A4 贴图，避免无关资源影响它的导出。
     if (ver === 'plain') { cb(lines, []); return; }
-    // 带图版的纸张、边框、山水全部由 Canvas 生成，模板不含任何文字或位图。
-    // 因此这里仅预加载本次菜单真正需要的菜品图。
-    preloadImages(lines, cb);
+    // 固定底稿不含任何文字或 Logo；Canvas 先画底稿，之后才按当前菜单绘制动态内容。
+    preloadExportAssets(lines, cb);
   }
 
   // 有图横版 A4 的最终渲染器。这里故意不经过 SVG：固定底稿、菜品图和 LOGO
@@ -694,6 +693,16 @@
     text = String(text || ''); var original = text;
     while (text && ctx.measureText(text).width > maxWidth) text = text.slice(0, -1);
     return text.length < original.length ? text.slice(0, -1) + '…' : text;
+  }
+  // 抬头字段只在各自锚定区内缩小，不换行、不越界、不挤占相邻区域。
+  function canvasFontToFit(ctx, weight, size, family, text, maxWidth, minSize) {
+    var px = size;
+    do {
+      ctx.font = weight + ' ' + px + 'px ' + family;
+      if (ctx.measureText(String(text || '')).width <= maxWidth || px <= minSize) return px;
+      px -= 1;
+    } while (px > minSize);
+    return px;
   }
   function drawCanvasLogo(ctx, x, y, size, done) {
     var logo = '', crop = null;
@@ -745,16 +754,35 @@
     var W = 3508, H = 2480, canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext('2d'), C = { bg:'#f8f3e9', ink:'#382c25', muted:'#a88d67', red:'#a52f29', gold:'#b78d40', hair:'#cfb878', card:'#fffdf8', image:'#e8dcc0' };
-    drawLandscapeTemplate(ctx, W, H, C);
-    ctx.strokeStyle = C.hair; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(165, 445); ctx.lineTo(W - 165, 445); ctx.stroke();
-    var logoSize = 90;
-    ctx.fillStyle = C.red; ctx.font = '700 64px "Songti SC", "STSong", SimSun, serif'; ctx.textBaseline = 'middle'; ctx.fillText(getBrandName(), 280, 212);
+    // 固定层来自无文字底稿；绝不使用带菜单名、价格或 Logo 的参考图。
+    if (exportBackdropImage) ctx.drawImage(exportBackdropImage, 0, 0, W, H);
+    else drawLandscapeTemplate(ctx, W, H, C); // 仅在底稿异常时的保守离线兜底
+    // 抬头采用无文字底稿的原始 1491×1055 坐标系（s=2.352），所有动态字段严格替换图一对应区域。
+    var s = W / 1491, logoX = 92 * s, logoY = 92 * s, logoSize = 92 * s;
+    // 标题下方两段固定金线属于装饰，不属于动态文案。
+    ctx.strokeStyle = '#d2bb8c'; ctx.lineWidth = 1.5 * s;
+    ctx.beginPath(); ctx.moveTo(568 * s, 188 * s); ctx.lineTo(600 * s, 188 * s); ctx.moveTo(892 * s, 188 * s); ctx.lineTo(924 * s, 188 * s); ctx.stroke();
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    var titleFamily = '"Noto Serif SC", "Songti SC", "STSong", Georgia, serif';
+    var sansFamily = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
+    // 左侧仅使用设置页的原始 LOGO（其内部文字、比例均随设置图像保持），不重复绘制酒店名。
     var title = (draft.source || draft.type || '宴会菜单').trim();
-    ctx.fillStyle = C.ink; ctx.font = '700 76px "Songti SC", "STSong", SimSun, serif'; ctx.textAlign = 'center'; ctx.fillText(canvasText(ctx, title, W / 2, 210, 1000), W / 2, 210);
-    ctx.textAlign = 'right'; ctx.fillStyle = C.muted; ctx.font = '28px "Microsoft YaHei", sans-serif'; ctx.fillText('菜单价格', W - 165, 158);
-    ctx.fillStyle = C.red; ctx.font = '700 72px "Songti SC", "STSong", SimSun, serif'; ctx.fillText('¥' + (draft.total || '—'), W - 235, 235);
-    ctx.font = '30px "Microsoft YaHei", sans-serif'; ctx.fillText('元/桌', W - 165, 235);
-    ctx.textAlign = 'center'; ctx.fillStyle = C.muted; ctx.font = '30px "Microsoft YaHei", sans-serif'; ctx.fillText(getExportHeaderSlogan(), W / 2, 530);
+    ctx.fillStyle = '#781b1b'; canvasFontToFit(ctx, '700', 60 * s, titleFamily, title, 420 * s, 35 * s); ctx.textAlign = 'center';
+    ctx.fillText(title, 746 * s, 151 * s);
+    var price = String(draft.total || '—');
+    var priceText = '¥' + price, priceGap = 14 * s, deskText = '/ 桌', deskRight = 1405 * s;
+    // “/ 桌”是最右固定锚点；另外两段从右向左依次排布，两个空隙严格相等。
+    ctx.font = (17 * s) + 'px ' + sansFamily;
+    var deskLeft = deskRight - ctx.measureText(deskText).width;
+    var priceRight = deskLeft - priceGap;
+    ctx.fillStyle = C.red; canvasFontToFit(ctx, '400', 48 * s, '"Times New Roman", "Songti SC", serif', priceText, 180 * s, 30 * s);
+    var priceWidth = ctx.measureText(priceText).width;
+    // 标签由价格左边缘反推，与“价格 → / 桌”使用完全相同的间距。
+    ctx.textAlign = 'right'; ctx.fillStyle = C.muted; ctx.font = (14 * s) + 'px ' + sansFamily;
+    ctx.fillText('菜单价格', priceRight - priceWidth - priceGap, 155 * s);
+    ctx.fillStyle = C.red; canvasFontToFit(ctx, '400', 48 * s, '"Times New Roman", "Songti SC", serif', priceText, 180 * s, 30 * s); ctx.fillText(priceText, priceRight, 155 * s);
+    ctx.font = (17 * s) + 'px ' + sansFamily; ctx.fillText(deskText, deskRight, 155 * s);
+    ctx.textAlign = 'center'; ctx.fillStyle = C.muted; canvasFontToFit(ctx, '400', 15 * s, sansFamily, getExportHeaderSlogan(), 260 * s, 10 * s); ctx.fillText(getExportHeaderSlogan(), 746 * s, 194 * s);
     var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines.length || 1, bounds);
     var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.rows * grid.h + (grid.rows - 1) * grid.gap;
     var startX = bounds.x + (bounds.w - gridW) / 2, startY = bounds.y + Math.max(0, (bounds.h - gridH) / 2);
@@ -773,7 +801,7 @@
     ctx.fillStyle = 'rgba(248,243,233,.9)'; ctx.fillRect(1060, 2300, 1388, 82);
     ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.font = '26px "Microsoft YaHei", sans-serif'; ctx.fillText(getExportFooterSlogan(), W / 2, 2350);
     // 在 Logo 加载完成后交给下载和 PDF，保证同一张 Canvas 被两个格式复用。
-    drawCanvasLogo(ctx, 165, 165, logoSize, function () { done(canvas); });
+    drawCanvasLogo(ctx, logoX, logoY, logoSize, function () { done(canvas); });
   }
 
   // 构造导出 SVG（A4 竖版单页：保留旧版作为兼容路径）
@@ -922,10 +950,13 @@
           m: m, FS: FS, C: C,
           maxChars: gcnChars, fs: gNameFs, step: 4
         });
-        // #4 菜品下方不写英文，改为「备注：」
-        var note = '备注：' + ((l.note || '').trim());
-        if (note.length > 28) note = note.slice(0, 27) + '…';
-        parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + gcnLinesN * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gNoteFs) + '" fill="' + C.muted + '">' + esc2(note) + '</text>');
+        // 备注区始终预留同一高度；有备注才落字，避免无备注卡片挤压菜名或破坏网格对齐。
+        var note = (l.note || '').trim();
+        if (note) {
+          note = '备注：' + note;
+          if (note.length > 28) note = note.slice(0, 27) + '…';
+          parts.push('<text x="' + m(gx + 2.2) + '" y="' + m(gyName + gcnLinesN * 4 + 2.6) + '" font-family="' + FN + '" font-size="' + m(gNoteFs) + '" fill="' + C.muted + '">' + esc2(note) + '</text>');
+        }
       });
     } else if (isPhoto) {
       // —— 带图版 v3.2（旧版保留，不再进入）
@@ -1057,7 +1088,8 @@
         colRows[c] += s.rows.length;
       });
       var maxColRows = Math.max(1, colRows[0], colRows[1]);
-      var rowH2 = Math.min(16, Math.max(12.5, (availH - 40) / maxColRows));
+      // 每道菜都预留一行备注，名称与备注分层排布；有备注时不会压到下一个菜名。
+      var rowH2 = Math.min(21, Math.max(17, (availH - 40) / maxColRows));
       var targetCol = 0;
       segs.forEach(function (s, si) {
         targetCol = plainY[0] <= plainY[1] ? 0 : 1;
@@ -1074,11 +1106,17 @@
           var cnStep = 4.4;
           // 先按普通菜名估算行数以垂直居中；renderDishName 内部会重新折行并追加换/加标注
           var tmpLines = wrapCn(l.cn || '未命名菜品', cnMax);
-          var cnBase = ry + rowH2 * 0.5 - (tmpLines.length * cnStep) * 0.5 + 3.2;
+          var cnBase = ry + 5.2 - (tmpLines.length - 1) * cnStep * .5;
           renderDishName(parts, px2 + 1, cnBase, l, {
             m: m, FS: FS, C: C,
             maxChars: cnMax, fs: 4.4, step: cnStep
           });
+          var plainNote = (l.note || '').trim();
+          if (plainNote) {
+            var noteMax = Math.max(14, Math.floor((plainW - 2) / 2.4));
+            if (plainNote.length > noteMax) plainNote = plainNote.slice(0, noteMax - 1) + '…';
+            parts.push('<text x="' + m(px2 + 1) + '" y="' + m(ry + rowH2 - 4.2) + '" font-family="' + FN + '" font-size="' + m(2.25) + '" fill="' + C.primary + '">备注：' + esc2(plainNote) + '</text>');
+          }
           // 分隔线：整行宽、底部统一位置，不随菜名行数抖动
           parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
         });
@@ -1138,7 +1176,7 @@
           p.push('<clipPath id="'+clip+'"><rect x="'+pad+'" y="'+y+'" width="156" height="117" rx="12"/></clipPath><rect x="'+pad+'" y="'+y+'" width="156" height="117" rx="12" fill="'+resolveImgBg()+'"/>');
           if(src)p.push('<image href="'+src+'" xlink:href="'+src+'" x="'+pad+'" y="'+y+'" width="156" height="117" preserveAspectRatio="xMidYMid slice" clip-path="url(#'+clip+')"/>');
           p.push('<text x="'+(pad+178)+'" y="'+(y+40)+'" font-family="'+FONT_SERIF+'" font-size="24" font-weight="600" fill="'+C.ink+'">'+esc(l.cn||'未命名菜品')+'</text>');
-          p.push('<text x="'+(pad+178)+'" y="'+(y+77)+'" font-family="'+FONT_SANS+'" font-size="18" fill="'+(l.note?C.primary:C.muted)+'">备注：'+esc(l.note||'—')+'</text>');
+          if (l.note) p.push('<text x="'+(pad+178)+'" y="'+(y+77)+'" font-family="'+FONT_SANS+'" font-size="18" fill="'+C.primary+'">备注：'+esc(l.note)+'</text>');
         } else {
           var mark=l.swappedFromCn?'原 '+l.swappedFromCn+' → '+l.cn:(l.added?'新增 · '+l.cn:l.cn);
           p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">'+String(seq).padStart(2,'0')+'</text><text x="'+(pad+54)+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="25" fill="'+(l.swappedFromCn||l.added?C.primary:C.ink)+'">'+esc(mark)+'</text>');
@@ -1767,7 +1805,8 @@
       colRows[c] += s.rows.length;
     });
     var maxColRows = Math.max(1, colRows[0], colRows[1]);
-    var rowH2 = Math.min(16, Math.max(12.5, (availH - 40) / maxColRows));
+    // 总厨无图单也预留备注高度，手写或已填写备注都不会挤压下一道菜。
+    var rowH2 = Math.min(21, Math.max(17, (availH - 40) / maxColRows));
     var targetCol = 0;
     segs.forEach(function (s, si) {
       targetCol = plainY[0] <= plainY[1] ? 0 : 1;
@@ -1782,7 +1821,7 @@
           var cnMax = Math.max(11, Math.floor((plainW - 2) / 4.2));
           var cnStep = 4.4;
           var tmpLines = wrapCn(l.cn || '未命名菜品', cnMax);
-          var cnBase = ry + rowH2 * 0.5 - (tmpLines.length * cnStep) * 0.5 + 3.2;
+          var cnBase = ry + 5.2 - (tmpLines.length - 1) * cnStep * .5;
           // 总厨单：换菜画删除线、换后菜名红色；加菜红色后缀
           renderDishName(parts, px2 + 1, cnBase, l, {
             m: m, FS: FS, C: C,
@@ -1790,6 +1829,12 @@
             chefMode: true,
             rowWidth: plainW - 2
           });
+        var chefNote = (l.note || '').trim();
+        if (chefNote) {
+          var chefNoteMax = Math.max(14, Math.floor((plainW - 2) / 2.4));
+          if (chefNote.length > chefNoteMax) chefNote = chefNote.slice(0, chefNoteMax - 1) + '…';
+          parts.push('<text x="' + m(px2 + 1) + '" y="' + m(ry + rowH2 - 4.2) + '" font-family="' + FN + '" font-size="' + m(2.25) + '" fill="' + C.primary + '">备注：' + esc2(chefNote) + '</text>');
+        }
         parts.push('<line x1="' + m(px2) + '" y1="' + m(ry + rowH2 - 1.5) + '" x2="' + m(px2 + plainW) + '" y2="' + m(ry + rowH2 - 1.5) + '" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
       });
       plainY[targetCol] = py2 + s.rows.length * rowH2 + 7;

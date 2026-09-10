@@ -86,7 +86,7 @@
     <aside class="tablet-sidebar" id="tabletSidebar" aria-label="平板菜单导航">
       <div class="tablet-brand" id="tabletBrand" role="img" aria-label="山水 S 酒店"></div>
       <div class="tablet-banquet-label" id="tabletBanquetLabel">宴享</div>
-      <h1 class="tablet-banquet" id="tabletBanquet" tabindex="0" title="长按切换其他宴席">山水臻宴</h1>
+      <h1 class="tablet-banquet" id="tabletBanquet" tabindex="0" title="双击切换其他宴席">山水臻宴</h1>
       <div class="tablet-banquet-menu" id="tabletBanquetMenu" hidden></div>
       <div class="tablet-en" id="tabletBanquetEn">Shanshui Grand Banquet</div>
       <div class="tablet-rule"></div>
@@ -172,12 +172,13 @@
           <button class="mg-btn primary small" id="mgAddLibDish">+ 新增菜品</button>
         </div>
 
-        <!-- 菜单 上下文：宴席 + 套餐条（按住套餐可拖动排序） -->
+        <!-- 菜单上下文：套餐收进下拉，排序/新增在下拉内完成 -->
         <div class="mg-inline" id="mgCtxbar" hidden>
           <select id="mgBanquet" class="mg-mini" title="切换宴席类型"></select>
-          <div class="mg-pkgrow" id="mgPkgRow" title="点击切换套餐，按住拖动可调整套餐顺序"></div>
-          <button class="mg-btn small" id="mgAddPkg">+ 套餐</button>
-          <button class="mg-btn primary small" id="mgAddFromLib">+ 菜品</button>
+          <div class="mg-pkgmenu" id="mgPkgMenuWrap">
+            <button type="button" class="mg-btn small mg-pkg-trigger" id="mgPkgTrigger" aria-haspopup="menu" aria-expanded="false">套餐</button>
+            <div class="mg-pkg-dropdown" id="mgPkgMenu" role="menu" hidden></div>
+          </div>
         </div>
 
         <span class="mg-spacer"></span>
@@ -244,19 +245,14 @@
   <!-- 菜品详情弹窗 -->
   <div class="modal" id="modal" hidden>
     <div class="modal-card">
-      <button class="modal-close" aria-label="关闭">✕</button>
-      <button class="modal-nav m-prev" aria-label="上一个">‹</button>
-      <button class="modal-nav m-next" aria-label="下一个">›</button>
-      <div class="modal-counter"></div>
+      <button class="modal-close m-back" aria-label="返回菜单">← 返回</button>
       <div class="modal-thumb"></div>
       <div class="modal-body">
-        <div class="m-num"></div>
         <h2 class="m-cn"></h2>
         <div class="m-en"></div>
         <span class="m-cat"></span>
         <p class="m-desc"></p>
       </div>
-      <div class="modal-gesture" id="modalGesture">↑↑ 回封面 · ↓ 关闭</div>
     </div>
   </div>
 
@@ -352,22 +348,36 @@
     <div class="modal-card">
       <button class="modal-close" aria-label="关闭" data-close="cropModal">✕</button>
       <h3 style="font-size:18px;font-weight:700;padding:20px 24px 0;">调整图片展示位置</h3>
-      <div style="padding:16px 24px 6px;">
-      <div class="crop-win" id="cropWin">
-        <img id="cropImg" alt="">
-        <div class="crop-frame" id="cropFrame"><span class="crop-grip" id="cropGrip"></span></div>
-      </div>
-      <p class="crop-hint">拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（展示框固定 4:3，不变形）</p>
-      <div class="crop-zoom">
-        <span class="crop-zoom-label">缩放</span>
-        <input type="range" id="cropZoom" min="100" max="400" step="1" value="150">
-        <span class="crop-zoom-val" id="cropZoomVal">150%</span>
-      </div>
-      <div class="crop-zoom" id="cropDisplayScaleRow" hidden>
-        <span class="crop-zoom-label">显示大小</span>
-        <input type="range" id="cropDisplayScale" min="35" max="160" step="1" value="100">
-        <span class="crop-zoom-val" id="cropDisplayScaleVal">100%</span>
-      </div>
+      <div class="crop-workspace" style="padding:16px 24px 6px;">
+        <div class="crop-preview-column">
+          <div class="crop-win" id="cropWin">
+            <img id="cropImg" alt="">
+            <div class="crop-frame" id="cropFrame"><span class="crop-grip" id="cropGrip"></span></div>
+          </div>
+          <div class="crop-live-preview" id="cropLivePreview" hidden aria-label="主页实际呈现预览">
+            <span class="crop-live-label">主页实际呈现预览</span>
+            <div class="crop-live-logo-shell" id="cropLiveLogoShell" hidden>
+              <div class="crop-live-logo" id="cropLiveLogo"></div>
+            </div>
+            <div class="crop-live-art-shell" id="cropLiveArtShell" hidden>
+              <div class="crop-live-art-copy"><b>佳偶天成宴</b><span>A TASTE FOR EVERY SEASON</span></div>
+              <div class="crop-live-art" id="cropLiveArt"></div>
+            </div>
+          </div>
+        </div>
+        <div class="crop-control-column">
+          <p class="crop-hint">拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小。取景框比例即实际显示窗口。</p>
+          <div class="crop-zoom">
+            <span class="crop-zoom-label">缩放</span>
+            <input type="range" id="cropZoom" min="100" max="400" step="1" value="150">
+            <span class="crop-zoom-val" id="cropZoomVal">150%</span>
+          </div>
+          <div class="crop-zoom" id="cropDisplayScaleRow" hidden>
+            <span class="crop-zoom-label">显示大小</span>
+            <input type="range" id="cropDisplayScale" min="35" max="160" step="1" value="100">
+            <span class="crop-zoom-val" id="cropDisplayScaleVal">100%</span>
+          </div>
+        </div>
       </div>
       <div class="edit-actions" style="padding:6px 24px 22px;">
         <span class="spacer"></span>

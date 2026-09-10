@@ -617,6 +617,30 @@ body.detail-modal-open .content { overscroll-behavior: none; }
 .mg-pkgrow.dragging-row .mg-pkgchip:not(.dragging) { transition: transform .12s ease; }
 .mg-pkgrow-empty { font-size: 12.5px; color: var(--muted); }
 
+/* 套餐不再挤占工具栏：由单一入口展开，菜单内可切换、排序和新增。 */
+.mg-pkgmenu { position:relative; }
+.mg-pkg-trigger { display:flex; align-items:center; gap:7px; min-width:0; height:32px; padding:7px 10px; justify-content:space-between; border-radius:999px; font-size:13px; font-weight:400; }
+.mg-pkg-trigger b { max-width:86px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:400; }
+.mg-pkg-trigger i { width:6px; height:6px; margin:0 2px 3px 2px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); transition:transform .16s ease; }
+.mg-pkg-trigger[aria-expanded="true"] i { transform:rotate(225deg); margin-bottom:-2px; }
+.mg-pkg-dropdown { position:absolute; z-index:45; top:calc(100% + 7px); left:0; width:min(350px,calc(100vw - 36px)); padding:7px; background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 32px rgba(25,39,33,.18); }
+.mg-pkg-dropdown[hidden] { display:none; }
+.mg-pkg-menu-item { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:5px; padding:3px; border-radius:8px; }
+.mg-pkg-menu-item.on { background:var(--primary-soft); }
+.mg-pkg-select { min-width:0; border:0; background:transparent; color:var(--ink); padding:8px 9px; text-align:left; cursor:pointer; border-radius:6px; }
+.mg-pkg-select:hover { background:color-mix(in srgb,var(--primary-soft) 70%,transparent); }
+.mg-pkg-select .pc-name,.mg-pkg-select .pc-meta { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mg-pkg-select .pc-name { font-size:13px; font-weight:650; }
+.mg-pkg-select .pc-meta { margin-top:2px; font-size:10.5px; color:var(--muted); }
+.mg-pkg-sort { display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+.mg-pkg-sort button,.mg-pkg-more { width:28px; height:28px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 15px/1 var(--sans); }
+.mg-pkg-sort button + button { border-left:1px solid var(--line); }
+.mg-pkg-sort button:hover,.mg-pkg-more:hover { color:var(--primary); background:var(--primary-soft); }
+.mg-pkg-sort button:disabled { color:var(--line); cursor:default; background:transparent; }
+.mg-pkg-more { border-radius:7px; font-size:14px; letter-spacing:1px; }
+.mg-pkg-add { width:100%; margin-top:5px; border:1px dashed var(--primary); border-radius:8px; background:transparent; color:var(--primary); padding:9px; font:600 12px var(--sans); cursor:pointer; }
+.mg-pkg-add:hover { background:var(--primary-soft); }
+
 /* 菜品卡片容器（用于删除按钮等绝对定位） */
 .mg-card { position: relative; }
 
@@ -667,7 +691,25 @@ body.detail-modal-open .content { overscroll-behavior: none; }
   margin: 0 auto; overflow: hidden; border-radius: 12px; background: #111;
   touch-action: none; user-select: none;
 }
+.modal-close.m-back {
+  left: 14px; right: auto; width: auto; height: auto; padding: 7px 10px;
+  border-radius: var(--r-pill); font: 13px/1 var(--sans); letter-spacing: .03em;
+}
 .crop-win img { width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; }
+.crop-workspace { display:grid; grid-template-columns:minmax(360px,1.35fr) minmax(260px,.85fr); gap:24px; align-items:center; }
+.crop-preview-column { min-width:0; }
+.crop-control-column { min-width:0; align-self:stretch; display:flex; flex-direction:column; justify-content:center; }
+#cropModal .modal-card { max-width:980px; }
+.crop-live-preview { margin:12px 0 0; width:100%; }
+.crop-live-label { display:block; margin:0 0 6px; color:var(--muted); font-size:12px; }
+.crop-live-logo-shell { height:132px; overflow:hidden; border-radius:10px; padding:10px 22px; background:linear-gradient(135deg,rgba(5,38,33,.98),rgba(17,68,58,.96)),url('pad-sidebar-jade-texture.png') center/cover; border:1px solid rgba(213,180,113,.34); }
+.crop-live-logo { width:100%; height:100%; background-repeat:no-repeat; background-color:transparent; }
+.crop-live-art-shell { position:relative; height:132px; overflow:hidden; border-radius:10px; background:linear-gradient(105deg,#faf8f1 0%,#faf8f1 42%,#eef1ea 100%); border:1px solid var(--line); }
+.crop-live-art-copy { position:relative; z-index:2; display:flex; flex-direction:column; gap:5px; width:52%; padding:23px 16px; color:#183f37; }
+.crop-live-art-copy b { font:400 17px/1 var(--font-title); letter-spacing:.1em; white-space:nowrap; }
+.crop-live-art-copy span { font:8px/1 Georgia,serif; letter-spacing:.1em; color:#879189; white-space:nowrap; }
+.crop-live-art { position:absolute; inset:0 0 0 auto; width:67%; opacity:.96; background-repeat:no-repeat; -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 20%,#000 83%,transparent 100%); mask-image:linear-gradient(90deg,transparent 0%,#000 20%,#000 83%,transparent 100%); }
+@media (max-width:720px) { .crop-workspace { grid-template-columns:1fr; gap:12px; } .crop-control-column { align-self:auto; } #cropModal .modal-card { max-width:560px; } }
 .crop-hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .crop-zoom { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
 .crop-zoom-label { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
@@ -769,6 +811,7 @@ body.detail-modal-open .content { overscroll-behavior: none; }
   font-size: 14px; color: var(--muted); cursor: pointer; white-space: nowrap;
 }
 .mg-tabs button.on { background: var(--primary); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.mg-head-add-dish { border-radius:999px; padding:7px 13px; color:var(--on-accent); white-space:nowrap; }
 
 /* 管理模式上下文栏（按子标签切换显示） */
 .mg-ctxbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 22px; background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -1645,7 +1688,10 @@ body.shell-pad .pad-backdrop {
   inset: 0;
   z-index: 25;            /* 低于抽屉 30，高于封面/菜单/详情 */
   display: none;
-  background: rgba(0, 0, 0, .28);
+  /* 管理与定制抽屉打开后，首页退后并模糊，保证视觉焦点只留在当前工作区。 */
+  background: rgba(7, 24, 21, .38);
+  backdrop-filter: blur(11px) saturate(.78) brightness(.82);
+  -webkit-backdrop-filter: blur(11px) saturate(.78) brightness(.82);
 }
 body.shell-pad .pad-backdrop.show { display: block; }
 /* 抽屉与遮罩同属 .app 后，明确保持：遮罩只接收抽屉外区域的点击。 */
@@ -1925,7 +1971,8 @@ body.shell-pad #list .empty-state {
 }
 
 /* 设置页按产品约束固定为平板工作区尺寸，不随 shell/视口切换布局。 */
-body.shell-pad #settingsModal { align-items:center; justify-content:center; width:100%; padding:20px; background:var(--scrim); }
+/* 设置虽为居中工作台，也与右侧抽屉使用同一层级的背景退焦效果。 */
+body.shell-pad #settingsModal { align-items:center; justify-content:center; width:100%; padding:20px; background:rgba(7,24,21,.44); backdrop-filter:blur(13px) saturate(.78) brightness(.82); -webkit-backdrop-filter:blur(13px) saturate(.78) brightness(.82); }
 body.shell-pad #settingsModal .settings-card { width:920px; min-width:920px; max-width:920px; height:640px; min-height:640px; max-height:640px; border-radius:var(--r-lg); }
 
 /* ============================================================
@@ -1972,13 +2019,23 @@ body.shell-pad #list .grid { display: block; }
 body.shell-pad #list .card { display:grid; grid-template-columns:112px minmax(0,1fr) minmax(115px, .35fr) 24px; gap:24px; align-items:center; min-height:142px; padding:18px 0; border:0; border-bottom:1px solid #deded5; border-radius:0; background:transparent; box-shadow:none; position:relative; }
 body.shell-pad #list .card::after { content:'›'; color:#b69351; font-size:29px; font-family:Georgia,serif; text-align:right; }
 body.shell-pad #list .card:hover { transform:none; background:rgba(246,247,241,.75); }
-body.shell-pad #list .thumb { width:108px; aspect-ratio:1; border-radius:0; background:#e4d9c6; box-shadow:0 0 0 1px rgba(178,148,83,.28); }
+/* 首页列表也沿用菜品库的 4:3 取景框，不能把同一张菜图再裁成正方形。 */
+body.shell-pad #list .thumb { width:108px; aspect-ratio:4 / 3; border-radius:0; background:#e4d9c6; box-shadow:0 0 0 1px rgba(178,148,83,.28); }
 body.shell-pad #list .info { padding: 0; min-width: 0; }
 body.shell-pad #list .cn { font-size:clamp(20px,2.25vw,28px); font-weight:400; letter-spacing:.08em; color:#192f2c; }
 body.shell-pad #list .en { height:auto; margin-top:6px; font:13px/1.35 Georgia,serif; letter-spacing:.03em; color:#89908b; text-transform:none; }
 body.shell-pad #list .pad-dish-desc { display:block; margin-top:10px; color:#70807a; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 body.shell-pad #list .pad-dish-note { display:block; color:#7d806f; font:14px/1.55 var(--font-title); text-align:right; letter-spacing:.12em; }
 body.shell-pad #list .cat-tag { display: none; }
+
+/* 首页三档阅读比例。zoom 在本项目的 Chromium/iPad WebView 中保持布局参与尺寸，
+   不会像 transform 那样留下空白区或打乱卡片/目录对齐。 */
+body.shell-pad #orderScreen { --home-scale: 1; }
+body.shell-pad #orderScreen .content { zoom: var(--home-scale); }
+
+/* 管理抽屉：双指手势写入的列数只作用于菜品卡片网格，文本排序模式保持单列。 */
+body.shell-pad #manageScreen { --drawer-grid-cols: 3; }
+body.shell-pad #manageScreen .mg-grid { grid-template-columns: repeat(var(--drawer-grid-cols), minmax(0, 1fr)); }
 
 body.shell-pad .tablet-sidebar {
   position:absolute; inset:0 auto 0 0; z-index:10; width:330px; padding:30px 30px 24px;
@@ -2009,9 +2066,9 @@ body.shell-pad .tablet-category.on { color: #fff8ef; }
 body.shell-pad .tablet-category.on i { border-color: #d1a64e; background: #d1a64e; }
 body.shell-pad .tablet-banquet { cursor: pointer; user-select: none; outline: none; }
 body.shell-pad .tablet-banquet:focus-visible { text-decoration: underline; text-decoration-color: #d1a64e; text-underline-offset: 6px; }
-body.shell-pad .tablet-banquet-menu { position: absolute; top: 140px; left: 24px; right: 24px; z-index: 4; padding: 7px; background: #2b324b; border: 1px solid rgba(211,166,78,.45); border-radius: 8px; box-shadow: 0 14px 32px rgba(0,0,0,.3); }
+body.shell-pad .tablet-banquet-menu { position:absolute; top:220px; left:24px; right:24px; z-index:4; padding:7px; background:rgba(13,51,45,.96); border:1px solid rgba(211,166,78,.42); border-radius:8px; box-shadow:0 14px 32px rgba(0,0,0,.3); backdrop-filter:blur(12px); }
 body.shell-pad .tablet-banquet-menu[hidden] { display: none; }
-body.shell-pad .tablet-banquet-option { display: block; width: 100%; border: 0; border-radius: 5px; padding: 10px; color: #bfc1cb; background: transparent; text-align: left; font: 15px var(--font-title); cursor: pointer; }
+body.shell-pad .tablet-banquet-option { display:block; width:100%; border:0; border-radius:5px; padding:10px; color:#c9d4ca; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
 body.shell-pad .tablet-banquet-option:hover,
 body.shell-pad .tablet-banquet-option.on { color: #fff8ef; background: rgba(255,255,255,.08); }
 body.shell-pad .tablet-bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 12px; }
@@ -2022,15 +2079,15 @@ body.shell-pad .tablet-footer { margin-top: auto; padding-top: 15px; border-top:
 body.shell-pad .tablet-bottom-actions + .tablet-footer { margin-top: 13px; }
 /* 详情维持为可快速关闭的居中卡片，避免占满平板工作区。 */
 body.shell-pad #modal { z-index: 60; display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; background: rgba(10,14,25,.68); backdrop-filter: blur(13px); }
-body.shell-pad #modal .modal-card { display: flex; flex-direction: column; width: min(62vw, 620px); height: min(84vh, 680px); max-width: 620px; max-height: none; overflow: hidden; border-radius: 16px; border-color: rgba(255,255,255,.18); box-shadow: 0 24px 70px rgba(0,0,0,.38); }
-body.shell-pad #modal .modal-card .modal-thumb { flex: 1 1 auto; width: 100%; min-height: 0; aspect-ratio: auto; border-radius: 0; }
-body.shell-pad #modal .modal-card .modal-body { flex: 0 0 auto; padding: 18px 26px 20px; border-top: 0; }
+body.shell-pad #modal .modal-card { display: flex; flex-direction: column; width: min(62vw, 620px); height: auto; max-width: 620px; max-height: 90vh; overflow: hidden; border-radius: 16px; border-color: rgba(255,255,255,.18); box-shadow: 0 24px 70px rgba(0,0,0,.38); }
+/* 菜品库的取景框就是 4:3；详情页不得再拉伸成任意高度。 */
+body.shell-pad #modal .modal-card .modal-thumb { flex: 0 0 auto; width: 100%; min-height: 0; aspect-ratio: 4 / 3; border-radius: 0; }
+body.shell-pad #modal .modal-card .modal-body { flex: 0 0 auto; padding: 22px 28px 28px; border-top: 0; }
 body.shell-pad #modal .modal-card .m-cn { font-size: 26px; }
-body.shell-pad #modal .modal-card .m-desc { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
-body.shell-pad #modal .modal-gesture { display: none; }
-body.shell-pad #modal .modal-close { top: 12px; right: 12px; }
-body.shell-pad #modal .m-prev { left: 12px; }
-body.shell-pad #modal .m-next { right: 12px; }
+body.shell-pad #modal .modal-card .m-en { margin-top: 6px; font: 14px/1.5 Georgia, serif; letter-spacing: .04em; }
+body.shell-pad #modal .modal-card .m-cat { margin: 16px 0 12px; }
+body.shell-pad #modal .modal-card .m-desc { margin: 0; display:block; font-size:15px; line-height:1.8; color:#5f6861; }
+body.shell-pad #modal .modal-close.m-back { top: 12px; left: 12px; right: auto; color:#fff; background:rgba(12,29,26,.48); border-color:rgba(255,255,255,.28); backdrop-filter:blur(7px); }
 .pad-art-region-preview { max-width:360px; height:118px; background:linear-gradient(105deg,#faf8f1 0%,#faf8f1 40%,#eef1ea 100%); }
 .pad-art-preview-copy { position:relative; z-index:2; display:flex; flex-direction:column; gap:5px; padding:30px 22px; width:52%; color:#183f37; }
 .pad-art-preview-copy b { font:400 21px/1 var(--font-title); letter-spacing:.12em; white-space:nowrap; }

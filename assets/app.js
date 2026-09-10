@@ -66,6 +66,7 @@
   let cropDoneFn = null; // logo 裁剪完成回调
   let cropDisplayScale = 100;
   let cropScaleChangeFn = null;
+  let cropPreviewSrc = '';
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -79,6 +80,7 @@
     pendingCrop: { y: 50 },
     pendingAddToPkg: null, // {banquet, pkg}：从选择器“新建并加入”时暂存
     pickSel: [],           // 选择器点选顺序（菜品库 id，按点击先后），决定添加顺序与序号
+    pkgMenuOpen: false,    // 套餐折叠菜单状态
   };
 
   const $ = (s) => document.querySelector(s);
@@ -249,6 +251,25 @@
       return { backgroundImage:`url('${url}')`, backgroundSize:`${(100 / w).toFixed(3)}% ${(100 / h).toFixed(3)}%`, backgroundPosition:`${(1-w < .0001 ? 0 : x/(1-w)*100).toFixed(2)}% ${(1-h < .0001 ? 0 : y/(1-h)*100).toFixed(2)}%`, backgroundRepeat:'no-repeat' };
     }
     return { backgroundImage:`url('${url}')`, backgroundSize:'cover', backgroundPosition:'center', backgroundRepeat:'no-repeat' };
+  }
+  // 平板 LOGO 既要保持侧栏容器居中，也必须忠实执行取景框的 x/y。
+  // 用取景框中心反推 CSS background-position，使缩小显示时仍以选中的区域为锚点。
+  function tabletLogoRegionStyle(url, crop, scale) {
+    const c = (crop && typeof crop.w === 'number') ? crop : null;
+    const s = Math.max(.35, Math.min(1.6, (Number(scale) || 100) / 100));
+    if (!c) return { backgroundImage:`url('${url}')`, backgroundSize:`${Math.round(s * 100)}% auto`, backgroundPosition:'50% 50%', backgroundRepeat:'no-repeat', backgroundColor:'transparent' };
+    const w = Math.max(.05, Math.min(1, c.w));
+    const h = Math.max(.05, Math.min(1, typeof c.h === 'number' ? c.h : c.w));
+    const x = Math.max(0, Math.min(1 - w, Number(c.x) || 0));
+    const y = Math.max(0, Math.min(1 - h, Number(c.y) || 0));
+    const sx = s / w, sy = s / h;
+    const centerPos = (selectedCenter, renderedSize) => Math.abs(1 - renderedSize) < .0001 ? 50 : ((.5 - renderedSize * selectedCenter) / (1 - renderedSize) * 100);
+    return {
+      backgroundImage:`url('${url}')`,
+      backgroundSize:`${(sx * 100).toFixed(3)}% ${(sy * 100).toFixed(3)}%`,
+      backgroundPosition:`${centerPos(x + w / 2, sx).toFixed(2)}% ${centerPos(y + h / 2, sy).toFixed(2)}%`,
+      backgroundRepeat:'no-repeat', backgroundColor:'transparent'
+    };
   }
   function getPadArtCrop() {
     try {
@@ -476,20 +497,12 @@
       thumb.style.background = 'transparent';
       thumb.innerHTML = dishCropThumb(d);
     } else { thumb.style.background = categoryColor(d.cat); thumb.innerHTML = ICONS[d.icon] || ''; }
-    m.querySelector('.m-num').textContent = 'NO. ' + dishNo(d.id, viewer.index);
     m.querySelector('.m-cn').textContent = d.cn;
     m.querySelector('.m-en').textContent = d.en;
     m.querySelector('.m-cat').textContent = d.cat;
     m.querySelector('.m-desc').textContent = d.desc || '介绍待补充';
     m.querySelector('.m-desc').style.display = showDesc() ? '' : 'none';
-    // 循环浏览：仅当只有 1 道菜时才禁用左右键
-    const only = viewer.list.length <= 1;
-    const prev = m.querySelector('.m-prev'); const next = m.querySelector('.m-next');
-    if (prev) prev.disabled = only;
-    if (next) next.disabled = only;
-    const cnt = m.querySelector('.modal-counter');
-    if (cnt) cnt.textContent = (viewer.index + 1) + ' / ' + viewer.list.length;
-    // 切换时给一点方向感（左右淡入位移）
+    // 手势或键盘切换时保留轻微方向感；界面不再显示数量与切换按钮。
     if (dir) {
       const card = m.querySelector('.modal-card');
       const cls = dir > 0 ? 'slide-l' : 'slide-r';
@@ -603,16 +616,37 @@
   function renderPkgRow() {
     const b = MENU()[mg.banquet];
     const pkgs = b ? b.packages : [];
-    const row = $('#mgPkgRow');
+    const row = $('#mgPkgMenu');
+    const trigger = $('#mgPkgTrigger');
+    if (!row || !trigger) return;
     if (!pkgs.length) {
-      row.innerHTML = '<span class="mg-pkgrow-empty">该宴席暂无套餐，点右上「+ 新增套餐」开始配置</span>';
+      trigger.textContent = '套餐';
+      trigger.setAttribute('aria-expanded', String(mg.pkgMenuOpen));
+      row.hidden = !mg.pkgMenuOpen;
+      row.innerHTML = '<span class="mg-pkgrow-empty">该宴席暂无套餐</span><button type="button" class="mg-pkg-add" data-pkg-add>+ 新增套餐</button>';
       return;
     }
-    row.innerHTML = pkgs.map((p) => `<div class="mg-pkgchip ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}" title="${p.name} · ¥${p.price}/桌 · ${(p.dishes || []).length} 道（拖动排序 · 长按或右键：编辑/副本/删除）">
-      <span class="pc-grip" aria-hidden="true">⠿</span>
-      <span class="pc-name">${p.name}</span>
-      <span class="pc-meta">¥${p.price}·${(p.dishes || []).length}道</span>
-    </div>`).join('');
+    const current = pkgs.find((p) => p.id === mg.pkg) || pkgs[0];
+    trigger.innerHTML = `套餐 <b>${current.name}</b><i aria-hidden="true"></i>`;
+    trigger.setAttribute('aria-expanded', String(mg.pkgMenuOpen));
+    row.hidden = !mg.pkgMenuOpen;
+    row.innerHTML = pkgs.map((p, index) => `<div class="mg-pkg-menu-item ${p.id === mg.pkg ? 'on' : ''}" data-pkg="${p.id}" role="menuitem">
+      <button type="button" class="mg-pkg-select" data-pkg-select="${p.id}" title="切换到 ${p.name}"><span class="pc-name">${p.name}</span><span class="pc-meta">¥${p.price} · ${(p.dishes || []).length}道</span></button>
+      <span class="mg-pkg-sort"><button type="button" data-pkg-up="${p.id}" ${index === 0 ? 'disabled' : ''} title="上移">↑</button><button type="button" data-pkg-down="${p.id}" ${index === pkgs.length - 1 ? 'disabled' : ''} title="下移">↓</button></span>
+      <button type="button" class="mg-pkg-more" data-pkg="${p.id}" data-pkg-more="${p.id}" title="更多操作">•••</button>
+    </div>`).join('') + '<button type="button" class="mg-pkg-add" data-pkg-add>+ 新增套餐</button>';
+  }
+
+  async function movePackageBy(id, delta) {
+    const b = MENU()[mg.banquet];
+    const ids = (b && b.packages ? b.packages : []).map((p) => p.id);
+    const from = ids.indexOf(id), to = from + delta;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    await Store.reorderPackages(mg.banquet, ids);
+    mg.pkgMenuOpen = true;
+    renderPkgRow();
+    toast('套餐顺序已保存');
   }
 
   // 找到离指针最近的套餐卡片，并判断应插在其前还是其后（兼容换行布局）
@@ -882,6 +916,7 @@
           <span class="mg-pkg-count">${p.dishes.length} 道（引用菜品库）</span>
         </div>
         <div class="mg-pkg-ops">
+          <button class="mg-btn primary small mg-head-add-dish" data-add-from-lib type="button">+ 菜品</button>
           <div class="mg-view-toggle" title="切换菜单板块显示方式">
             <button class="mg-view-btn ${mg.viewMode === 'card' ? 'on' : ''}" data-view="card" type="button">卡片</button>
             <button class="mg-view-btn ${mg.viewMode === 'text' ? 'on' : ''}" data-view="text" type="button">排序</button>
@@ -1473,6 +1508,7 @@
     cropScaleChangeFn = typeof opts.onScaleChange === 'function' ? opts.onScaleChange : null;
     cropDisplayScale = Number(opts.displayScale) || 100;
     const src = opts.src || mg.pendingImage;
+    cropPreviewSrc = src || '';
     const currentCrop = opts.crop || ((cropMode === 'logo' || cropMode === 'tablet-logo' || cropMode === 'art') ? null : mg.pendingCrop);
     if (!src) { alert(cropMode === 'logo' || cropMode === 'tablet-logo' ? '请先选择 LOGO 图片' : '请先上传图片再调整展示位置'); return; }
     const title = $('#cropModal').querySelector('h3');
@@ -1494,10 +1530,12 @@
         cropAspect = img.naturalWidth / img.naturalHeight;
         win.style.aspectRatio = cropAspect.toFixed(4);
       }
-      const h = (!opts.forceAspect && typeof c.h === 'number') ? c.h : c.w * targetAspect * (cropAspect || 1);
+      // 已保存过的取景框必须原样复位（含 h）；只有新图片/旧兼容数据才依据目标比例补齐高度。
+      const h = (typeof c.h === 'number') ? c.h : c.w * targetAspect * (cropAspect || 1);
       cropTemp = { x: c.x, y: c.y, w: c.w, h: clamp(h, 0.05, 1) };
       syncZoomSlider();
       positionCropFrame();
+      syncCropLivePreview();
     };
     img.onload = apply;
     img.src = src;
@@ -1521,6 +1559,25 @@
     frame.style.height = fh + 'px';
     frame.style.left = fx + 'px';
     frame.style.top = fy + 'px';
+    syncCropLivePreview();
+  }
+
+  // 裁剪弹窗内不是孤立小图，而是按主页真实区域即时合成预览。
+  // 取景框每次打开都由已保存的 crop 初始化；拖动时仅更新这一份临时值。
+  function syncCropLivePreview() {
+    const panel = $('#cropLivePreview');
+    const logoShell = $('#cropLiveLogoShell');
+    const logo = $('#cropLiveLogo');
+    const artShell = $('#cropLiveArtShell');
+    const art = $('#cropLiveArt');
+    if (!panel || !logoShell || !artShell) return;
+    const isLogo = cropMode === 'tablet-logo';
+    const isArt = cropMode === 'art';
+    panel.hidden = !isLogo && !isArt;
+    logoShell.hidden = !isLogo;
+    artShell.hidden = !isArt;
+    if (isLogo && logo && cropPreviewSrc && cropTemp) Object.assign(logo.style, tabletLogoRegionStyle(cropPreviewSrc, cropTemp, cropDisplayScale));
+    if (isArt && art && cropPreviewSrc && cropTemp) Object.assign(art.style, regionCropStyle(cropPreviewSrc, cropTemp));
   }
 
   function setCropXY(x, y) {
@@ -1592,6 +1649,7 @@
       cropDisplayScale = Number(displayScale.value) || 100;
       const value = $('#cropDisplayScaleVal'); if (value) value.textContent = `${cropDisplayScale}%`;
       if (cropScaleChangeFn) cropScaleChangeFn(cropDisplayScale);
+      syncCropLivePreview();
     });
   }
 
@@ -1864,9 +1922,6 @@
       if (swipeGuard) return;   // 刚滑动过：本次 click 不当作“点遮罩关闭”
       if (e.target.id === 'modal' || e.target.closest('.modal-close')) closeModal();
     });
-    // 直接绑定左右按钮，避免遮罩的关闭事件与按钮点击竞争，切换时弹窗始终保持打开。
-    document.querySelectorAll('.m-prev').forEach((button) => button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); viewerGo(-1); }));
-    document.querySelectorAll('.m-next').forEach((button) => button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); viewerGo(1); }));
     document.addEventListener('keydown', (e) => {
       if (!$('#modal').hidden) {
         if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
@@ -1969,10 +2024,9 @@
       mg.pkg = (b && b.packages[0]) ? b.packages[0].id : null;
       renderManage();
     });
-    $('#mgAddPkg').addEventListener('click', () => { mg.pkgMode = 'new'; openPkgEditor(); });
-    $('#mgAddFromLib').addEventListener('click', openPicker);
     $('#mgList').addEventListener('click', (e) => {
       if (suppressMgClick) return;                             // 刚拖拽完，抑制误触点击
+      if (e.target.closest('[data-add-from-lib]')) { openPicker(); return; }
       const vt = e.target.closest('[data-view]');
       if (vt) { mg.viewMode = vt.dataset.view; renderMgList(); return; }
       if (e.target.closest('[data-handle]')) return;          // 拖动手柄不触发编辑
@@ -1997,10 +2051,23 @@
     });
     // 拖拽排序：在网格上委托 pointerdown，手柄触发
     $('#mgList').addEventListener('pointerdown', onMgPointerDown);
-    // 套餐条：点击切换套餐、按住拖动排序
-    $('#mgPkgRow').addEventListener('pointerdown', onPkgPointerDown);
-    // 套餐条右键 → 创建副本（快速建菜单）
-    $('#mgPkgRow').addEventListener('contextmenu', onPkgContextMenu);
+    // 套餐收纳菜单：选中、上下排序、新增及更多操作均在此完成。
+    $('#mgPkgTrigger').addEventListener('click', () => { mg.pkgMenuOpen = !mg.pkgMenuOpen; renderPkgRow(); });
+    $('#mgPkgMenu').addEventListener('click', (e) => {
+      const select = e.target.closest('[data-pkg-select]');
+      const up = e.target.closest('[data-pkg-up]');
+      const down = e.target.closest('[data-pkg-down]');
+      const more = e.target.closest('[data-pkg-more]');
+      if (e.target.closest('[data-pkg-add]')) { mg.pkgMenuOpen = false; mg.pkgMode = 'new'; openPkgEditor(); return; }
+      if (select) { mg.pkg = select.dataset.pkgSelect; mg.pkgMenuOpen = false; renderPkgRow(); renderMgList(); return; }
+      if (up) { movePackageBy(up.dataset.pkgUp, -1); return; }
+      if (down) { movePackageBy(down.dataset.pkgDown, 1); return; }
+      if (more) { const r = more.getBoundingClientRect(); openPkgCtx(more, r.left, r.bottom + 4); }
+    });
+    document.addEventListener('click', (e) => {
+      const wrap = $('#mgPkgMenuWrap');
+      if (mg.pkgMenuOpen && wrap && !wrap.contains(e.target)) { mg.pkgMenuOpen = false; renderPkgRow(); }
+    });
     $('#pkgCtxMenu').addEventListener('click', (e) => {
       const item = e.target.closest('.ctx-item');
       if (!item) return;
@@ -2246,17 +2313,7 @@
       return { backgroundImage: `url('${url}')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: 'transparent' };
     }
     function tabletLogoBgStyle(url, crop, scale) {
-      const style = logoBgStyle(url, crop);
-      const s = Math.max(35, Math.min(160, Number(scale) || 100)) / 100;
-      if (crop && typeof crop.w === 'number') {
-        const w = clamp(crop.w, .05, 1), h = clamp(typeof crop.h === 'number' ? crop.h : crop.w, .05, 1);
-        style.backgroundSize = `${(100 / w * s).toFixed(3)}% ${(100 / h * s).toFixed(3)}%`;
-      } else {
-        style.backgroundSize = `${Math.round(s * 100)}% auto`;
-      }
-      // 平板侧栏中的品牌标识始终以侧栏中心为锚点；裁剪只决定取哪一块内容，不改变品牌的版式中心。
-      style.backgroundPosition = '50% 50%';
-      return style;
+      return tabletLogoRegionStyle(url, crop, scale);
     }
 
     // —— 品牌设置（LOGO 图片 + 酒店名称）——
@@ -2411,7 +2468,8 @@
       var reader = new FileReader();
       reader.onload = function(e) {
         var src = e.target.result;
-        openCrop({ mode: 'tablet-logo', src: src, crop: BrandConfig.tabletLogoCrop, aspect: .46, forceAspect:true, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done: function(crop, scale) {
+        // 新文件从默认取景框开始；后续「调整展示区域」才严格复位该文件已保存的锚点。
+        openCrop({ mode: 'tablet-logo', src: src, crop: null, aspect: .46, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done: function(crop, scale) {
           BrandConfig.logo = src;
           BrandConfig.tabletLogoCustom = src;
           BrandConfig.tabletLogoCrop = crop;
@@ -2433,7 +2491,7 @@
     });
     var tabletLogoCropBtn = $('#setBrandLogoCropBtn');
     if (tabletLogoCropBtn) tabletLogoCropBtn.addEventListener('click', function() {
-      openCrop({ mode:'tablet-logo', src:BrandConfig.tabletLogo(), crop:BrandConfig.tabletLogoCrop, aspect:.46, forceAspect:true, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done:function(crop, scale) { BrandConfig.tabletLogoCrop = crop; BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); toast('LOGO 展示区域已调整'); } });
+      openCrop({ mode:'tablet-logo', src:BrandConfig.tabletLogo(), crop:BrandConfig.tabletLogoCrop, aspect:.46, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done:function(crop, scale) { BrandConfig.tabletLogoCrop = crop; BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); toast('LOGO 展示区域已调整'); } });
     });
     // 平板页头 PNG：仅用于右上角装饰，使用与菜品相同的固定比例取景框保存展示范围。
     var padArtInput = $('#padArtInput');
@@ -2755,6 +2813,68 @@
     }
   }
 
+  // ---------- 平板双指缩放 ----------
+  // 只在各自的工作区域接管双指手势：管理抽屉调卡片列数，首页调阅读比例。
+  // 这样单指滚动、详情页滑动以及系统层级的缩放仍然保持原有行为。
+  function initPadPinchControls() {
+    const drawer = $('#manageScreen');
+    const home = $('#orderScreen');
+    if (!drawer || !home) return;
+
+    function distance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    function readPref(key, fallback) {
+      try { return Number(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
+    }
+    function writePref(key, value) { try { localStorage.setItem(key, String(value)); } catch (_) {} }
+
+    let drawerCols = Math.min(4, Math.max(2, readPref('ss_drawer_cols', 3)));
+    let homeScale = [80, 90, 100].includes(readPref('ss_home_scale', 100)) ? readPref('ss_home_scale', 100) : 100;
+    const applyDrawer = (value, announce) => {
+      drawerCols = Math.min(4, Math.max(2, value));
+      drawer.style.setProperty('--drawer-grid-cols', drawerCols);
+      writePref('ss_drawer_cols', drawerCols);
+      if (announce) toast('抽屉菜品库：' + drawerCols + ' 列');
+    };
+    const applyHome = (value, announce) => {
+      homeScale = Math.min(100, Math.max(80, value));
+      home.style.setProperty('--home-scale', (homeScale / 100).toFixed(1));
+      writePref('ss_home_scale', homeScale);
+      if (announce) toast('首页显示：' + homeScale + '%');
+    };
+    applyDrawer(drawerCols, false);
+    applyHome(homeScale, false);
+    drawer.setAttribute('aria-label', '管理抽屉，双指捏合或展开可切换 2、3、4 列');
+    home.setAttribute('aria-label', '首页，双指捏合或展开可切换 80%、90%、100% 显示比例');
+
+    function bindPinch(el, values, getValue, setValue) {
+      let active = false, startDistance = 0, startIndex = 0;
+      el.addEventListener('touchstart', (e) => {
+        if (!document.body.classList.contains('shell-pad') || e.touches.length !== 2) return;
+        active = true;
+        startDistance = distance(e.touches);
+        startIndex = Math.max(0, values.indexOf(getValue()));
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (!active || e.touches.length !== 2) return;
+        e.preventDefault();
+        // 每约 70px 切换一档，避免细微手抖反复改变布局。
+        const shift = Math.round((distance(e.touches) - startDistance) / 70);
+        const index = Math.min(values.length - 1, Math.max(0, startIndex + shift));
+        const next = values[index];
+        if (next !== getValue()) setValue(next, true);
+      }, { passive: false });
+      const end = (e) => { if (e.touches.length < 2) active = false; };
+      el.addEventListener('touchend', end, { passive: true });
+      el.addEventListener('touchcancel', () => { active = false; }, { passive: true });
+    }
+    bindPinch(drawer, [2, 3, 4], () => drawerCols, applyDrawer);
+    bindPinch(home, [80, 90, 100], () => homeScale, applyHome);
+  }
+
   // ---------- 启动 ----------
   document.addEventListener('DOMContentLoaded', async () => {
     let storageWarned = false;
@@ -2768,6 +2888,7 @@
       if (localStorage.getItem('ss_hint_off') === '1') { $('#mgHint').style.display = 'none'; }
     } catch (_) {}
     applyTheme();   // 先识别设备 + 设置 body.shell-pad + 应用皮肤
+    initPadPinchControls();
     syncCategoryOptions();
     bindStatic();
     initUnifiedSelects();
@@ -2785,6 +2906,27 @@
     }
     // 平板侧栏的套餐切换与分类定位：事件委托，重渲染后仍然有效。
     const tabletSidebar = $('#tabletSidebar');
+    const tabletManage = $('#tabletManage');
+    if (tabletManage) {
+      let settingsHold = null;
+      let settingsLongPressed = false;
+      const clearSettingsHold = () => { if (settingsHold) { clearTimeout(settingsHold); settingsHold = null; } };
+      tabletManage.addEventListener('pointerdown', () => {
+        settingsLongPressed = false;
+        clearSettingsHold();
+        settingsHold = setTimeout(() => {
+          settingsHold = null;
+          settingsLongPressed = true;
+          openDemoLockConfirm();
+        }, 800);
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => tabletManage.addEventListener(eventName, clearSettingsHold));
+      tabletManage.addEventListener('click', (e) => {
+        if (!settingsLongPressed) return;
+        e.preventDefault(); e.stopPropagation();
+        settingsLongPressed = false;
+      });
+    }
     if (tabletSidebar) tabletSidebar.addEventListener('click', (e) => {
       const banquetOption = e.target.closest('[data-tablet-banquet]');
       if (banquetOption) { window.setBanquet(banquetOption.dataset.tabletBanquet); return; }
@@ -2809,20 +2951,13 @@
         tabletSidebar.querySelectorAll('.tablet-category').forEach((el) => el.classList.toggle('on', el === categoryButton));
       }
     });
-    // 长按当前宴席名（桌面亦支持右键）打开其他宴席的二级菜单。
+    // 双击当前宴席名打开二级菜单；菜单保留直到选中其他宴席或点击侧栏以外。
     const tabletBanquet = $('#tabletBanquet');
     const tabletBanquetMenu = $('#tabletBanquetMenu');
     if (tabletBanquet && tabletBanquetMenu) {
-      let banquetHold = null;
       const closeBanquetMenu = () => { tabletBanquetMenu.hidden = true; };
       const openBanquetMenu = () => { tabletBanquetMenu.hidden = !tabletBanquetMenu.hidden; };
-      tabletBanquet.addEventListener('pointerdown', () => {
-        banquetHold = setTimeout(() => { banquetHold = null; openBanquetMenu(); }, 550);
-      });
-      ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach((eventName) => tabletBanquet.addEventListener(eventName, () => {
-        if (banquetHold) { clearTimeout(banquetHold); banquetHold = null; }
-      }));
-      tabletBanquet.addEventListener('contextmenu', (e) => { e.preventDefault(); openBanquetMenu(); });
+      tabletBanquet.addEventListener('dblclick', (e) => { e.preventDefault(); e.stopPropagation(); openBanquetMenu(); });
       document.addEventListener('click', (e) => { if (!tabletSidebar.contains(e.target)) closeBanquetMenu(); });
       tabletBanquet.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBanquetMenu(); } });
     }
