@@ -736,7 +736,8 @@
     return lines;
   }
   // 根据每行备注的最大高度计算行高；同行卡片共享同一个 rowHeight，底边始终对齐。
-  function getLandscapeGrid(lines, bounds, ctx) {
+  function getLandscapeGrid(lines, bounds, ctx, options) {
+    options = options || {};
     var count = Math.max(1, lines.length), best = null, maxCols = Math.min(6, Math.max(3, count));
     function measure(cols, w) {
       var gap = 30, rows = Math.ceil(count / cols), pad = Math.max(9, w * .025), imageW = w - pad * 2, imageH = imageW * .75;
@@ -744,7 +745,7 @@
       for (var r = 0; r < rows; r++) {
         var rowH = imageH + pad + titleFs + 26;
         for (var c = 0; c < cols; c++) {
-          var dish = lines[r * cols + c]; if (!dish || !(dish.note || '').trim()) continue;
+          var dish = lines[r * cols + c]; if (!options.showNotes || !dish || !(dish.note || '').trim()) continue;
           ctx.font = noteFs + 'px "Microsoft YaHei", sans-serif';
           var noteLines = wrapCanvasLines(ctx, '备注：' + dish.note.trim(), imageW);
           rowH = Math.max(rowH, imageH + pad + titleFs + 14 + noteLines.length * noteStep + 16);
@@ -819,7 +820,8 @@
     ctx.fillStyle = C.red; canvasFontToFit(ctx, '400', 48 * s, '"Times New Roman", "Songti SC", serif', priceText, 180 * s, 30 * s); ctx.fillText(priceText, priceRight, 155 * s);
     ctx.font = (17 * s) + 'px ' + sansFamily; ctx.fillText(deskText, deskRight, 155 * s);
     ctx.textAlign = 'center'; ctx.fillStyle = C.muted; canvasFontToFit(ctx, '400', 15 * s, sansFamily, getExportHeaderSlogan(), 260 * s, 10 * s); ctx.fillText(getExportHeaderSlogan(), 746 * s, 194 * s);
-    var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines, bounds, ctx);
+    var showNotes = meta.showNotes !== false, centerNames = !!meta.catalogMode;
+    var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines, bounds, ctx, { showNotes: showNotes });
     var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.total;
     var startX = bounds.x + (bounds.w - gridW) / 2, startY = bounds.y + Math.max(0, (bounds.h - gridH) / 2);
     lines.forEach(function (line, i) {
@@ -834,9 +836,10 @@
       else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.imageW, grid.imageH, line.crop);
       ctx.restore();
       var name = line.cn || '未命名菜品', note = (line.note || '').trim(), nameY = y + pad + grid.imageH + grid.titleFs + 12;
-      ctx.textAlign = 'left'; ctx.fillStyle = C.ink; ctx.font = '700 ' + grid.titleFs + 'px "Noto Serif SC", "Songti SC", "STSong", serif';
-      ctx.fillText(canvasText(ctx, name, x + pad, nameY, grid.imageW), x + pad, nameY);
-      if (note) {
+      ctx.textAlign = centerNames ? 'center' : 'left'; ctx.fillStyle = C.ink; ctx.font = '700 ' + grid.titleFs + 'px "Noto Serif SC", "Songti SC", "STSong", serif';
+      var nameX = centerNames ? x + grid.w / 2 : x + pad;
+      ctx.fillText(canvasText(ctx, name, nameX, nameY, grid.imageW), nameX, nameY);
+      if (showNotes && note) {
         ctx.fillStyle = C.muted; ctx.font = grid.noteFs + 'px "Microsoft YaHei", sans-serif';
         var noteLines = wrapCanvasLines(ctx, '备注：' + note, grid.imageW), noteY = nameY + grid.noteStep;
         noteLines.forEach(function (text, n) { ctx.fillText(text, x + pad, noteY + n * grid.noteStep); });
@@ -1528,7 +1531,8 @@
       if (errors && errors.length) { done(null, errors); return; }
       buildPhotoLandscapeCanvas(dishes, function (canvas) { done(canvas, null); }, {
         title: pk && pk.name ? pk.name : (b && b.name ? b.name : '宴会菜单'),
-        price: pk && typeof pk.price !== 'undefined' ? pk.price : '—'
+        price: pk && typeof pk.price !== 'undefined' ? pk.price : '—',
+        catalogMode: true, showNotes: false
       });
     });
   }
@@ -1575,7 +1579,7 @@
             var pdf = buildMultiPagePdf(pages);
             var fname = single
               ? safeName(b.name) + '-' + safeName(pkgs[0].name) + '.pdf'
-              : safeName(b.name) + '-整份菜单.pdf';
+              : safeName(/菜单$/.test(b.name) ? b.name : b.name + '菜单') + '.pdf';
             downloadBlob(new Blob([pdf], { type: 'application/pdf' }), fname);
           } catch (e) {
             try { alert('生成 PDF 失败：' + (e && e.message ? e.message : e)); } catch (e2) {}
@@ -1595,6 +1599,11 @@
             pages.push({ bytes: bytes, w: canvas.width, h: canvas.height });
           } catch (e) { /* 单页失败则跳过该页 */ }
           next();
+        }, {
+          title: pkg.name || b.name,
+          price: typeof pkg.price !== 'undefined' ? pkg.price : '—',
+          catalogMode: true,
+          showNotes: false
         });
       }
       next();
@@ -1682,7 +1691,7 @@
             } else cv.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); else alert('导出失败，请重试'); }, 'image/png');
           };
           output(canvas);
-        }, { title: pkg.name || b.name, price: typeof pkg.price !== 'undefined' ? pkg.price : '—' });
+        });
         return;
       }
       var liveLines = draft.lines;

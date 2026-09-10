@@ -2646,6 +2646,8 @@
       var container = $('#mePreview'); if (!container) return;
       var bId = menuExportBanquet();
       var b = Store.getBanquet(bId);
+      var previewLabel = $('#mePreviewLabel');
+      if (previewLabel && b) previewLabel.textContent = '预览（第 1 页 / 共 ' + b.packages.length + ' 页 · 横版 A4）';
       if (!b || !b.packages.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">该宴席暂无套餐</div>'; return; }
       container.innerHTML = '<div style="text-align:center;padding:30px;color:#A88A5E;font-size:14px">渲染预览中…</div>';
       if (window.CustomOrder && window.CustomOrder.renderPackageLandscapeCanvas) {
