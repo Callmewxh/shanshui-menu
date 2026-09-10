@@ -3,7 +3,8 @@
 // 便于在迭代中直接查看导出排版（间距 / 左右对称）。
 const path = require('path');
 const fs = require('fs');
-const { Resvg } = require('@resvg/resvg-js');
+let Resvg;
+try { ({ Resvg } = require('@resvg/resvg-js')); } catch (_) { Resvg = null; }
 const ROOT = path.resolve(__dirname, '..');
 
 const fakeEl = () => ({
@@ -40,11 +41,27 @@ function render(ver, k, label) {
   const outSvg = path.join(ROOT, 'prototype', 'preview-' + label + '.svg');
   const outPng = path.join(ROOT, 'prototype', 'preview-' + label + '.png');
   fs.writeFileSync(outSvg, svg, 'utf8');
+  if (!Resvg) { console.log('wrote', outSvg, '(PNG renderer unavailable)'); return; }
   const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1240 } });
   const png = resvg.render();
   fs.writeFileSync(outPng, png.asPng());
   console.log('wrote', outPng, '(' + (png.width) + 'x' + png.height + ')');
 }
 
+function renderLandscape(k) {
+  CO.enter('wedding', 'A1');
+  CO._setTotal('2399');
+  const svg = CO._buildPhotoLandscapeSVG(k);
+  const outSvg = path.join(ROOT, 'prototype', 'preview-landscape-a4.svg');
+  const outPng = path.join(ROOT, 'prototype', 'preview-landscape-a4.png');
+  fs.writeFileSync(outSvg, svg, 'utf8');
+  if (!Resvg) { console.log('wrote', outSvg, '(PNG renderer unavailable)'); return; }
+  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1600 } });
+  const png = resvg.render();
+  fs.writeFileSync(outPng, png.asPng());
+  console.log('wrote', outPng, '(' + png.width + 'x' + png.height + ')');
+}
+
 render('thumb', 1, 'thumb-k1');
 render('plain', 1, 'plain-k1');
+renderLandscape(1);

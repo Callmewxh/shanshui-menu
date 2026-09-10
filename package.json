@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npm run build:cache",
+    "build": "npm run build:export-assets && npm run build:cache",
+    "build:export-assets": "node tools/build-export-assets.js",
     "build:cache": "node tools/build-sw-cache.js",
     "data:externalize": "node tools/externalize-menu-images.js",
     "test": "node tools/run-tests.js"

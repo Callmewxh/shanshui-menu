@@ -402,21 +402,28 @@
       if (i >= 0) goTo(i);
     };
 
-    // 定制界面：点击非定制区域（背景遮罩）即退出定制，回到点菜
+    // 右侧抽屉：点击抽屉以外的遮罩即回到主菜单；编辑内容由各模块实时保存。
     let backdrop = document.getElementById('padBackdrop');
+    const appRoot = document.querySelector('.app');
     if (!backdrop) {
       backdrop = document.createElement('div');
       backdrop.id = 'padBackdrop';
       backdrop.className = 'pad-backdrop';
       backdrop.innerHTML = '<span class="pad-backdrop-tip">点击空白处退出定制</span>';
-      document.body.appendChild(backdrop);
+      // 必须放入 .app：外部 body 的遮罩会跨过 app 的层叠上下文，压住右侧抽屉并吞掉点击。
+      (appRoot || document.body).appendChild(backdrop);
+    } else if (appRoot && backdrop.parentElement !== appRoot) {
+      // 兼容热更新/旧页面已创建在 body 下的遮罩。
+      appRoot.appendChild(backdrop);
     }
     const customScreen = $('#customScreen');
+    const manageScreen = $('#manageScreen');
     const syncBackdrop = () => {
-      const open = customScreen && !customScreen.hidden && document.body.classList.contains('shell-pad');
+      const open = ((customScreen && !customScreen.hidden) || (manageScreen && !manageScreen.hidden)) && document.body.classList.contains('shell-pad');
       backdrop.classList.toggle('show', !!open);
     };
     if (customScreen) new MutationObserver(syncBackdrop).observe(customScreen, { attributes: true, attributeFilter: ['hidden'] });
+    if (manageScreen) new MutationObserver(syncBackdrop).observe(manageScreen, { attributes: true, attributeFilter: ['hidden'] });
     backdrop.addEventListener('click', () => { if (window.setMode) window.setMode('order'); });
     syncBackdrop();
 

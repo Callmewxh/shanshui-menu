@@ -21,6 +21,13 @@
     '主菜': '#F0B8A0',
     '主食点心': '#E6C58F',
   };
+  // 菜品无图占位也随皮肤使用低饱和色板，管理端与展示端保持统一。
+  function categoryColor(cat) {
+    if (document.documentElement.getAttribute('data-theme') === 'amber-green') {
+      return ({ '凉菜': '#E4EAD8', '主菜': '#CFE1D7', '主食点心': '#E9DDC1' })[cat] || '#E8EEE8';
+    }
+    return CAT_COLORS[cat] || '#eee';
+  }
   // 展示裁剪：支持 2D 平移 + 缩放的 4:3 截图框（方案 B：完整图上拖 4:3 框 + 缩放）。
   // 新模型 crop = {x,y,w,h}（图片归一化裁剪矩形：x/y=左上角占宽/高比例，w=宽比例，h=高比例；h=w*0.75*图片宽高比 以保证 4:3）。
   // 用 background-size/position 精确还原，保证编辑框与展示端所见即所得。
@@ -54,8 +61,11 @@
   let viewList = [];      // 当前点菜页可见菜品的展示顺序（大图循环浏览用）
   let cropTemp = null; // 图片展示位置临时值 {x,y,w,h}
   let cropAspect = 1;  // 当前编辑图片宽高比（IW/IH），用于把裁剪框换算成图片归一化高度
-  let cropMode = 'dish'; // 'dish' | 'logo'
+  let cropMode = 'dish'; // 'dish' | 'logo' | 'tablet-logo' | 'art'
+  let cropTargetAspect = .75;
   let cropDoneFn = null; // logo 裁剪完成回调
+  let cropDisplayScale = 100;
+  let cropScaleChangeFn = null;
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -193,6 +203,85 @@
         <span class="chip-price">¥${p.price}<i>/桌</i></span>
       </button>`
     ).join('');
+    renderTabletSidebar(b);
+  }
+
+  // 横屏平板采用参考稿的「左侧宴席信息 + 右侧清单」结构；数据仍复用当前宴席/套餐状态。
+  function renderTabletSidebar(b) {
+    const p = pkg();
+    const banquetInfo = Store.BANQUETS.find((x) => x.id === state.banquet);
+    const label = $('#tabletBanquetLabel');
+    const name = $('#tabletBanquet');
+    const en = $('#tabletBanquetEn');
+    const price = $('#tabletPrice');
+    const meta = $('#tabletMeta');
+    const packages = $('#tabletPackages');
+    const banquetMenu = $('#tabletBanquetMenu');
+    if (!label || !name || !en || !price || !meta || !packages) return;
+    const banquetName = banquetInfo ? banquetInfo.name : '宴席';
+    label.textContent = '宴享';
+    name.textContent = banquetName;
+    en.textContent = 'Shanshui Grand Banquet';
+    price.innerHTML = p ? `¥ ${Number(p.price || 0).toLocaleString('zh-CN')} <span>/ 桌</span>` : '¥ 0 <span>/ 桌</span>';
+    meta.textContent = p ? `${(p.dishes || []).length} 道菜品 · ${p.name}` : '精选宴席菜单';
+    packages.innerHTML = b.packages.map((item) =>
+      `<button class="tablet-package ${item.id === state.pkg ? 'on' : ''}" type="button" data-tablet-pkg="${item.id}"><span>${item.name}</span><small>¥${item.price}</small></button>`
+    ).join('');
+    if (banquetMenu) {
+      banquetMenu.innerHTML = availableBanquets().map((item) =>
+        `<button type="button" class="tablet-banquet-option ${item.id === state.banquet ? 'on' : ''}" data-tablet-banquet="${item.id}">${item.name}</button>`
+      ).join('');
+      banquetMenu.hidden = true;
+    }
+  }
+
+  // 平板页头图案为展示偏好，独立保存，避免影响菜单配置和导出数据。
+  const PAD_ART_KEY = 'ss_pad_header_art';
+  const PAD_ART_CROP_KEY = 'ss_pad_header_art_crop';
+  const PAD_ART_DEFAULT = 'assets/pad-header-ink-landscape.png';
+  const PAD_ART_CSS_DEFAULT = 'pad-header-ink-landscape.png';
+  function regionCropStyle(url, crop) {
+    if (crop && typeof crop.w === 'number') {
+      const w = Math.max(.05, Math.min(1, crop.w));
+      const h = Math.max(.05, Math.min(1, typeof crop.h === 'number' ? crop.h : crop.w));
+      const x = Math.max(0, Math.min(1 - w, Number(crop.x) || 0));
+      const y = Math.max(0, Math.min(1 - h, Number(crop.y) || 0));
+      return { backgroundImage:`url('${url}')`, backgroundSize:`${(100 / w).toFixed(3)}% ${(100 / h).toFixed(3)}%`, backgroundPosition:`${(1-w < .0001 ? 0 : x/(1-w)*100).toFixed(2)}% ${(1-h < .0001 ? 0 : y/(1-h)*100).toFixed(2)}%`, backgroundRepeat:'no-repeat' };
+    }
+    return { backgroundImage:`url('${url}')`, backgroundSize:'cover', backgroundPosition:'center', backgroundRepeat:'no-repeat' };
+  }
+  function getPadArtCrop() {
+    try {
+      const crop = JSON.parse(localStorage.getItem(PAD_ART_CROP_KEY) || 'null');
+      if (crop && Number.isFinite(crop.x) && Number.isFinite(crop.y) && Number.isFinite(crop.w)) return crop;
+    } catch (_) {}
+    return null;
+  }
+  function setPadArtCrop(crop) {
+    try { if (crop) localStorage.setItem(PAD_ART_CROP_KEY, JSON.stringify(crop)); else localStorage.removeItem(PAD_ART_CROP_KEY); } catch (_) {}
+  }
+  function applyPadHeaderArt() {
+    let image = '';
+    try { image = localStorage.getItem(PAD_ART_KEY) || ''; } catch (_) {}
+    const content = $('#content');
+    const preview = $('#padArtPreview');
+    // CSS 文件位于 assets/：默认图在 CSS 变量中必须用 assets 内相对路径；
+    // 设置预览则用页面相对路径，二者不能混用，否则主页会静默丢图。
+    const cropStyle = regionCropStyle(image || PAD_ART_CSS_DEFAULT, getPadArtCrop());
+    const previewStyle = regionCropStyle(image || PAD_ART_DEFAULT, getPadArtCrop());
+    if (content) {
+      content.style.setProperty('--pad-header-art', cropStyle.backgroundImage);
+      content.style.setProperty('--pad-header-art-size', cropStyle.backgroundSize);
+      content.style.setProperty('--pad-header-art-position', cropStyle.backgroundPosition);
+      content.classList.toggle('has-pad-header-art', !!image);
+    }
+    if (preview) {
+      const layer = preview.querySelector('.pad-art-preview-layer');
+      if (layer) {
+        Object.assign(layer.style, previewStyle);
+      }
+      preview.classList.toggle('has-art', !!image);
+    }
   }
 
   function renderBanner() {
@@ -207,6 +296,19 @@
     const h = $('#hero');
     if (!p) { h.hidden = true; return; }
     h.hidden = false;
+    if (document.body.classList.contains('shell-pad')) {
+      const b = Store.BANQUETS.find((item) => item.id === state.banquet);
+      h.innerHTML = `<section class="pad-hero-card">
+        <div class="pad-hero-copy">
+          <div class="pad-hero-kicker">${b ? b.name : '宴席'} · 主厨臻选</div>
+          <h2>${p.name}</h2>
+          <div class="pad-hero-en">A TASTE FOR EVERY SEASON</div>
+          <div class="pad-hero-rule"></div>
+          <p>甄选时令风味，呈现一席从容雅致。</p>
+        </div>
+      </section>`;
+      return;
+    }
     h.innerHTML = `<div class="hero-card">
       <button class="pin-hero-btn ${heroPinned ? 'on' : ''}" type="button" title="${heroPinned ? '取消固定' : '固定菜单条'}" aria-pressed="${heroPinned}">
         <svg class="pin-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.17v6h1.66v-6H18v-2l-2-2z"/></svg>
@@ -236,18 +338,20 @@
     if (d.image) {
       return `<div class="thumb">${dishCropThumb(d, true)}</div>`;
     }
-    const col = CAT_COLORS[d.cat] || '#eee';
+    const col = categoryColor(d.cat);
     return `<div class="thumb" style="background:${col}">${ICONS[d.icon] || ''}<span class="num">${dishNo(d.id, idx)}</span></div>`;
   }
 
   function cardHTML(d, idx) {
-    return `<article class="card" data-idx="${idx}">
+    return `<article class="card" data-idx="${idx}" data-dish-id="${d.id}">
       ${thumbHTML(d, idx)}
       <div class="info">
         <div class="cn">${d.cn}</div>
         <div class="en">${d.en}</div>
+        <div class="pad-dish-desc">${d.desc || '甄选食材，细致烹制，呈现本味。'}</div>
         <span class="cat-tag">${d.cat}</span>
       </div>
+      <div class="pad-dish-note">${d.cat}</div>
     </article>`;
   }
 
@@ -276,6 +380,12 @@
       </section>`;
     }).join('');
     list.innerHTML = sections || '<div class="empty-state">未找到相关菜品</div>';
+    const tabletCategories = $('#tabletCategories');
+    if (tabletCategories) {
+      tabletCategories.innerHTML = CAT_ORDER.filter((cat) => ds.some((d) => d.cat === cat)).map((cat, i) =>
+        `<button type="button" class="tablet-category ${i === 0 ? 'on' : ''}" data-tablet-cat="${cat}"><i></i>${cat}</button>`
+      ).join('');
+    }
     hydrateLazyDishImages(list);
   }
 
@@ -355,6 +465,7 @@
     viewer.index = i;
     renderModal();
     $('#modal').hidden = false;
+    document.body.classList.add('detail-modal-open');
   }
   function renderModal(dir) {
     const d = viewer.list[viewer.index];
@@ -364,7 +475,7 @@
     if (d.image) {
       thumb.style.background = 'transparent';
       thumb.innerHTML = dishCropThumb(d);
-    } else { thumb.style.background = CAT_COLORS[d.cat] || '#eee'; thumb.innerHTML = ICONS[d.icon] || ''; }
+    } else { thumb.style.background = categoryColor(d.cat); thumb.innerHTML = ICONS[d.icon] || ''; }
     m.querySelector('.m-num').textContent = 'NO. ' + dishNo(d.id, viewer.index);
     m.querySelector('.m-cn').textContent = d.cn;
     m.querySelector('.m-en').textContent = d.en;
@@ -397,6 +508,7 @@
   let swipeGuard = false, swipeTimer = null;   // 滑动后短暂屏蔽 click，避免误触关闭
   const closeModal = () => {
     $('#modal').hidden = true;
+    document.body.classList.remove('detail-modal-open');
     const app = document.querySelector('.app'); if (app) app.classList.remove('chrome-hidden');
   };
   window.setMode = setMode;        // 暴露给沉浸 pad 外壳：定制界面点击外部退出
@@ -419,6 +531,9 @@
     const order = mode === 'order';
     const manage = mode === 'manage';
     const custom = mode === 'custom';
+    // 平板端的管理/定制保持为右侧抽屉，主菜单始终在后方可见。
+    document.body.classList.remove('pad-workspace');
+    try { localStorage.setItem('ss_last_mode', mode); } catch (_) {}
     $('#orderScreen').hidden = !order;
     $('#manageScreen').hidden = !manage;
     const cs = $('#customScreen'); if (cs) cs.hidden = !custom;
@@ -694,7 +809,7 @@
     const n = Store.usageCount(d.id);
     const inner = d.image
       ? dishCropThumb(d)
-      : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
+      : `<div class="thumb" style="background:${categoryColor(d.cat)}">${ICONS[d.icon] || ''}</div>`;
     return `<div class="mg-card lib-card" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
         ${inner}
@@ -729,7 +844,7 @@
       if (!d) return `<div class="mg-card missing" data-id="${id}"><div class="mg-info"><div class="mg-cn">⚠ 菜品缺失（${id}）</div></div></div>`;
       const inner = d.image
         ? dishCropThumb(d)
-        : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
+        : `<div class="thumb" style="background:${categoryColor(d.cat)}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单（排序请切到「排序」模式）
       const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
       return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
@@ -1161,7 +1276,7 @@
     grid.innerHTML = list.map((d) => {
       const inner = d.image
         ? dishCropThumb(d)
-        : `<div class="thumb" style="background:${CAT_COLORS[d.cat] || '#eee'}">${ICONS[d.icon] || ''}</div>`;
+        : `<div class="thumb" style="background:${categoryColor(d.cat)}">${ICONS[d.icon] || ''}</div>`;
       const order = mg.pickSel.indexOf(d.id);
       const selCls = order >= 0 ? ' sel' : '';
       const badge = order >= 0
@@ -1352,27 +1467,34 @@
 
   function openCrop(opts) {
     opts = opts || {};
-    cropMode = opts.mode === 'logo' ? 'logo' : 'dish';
+    cropMode = opts.mode || 'dish';
+    cropTargetAspect = Number(opts.aspect) || (cropMode === 'logo' ? 1 : .75);
     cropDoneFn = (typeof opts.done === 'function') ? opts.done : null;
+    cropScaleChangeFn = typeof opts.onScaleChange === 'function' ? opts.onScaleChange : null;
+    cropDisplayScale = Number(opts.displayScale) || 100;
     const src = opts.src || mg.pendingImage;
-    const currentCrop = opts.crop || (cropMode === 'logo' ? null : mg.pendingCrop);
-    if (!src) { alert(cropMode === 'logo' ? '请先选择 LOGO 图片' : '请先上传图片再调整展示位置'); return; }
+    const currentCrop = opts.crop || ((cropMode === 'logo' || cropMode === 'tablet-logo' || cropMode === 'art') ? null : mg.pendingCrop);
+    if (!src) { alert(cropMode === 'logo' || cropMode === 'tablet-logo' ? '请先选择 LOGO 图片' : '请先上传图片再调整展示位置'); return; }
     const title = $('#cropModal').querySelector('h3');
     const hint = $('#cropModal').querySelector('.crop-hint');
-    if (title) title.textContent = cropMode === 'logo' ? '调整 LOGO 显示区域' : '调整图片展示位置';
-    if (hint) hint.textContent = cropMode === 'logo'
-      ? '拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（LOGO 固定 1:1，不变形）'
-      : '拖动取景框上下左右移动；拖右下角手柄或拉「缩放」滑块调整大小（展示框固定 4:3，不变形）';
+    if (title) title.textContent = opts.title || (cropMode === 'logo' || cropMode === 'tablet-logo' ? '调整 LOGO 展示区域' : '调整图片展示位置');
+    if (hint) hint.textContent = opts.hint || '拖动固定比例取景框决定展示位置；拖右下角手柄或拉「缩放」调整内容大小，框的比例即实际显示窗口。';
     const img = $('#cropImg');
+    const displayScaleRow = $('#cropDisplayScaleRow');
+    const displayScaleInput = $('#cropDisplayScale');
+    const displayScaleVal = $('#cropDisplayScaleVal');
+    if (displayScaleRow) displayScaleRow.hidden = cropMode !== 'tablet-logo';
+    if (displayScaleInput) displayScaleInput.value = String(cropDisplayScale);
+    if (displayScaleVal) displayScaleVal.textContent = `${cropDisplayScale}%`;
     const c = (currentCrop && typeof currentCrop.w === 'number') ? currentCrop : defaultCrop();
-    const targetAspect = cropMode === 'logo' ? 1 : 0.75;
+    const targetAspect = cropTargetAspect;
     const apply = () => {
       const win = $('#cropWin');
       if (win && img.naturalWidth) {
         cropAspect = img.naturalWidth / img.naturalHeight;
         win.style.aspectRatio = cropAspect.toFixed(4);
       }
-      const h = (typeof c.h === 'number') ? c.h : c.w * targetAspect * (cropAspect || 1);
+      const h = (!opts.forceAspect && typeof c.h === 'number') ? c.h : c.w * targetAspect * (cropAspect || 1);
       cropTemp = { x: c.x, y: c.y, w: c.w, h: clamp(h, 0.05, 1) };
       syncZoomSlider();
       positionCropFrame();
@@ -1411,7 +1533,7 @@
 
   function setCropZoom(zoomPct) {
     if (!cropTemp) return;
-    const targetAspect = cropMode === 'logo' ? 1 : 0.75;
+    const targetAspect = cropTargetAspect;
     const nw = clamp(100 / zoomPct, 0.05, 1);
     const nh = nw * targetAspect * cropAspect;
     const cx = cropTemp.x + cropTemp.w / 2;
@@ -1450,7 +1572,7 @@
       if (mode === 'pan') {
         setCropXY(sc.x + (e.clientX - sx) / r.width, sc.y + (e.clientY - sy) / r.height);
       } else {
-        const targetAspect = cropMode === 'logo' ? 1 : 0.75;
+        const targetAspect = cropTargetAspect;
         const dd = ((e.clientX - sx) + (e.clientY - sy)) / 2;   // 拖右下角手柄往外 = 框变大（zoom out）；往内 = 框变小（放大）
         const nw = clamp(sc.w + dd / r.width, 0.05, 1);
         const nh = clamp(nw * targetAspect * cropAspect, 0.05, 1);
@@ -1465,13 +1587,19 @@
     frame.addEventListener('pointerup', up);
     frame.addEventListener('pointercancel', up);
     const z = $('#cropZoom'); if (z) z.addEventListener('input', () => setCropZoom(parseFloat(z.value)));
+    const displayScale = $('#cropDisplayScale');
+    if (displayScale) displayScale.addEventListener('input', () => {
+      cropDisplayScale = Number(displayScale.value) || 100;
+      const value = $('#cropDisplayScaleVal'); if (value) value.textContent = `${cropDisplayScale}%`;
+      if (cropScaleChangeFn) cropScaleChangeFn(cropDisplayScale);
+    });
   }
 
   function applyCrop() {
     if (!cropTemp) return;
     const next = { x: +cropTemp.x.toFixed(4), y: +cropTemp.y.toFixed(4), w: +cropTemp.w.toFixed(4), h: +cropTemp.h.toFixed(4) };
-    if (cropMode === 'logo' && cropDoneFn) {
-      cropDoneFn(next);
+    if (cropDoneFn) {
+      cropDoneFn(next, cropDisplayScale);
       cropDoneFn = null;
       $('#cropModal').hidden = true;
       return;
@@ -1727,15 +1855,18 @@
     $('#search').addEventListener('input', (e) => { state.search = e.target.value; renderList(); });
     $('#list').addEventListener('click', (e) => {
       const c = e.target.closest('.card'); if (!c) return;
-      // 打通整份菜单：不再按分类切片，大图里可循环浏览本套餐全部菜品
-      openModal(+c.dataset.idx, viewList);
+      // 详情始终以当前套餐全量菜品为导航序列；即使列表正处于搜索/分类位置，也不会缩成局部浏览。
+      const wholeMenu = resolvedDishes();
+      const index = wholeMenu.findIndex((dish) => dish.id === c.dataset.dishId);
+      openModal(index, wholeMenu);
     });
     $('#modal').addEventListener('click', (e) => {
-      if (e.target.closest('.m-prev')) { viewerGo(-1); return; }
-      if (e.target.closest('.m-next')) { viewerGo(1); return; }
       if (swipeGuard) return;   // 刚滑动过：本次 click 不当作“点遮罩关闭”
       if (e.target.id === 'modal' || e.target.closest('.modal-close')) closeModal();
     });
+    // 直接绑定左右按钮，避免遮罩的关闭事件与按钮点击竞争，切换时弹窗始终保持打开。
+    document.querySelectorAll('.m-prev').forEach((button) => button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); viewerGo(-1); }));
+    document.querySelectorAll('.m-next').forEach((button) => button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); viewerGo(1); }));
     document.addEventListener('keydown', (e) => {
       if (!$('#modal').hidden) {
         if (e.key === 'ArrowLeft') { viewerGo(-1); return; }
@@ -1748,6 +1879,9 @@
     });
     // 详情弹窗：左右滑动循环切换菜品（横向位移明显大于纵向才算滑动）
     const mEl = $('#modal');
+    // 详情层接管输入事件，不能让滚轮/手势穿透并驱动背后的首页内容。
+    mEl.addEventListener('wheel', (e) => { if (!mEl.hidden) e.preventDefault(); }, { passive: false });
+    mEl.addEventListener('touchmove', (e) => { if (!mEl.hidden) e.preventDefault(); }, { passive: false });
     let touchX = 0, touchY = 0;
     mEl.addEventListener('touchstart', (e) => {
       touchX = e.changedTouches[0].clientX; touchY = e.changedTouches[0].clientY;
@@ -2111,14 +2245,31 @@
       }
       return { backgroundImage: `url('${url}')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: 'transparent' };
     }
+    function tabletLogoBgStyle(url, crop, scale) {
+      const style = logoBgStyle(url, crop);
+      const s = Math.max(35, Math.min(160, Number(scale) || 100)) / 100;
+      if (crop && typeof crop.w === 'number') {
+        const w = clamp(crop.w, .05, 1), h = clamp(typeof crop.h === 'number' ? crop.h : crop.w, .05, 1);
+        style.backgroundSize = `${(100 / w * s).toFixed(3)}% ${(100 / h * s).toFixed(3)}%`;
+      } else {
+        style.backgroundSize = `${Math.round(s * 100)}% auto`;
+      }
+      // 平板侧栏中的品牌标识始终以侧栏中心为锚点；裁剪只决定取哪一块内容，不改变品牌的版式中心。
+      style.backgroundPosition = '50% 50%';
+      return style;
+    }
 
     // —— 品牌设置（LOGO 图片 + 酒店名称）——
     var BrandConfig = {
       KEY_LOGO: 'ss_brand_logo',   // base64 dataURL of uploaded logo PNG
       KEY_LOGO_CROP: 'ss_brand_logo_crop',
+      KEY_TABLET_LOGO: 'ss_pad_tablet_logo',
+      KEY_TABLET_LOGO_CROP: 'ss_pad_tablet_logo_crop',
+      KEY_TABLET_LOGO_SCALE: 'ss_pad_tablet_logo_scale',
       KEY_NAME: 'ss_brand_name',
       DEF_NAME: '山水S酒店',
       DEF_MARK: 'S',
+      DEF_TABLET_LOGO: 'assets/pad-default-hotel-logo.png',
       get logo() { try { return localStorage.getItem(this.KEY_LOGO) || ''; } catch(e){return '';} },
       get name() { try { return localStorage.getItem(this.KEY_NAME) || this.DEF_NAME; } catch(e){return this.DEF_NAME;} },
       get logoCrop() {
@@ -2135,6 +2286,12 @@
         return null;
       },
       set logo(v) { try { localStorage.setItem(this.KEY_LOGO, v||''); } catch(_) {} },
+      get tabletLogoCustom() { try { return localStorage.getItem(this.KEY_TABLET_LOGO) || ''; } catch(e){ return ''; } },
+      set tabletLogoCustom(v) { try { if (v) localStorage.setItem(this.KEY_TABLET_LOGO, v); else localStorage.removeItem(this.KEY_TABLET_LOGO); } catch(_) {} },
+      get tabletLogoCrop() { try { var raw = localStorage.getItem(this.KEY_TABLET_LOGO_CROP); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } },
+      set tabletLogoCrop(c) { try { if (c) localStorage.setItem(this.KEY_TABLET_LOGO_CROP, JSON.stringify(c)); else localStorage.removeItem(this.KEY_TABLET_LOGO_CROP); } catch(_) {} },
+      get tabletLogoScale() { try { var v = Number(localStorage.getItem(this.KEY_TABLET_LOGO_SCALE)); return v >= 35 && v <= 160 ? v : 100; } catch(e){ return 100; } },
+      set tabletLogoScale(v) { try { localStorage.setItem(this.KEY_TABLET_LOGO_SCALE, String(Math.max(35, Math.min(160, Number(v) || 100)))); } catch(_) {} },
       set name(v) { try { localStorage.setItem(this.KEY_NAME, (v||'').trim() || this.DEF_NAME); } catch(_) {} },
       set logoCrop(v) {
         try {
@@ -2143,6 +2300,7 @@
         } catch (_) {}
       },
       hasLogo: function() { return !!this.logo; },
+      tabletLogo: function() { return this.tabletLogoCustom || this.DEF_TABLET_LOGO; },
       apply: function() {
         var m = $('.mark');
         if (m) {
@@ -2161,23 +2319,18 @@
         }
         var n = $('.brand-name'); if (n) n.textContent = this.name;
         document.title = this.name + ' · 婚宴菜单';
+        // 平板侧栏始终有内置默认 LOGO；设置里上传同一入口即可替换。
+        var tabletLogo = $('#tabletBrand');
+        if (tabletLogo) {
+          Object.assign(tabletLogo.style, tabletLogoBgStyle(this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale));
+        }
         // 同步设置面板预览
         var prev = $('#brandLogoPreview');
         if (prev) {
-          if (this.hasLogo()) {
-            Object.assign(prev.style, logoBgStyle(this.logo, this.logoCrop));
-            prev.textContent = '';
-            var wrap = $('#brandLogoWrap');
-            if (wrap) wrap.classList.add('has-img');
-          } else {
-            prev.style.backgroundImage = '';
-            prev.style.backgroundSize = '';
-            prev.style.backgroundPosition = '';
-            prev.style.backgroundRepeat = '';
-            prev.textContent = this.DEF_MARK;
-            var wrap = $('#brandLogoWrap');
-            if (wrap) wrap.classList.remove('has-img');
-          }
+          Object.assign(prev.style, tabletLogoBgStyle(this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale));
+          prev.textContent = '';
+          var wrap = $('#brandLogoWrap');
+          if (wrap) wrap.classList.add('has-img');
         }
       }
     };
@@ -2195,6 +2348,17 @@
       Store.TENANT.name = bnInput.value.trim() || BrandConfig.DEF_NAME;
       await Store.save();
       settingsState('saved', '品牌名称已保存');
+    });
+    // 导出底板仅开放两段必要文案；LOGO、菜单名称与报价均直接映射现有品牌/套餐数据。
+    var exportHeaderSloganInput = $('#setExportHeaderSlogan');
+    var exportFooterSloganInput = $('#setExportFooterSlogan');
+    if (exportHeaderSloganInput) exportHeaderSloganInput.value = Store.TENANT.exportHeaderSlogan || '';
+    if (exportFooterSloganInput) exportFooterSloganInput.value = Store.TENANT.exportFooterSlogan || '';
+    if (exportHeaderSloganInput) exportHeaderSloganInput.addEventListener('change', async function () {
+      settingsState('saving', '正在保存…'); Store.TENANT.exportHeaderSlogan = exportHeaderSloganInput.value.trim(); await Store.save(); settingsState('saved', '菜单副标语已保存');
+    });
+    if (exportFooterSloganInput) exportFooterSloganInput.addEventListener('change', async function () {
+      settingsState('saving', '正在保存…'); Store.TENANT.exportFooterSlogan = exportFooterSloganInput.value.trim(); await Store.save(); settingsState('saved', '页脚文案已保存');
     });
     var tenantIdInput = $('#setTenantId');
     var storeNameInput = $('#setStoreName');
@@ -2247,9 +2411,11 @@
       var reader = new FileReader();
       reader.onload = function(e) {
         var src = e.target.result;
-        openCrop({ mode: 'logo', src: src, crop: BrandConfig.logoCrop, done: function(crop) {
+        openCrop({ mode: 'tablet-logo', src: src, crop: BrandConfig.tabletLogoCrop, aspect: .46, forceAspect:true, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done: function(crop, scale) {
           BrandConfig.logo = src;
-          BrandConfig.logoCrop = crop;
+          BrandConfig.tabletLogoCustom = src;
+          BrandConfig.tabletLogoCrop = crop;
+          BrandConfig.tabletLogoScale = scale;
           BrandConfig.apply();
           toast('LOGO 已更新');
         } });
@@ -2260,8 +2426,45 @@
     if (logoClear) logoClear.addEventListener('click', function() {
       BrandConfig.logo = '';
       BrandConfig.logoCrop = null;
+      BrandConfig.tabletLogoCustom = '';
+      BrandConfig.tabletLogoCrop = null;
       BrandConfig.apply();
-      toast('已清除 LOGO，恢复默认标记');
+      toast('已恢复内置酒店 LOGO');
+    });
+    var tabletLogoCropBtn = $('#setBrandLogoCropBtn');
+    if (tabletLogoCropBtn) tabletLogoCropBtn.addEventListener('click', function() {
+      openCrop({ mode:'tablet-logo', src:BrandConfig.tabletLogo(), crop:BrandConfig.tabletLogoCrop, aspect:.46, forceAspect:true, title:'调整平板 LOGO 展示区域', displayScale:BrandConfig.tabletLogoScale, onScaleChange:function(scale) { BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); }, done:function(crop, scale) { BrandConfig.tabletLogoCrop = crop; BrandConfig.tabletLogoScale = scale; BrandConfig.apply(); toast('LOGO 展示区域已调整'); } });
+    });
+    // 平板页头 PNG：仅用于右上角装饰，使用与菜品相同的固定比例取景框保存展示范围。
+    var padArtInput = $('#padArtInput');
+    var padArtBtn = $('#setPadArtBtn');
+    var padArtCropBtn = $('#setPadArtCropBtn');
+    var padArtClear = $('#setPadArtClear');
+    if (padArtBtn && padArtInput) padArtBtn.addEventListener('click', function() { padArtInput.click(); });
+    if (padArtInput) padArtInput.addEventListener('change', function() {
+      var file = padArtInput.files && padArtInput.files[0];
+      if (!file) return;
+      if (file.type !== 'image/png') { alert('平板页头图案仅支持 PNG 图片'); padArtInput.value = ''; return; }
+      if (file.size > 2 * 1024 * 1024) { alert('图片请控制在 2MB 以内，便于平板快速打开'); padArtInput.value = ''; return; }
+      var reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          localStorage.setItem(PAD_ART_KEY, event.target.result);
+          openCrop({ mode:'art', src:event.target.result, crop:getPadArtCrop(), aspect:.315, title:'调整页头图案展示区域', done:function(crop) { setPadArtCrop(crop); applyPadHeaderArt(); toast('平板页头图案已更新'); } });
+        } catch (_) { alert('图片保存失败，请换一张更小的 PNG 图片'); }
+      };
+      reader.readAsDataURL(file);
+      padArtInput.value = '';
+    });
+    if (padArtClear) padArtClear.addEventListener('click', function() {
+      try { localStorage.removeItem(PAD_ART_KEY); } catch (_) {}
+      setPadArtCrop(null);
+      applyPadHeaderArt();
+      toast('已恢复默认水墨图案');
+    });
+    if (padArtCropBtn) padArtCropBtn.addEventListener('click', function() {
+      var source = (function(){ try{return localStorage.getItem(PAD_ART_KEY) || PAD_ART_DEFAULT;}catch(_){return PAD_ART_DEFAULT;} })();
+      openCrop({ mode:'art', src:source, crop:getPadArtCrop(), aspect:.315, title:'调整页头图案展示区域', done:function(crop) { setPadArtCrop(crop); applyPadHeaderArt(); toast('页头图案展示区域已调整'); } });
     });
     // 阻止点击品牌设置行时关闭面板
     var brandRows = document.querySelectorAll('.set-brand');
@@ -2457,11 +2660,9 @@
     } catch (e) {}
   }
 
-  // ---------- 设备识别：平板自动启用 pad 沉浸外壳 ----------
-  // ⚠️ PAD 上线开关：false = 线上禁用沉浸 pad 外壳（平板/大屏触屏走经典版）。
-  //    pad 代码（index.html cover 层 / immersive.js / style.css body.shell-pad）完整保留，
-  //    日后修改 pad 端：本地预览用 ?shell=pad 强制打开；改好想上线时把本常量改为 true 再部署即可。
-  const PAD_ENABLED = false;
+  // ---------- 设备识别：平板自动启用参考版横向布局 ----------
+  // 平板/大屏触屏默认使用左侧宴席目录 + 右侧菜品清单；?shell=classic 可临时回看经典版。
+  const PAD_ENABLED = true;
   function detectDevice() {
     const ua = navigator.userAgent || '';
     const platform = navigator.platform || '';
@@ -2481,7 +2682,7 @@
     return 'desktop';
   }
 
-  // ---------- 皮肤：固定默认 shanshui（四套可选皮肤已移除） ----------
+  // ---------- 皮肤与设备外壳 ----------
   function applyTheme() {
     const shell = detectDevice();
     // PAD 上线开关：仅当 PAD_ENABLED 且设备为平板时才启用沉浸外壳；
@@ -2489,9 +2690,69 @@
     const qs = new URLSearchParams(location.search);
     const padOn = (PAD_ENABLED && shell === 'tablet') || qs.get('shell') === 'pad';
     document.body.classList.toggle('shell-pad', padOn);
-    // 仅默认新中式红（shanshui）皮肤；四套可选皮肤已移除
-    const t = 'shanshui';
+    let t = 'shanshui';
+    try { if (localStorage.getItem('ss_theme') === 'amber-green') t = 'amber-green'; } catch (_) {}
     document.documentElement.setAttribute('data-theme', t);
+  }
+
+  // 原生下拉展开样式由浏览器决定，容易与酒店皮肤割裂；统一为轻量菜单组件，
+  // 同时继续触发原 select 的 change 事件，业务逻辑无需改动。
+  function initUnifiedSelects() {
+    document.querySelectorAll('select').forEach((select) => {
+      if (select.dataset.unifiedSelect === '1') return;
+      select.dataset.unifiedSelect = '1';
+      const wrap = document.createElement('div');
+      wrap.className = 'ui-select';
+      const trigger = document.createElement('button');
+      trigger.type = 'button'; trigger.className = 'ui-select-trigger';
+      trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false');
+      const menu = document.createElement('div');
+      menu.className = 'ui-select-menu'; menu.setAttribute('role', 'listbox'); menu.hidden = true;
+      select.parentNode.insertBefore(wrap, select);
+      wrap.appendChild(select); wrap.appendChild(trigger); wrap.appendChild(menu);
+      select.classList.add('ui-select-native');
+      const render = () => {
+        const selected = select.options[select.selectedIndex];
+        trigger.textContent = selected ? selected.textContent : '请选择';
+        menu.innerHTML = '';
+        Array.from(select.options).forEach((option) => {
+          const item = document.createElement('button');
+          item.type = 'button'; item.className = 'ui-select-option'; item.setAttribute('role', 'option');
+          item.textContent = option.textContent; item.disabled = option.disabled;
+          item.classList.toggle('on', option.selected); item.setAttribute('aria-selected', String(option.selected));
+          item.addEventListener('click', () => {
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            render(); menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); trigger.focus();
+          });
+          menu.appendChild(item);
+        });
+      };
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = menu.hidden;
+        document.querySelectorAll('.ui-select-menu').forEach((item) => { item.hidden = true; });
+        document.querySelectorAll('.ui-select-trigger').forEach((item) => item.setAttribute('aria-expanded', 'false'));
+        menu.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
+      });
+      select.addEventListener('change', render);
+      new MutationObserver(render).observe(select, { childList: true, subtree: true });
+      render();
+    });
+    if (!document.body.dataset.unifiedSelectClose) {
+      document.body.dataset.unifiedSelectClose = '1';
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.ui-select')) {
+          document.querySelectorAll('.ui-select-menu').forEach((menu) => { menu.hidden = true; });
+          document.querySelectorAll('.ui-select-trigger').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        document.querySelectorAll('.ui-select-menu').forEach((menu) => { menu.hidden = true; });
+        document.querySelectorAll('.ui-select-trigger').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+      });
+    }
   }
 
   // ---------- 启动 ----------
@@ -2509,6 +2770,62 @@
     applyTheme();   // 先识别设备 + 设置 body.shell-pad + 应用皮肤
     syncCategoryOptions();
     bindStatic();
+    initUnifiedSelects();
+    applyPadHeaderArt();
+    const themeSelect = $('#setTheme');
+    if (themeSelect) {
+      themeSelect.value = document.documentElement.getAttribute('data-theme') || 'shanshui';
+      themeSelect.addEventListener('change', () => {
+        try { localStorage.setItem('ss_theme', themeSelect.value); } catch (_) {}
+        applyTheme();
+        renderAll();
+        if (document.getElementById('manageScreen')?.classList.contains('show')) renderManage();
+        toast(themeSelect.value === 'amber-green' ? '已切换为琥珀绿皮肤' : '已切换为山水朱砂皮肤');
+      });
+    }
+    // 平板侧栏的套餐切换与分类定位：事件委托，重渲染后仍然有效。
+    const tabletSidebar = $('#tabletSidebar');
+    if (tabletSidebar) tabletSidebar.addEventListener('click', (e) => {
+      const banquetOption = e.target.closest('[data-tablet-banquet]');
+      if (banquetOption) { window.setBanquet(banquetOption.dataset.tabletBanquet); return; }
+      if (e.target.closest('#tabletManage')) {
+        setMode('manage');
+        return;
+      }
+      if (e.target.closest('#tabletCustom')) {
+        setMode('custom');
+        return;
+      }
+      const packageButton = e.target.closest('[data-tablet-pkg]');
+      if (packageButton) {
+        state.pkg = packageButton.dataset.tabletPkg;
+        renderHero(); renderPkg(); renderBanner(); renderList();
+        return;
+      }
+      const categoryButton = e.target.closest('[data-tablet-cat]');
+      if (categoryButton) {
+        const section = Array.from(document.querySelectorAll('#list .sec')).find((el) => el.querySelector('.sec-head h3')?.textContent.includes(categoryButton.dataset.tabletCat));
+        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        tabletSidebar.querySelectorAll('.tablet-category').forEach((el) => el.classList.toggle('on', el === categoryButton));
+      }
+    });
+    // 长按当前宴席名（桌面亦支持右键）打开其他宴席的二级菜单。
+    const tabletBanquet = $('#tabletBanquet');
+    const tabletBanquetMenu = $('#tabletBanquetMenu');
+    if (tabletBanquet && tabletBanquetMenu) {
+      let banquetHold = null;
+      const closeBanquetMenu = () => { tabletBanquetMenu.hidden = true; };
+      const openBanquetMenu = () => { tabletBanquetMenu.hidden = !tabletBanquetMenu.hidden; };
+      tabletBanquet.addEventListener('pointerdown', () => {
+        banquetHold = setTimeout(() => { banquetHold = null; openBanquetMenu(); }, 550);
+      });
+      ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach((eventName) => tabletBanquet.addEventListener(eventName, () => {
+        if (banquetHold) { clearTimeout(banquetHold); banquetHold = null; }
+      }));
+      tabletBanquet.addEventListener('contextmenu', (e) => { e.preventDefault(); openBanquetMenu(); });
+      document.addEventListener('click', (e) => { if (!tabletSidebar.contains(e.target)) closeBanquetMenu(); });
+      tabletBanquet.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBanquetMenu(); } });
+    }
     applyTheme();   // 再刷一次皮肤按钮高亮，确保按钮事件已绑定后状态正确
     // 首次打开（本地无菜单数据）：尝试从云端 JSON 拉取已发布菜单；失败则回退 data.js 种子
     // 拉取成功时 pullFromCloud 内部已渲染，避免首屏重复渲染；拉取失败再统一渲染种子
@@ -2519,6 +2836,11 @@
     // 初始化自动备份：若本机尚无备份副本，先用当前数据建一份，保证「恢复自动备份」可用
     try { if (!localStorage.getItem('ss_menu_v1_backup')) await Store.save().catch(() => {}); } catch (_) {}
     if (!pulled) renderAll();
+    // 刷新后回到离开前的工作界面；定制草稿由 CustomOrder 自行从本机恢复。
+    try {
+      const lastMode = localStorage.getItem('ss_last_mode');
+      if (lastMode === 'custom' || lastMode === 'manage') setMode(lastMode);
+    } catch (_) {}
     applyHeroPin();
     initImmersive();
     if (window.initImmersiveShell) window.initImmersiveShell();

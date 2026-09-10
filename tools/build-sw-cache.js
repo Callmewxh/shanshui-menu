@@ -12,6 +12,7 @@ const HASH_FILES = [
   'assets/data.js',
   'assets/store.js',
   'assets/app.js',
+  'assets/export-assets.js',
   'assets/custom.js',
   'data/menu-config.json',
 ];
@@ -22,6 +23,13 @@ const imageFiles = fs.existsSync(imageDir)
   : [];
 HASH_FILES.push(...imageFiles);
 
+// 导出底稿也是离线导出的一部分；遗漏它会让 PWA 在离线时只导出米白兜底背景。
+const exportDir = path.join(ROOT, 'assets', 'export');
+const exportFiles = fs.existsSync(exportDir)
+  ? fs.readdirSync(exportDir).filter((file) => /\.(jpe?g|png|webp)$/i.test(file)).sort().map((file) => `assets/export/${file}`)
+  : [];
+HASH_FILES.push(...exportFiles);
+
 const hash = crypto.createHash('sha256');
 for (const file of HASH_FILES) {
   hash.update(file);
@@ -31,7 +39,7 @@ for (const file of HASH_FILES) {
 }
 const cacheName = `ss-menu-${hash.digest('hex').slice(0, 12)}`;
 const source = fs.readFileSync(SW_PATH, 'utf8');
-const generatedAssets = imageFiles.map((file) => `  './${file.replace(/\\/g, '/')}',`).join('\n');
+const generatedAssets = imageFiles.concat(exportFiles).map((file) => `  './${file.replace(/\\/g, '/')}',`).join('\n');
 let next = source.replace(
   /  \/\/ BEGIN GENERATED IMAGE ASSETS\r?\n[\s\S]*?  \/\/ END GENERATED IMAGE ASSETS/,
   `  // BEGIN GENERATED IMAGE ASSETS\n${generatedAssets}${generatedAssets ? '\n' : ''}  // END GENERATED IMAGE ASSETS`

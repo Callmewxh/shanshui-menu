@@ -82,6 +82,25 @@
 </script></head>
 <body>
   <div class="app">
+    <!-- 横屏平板专用：常驻宴席信息与菜单目录（非平板由 CSS 隐藏） -->
+    <aside class="tablet-sidebar" id="tabletSidebar" aria-label="平板菜单导航">
+      <div class="tablet-brand" id="tabletBrand" role="img" aria-label="山水 S 酒店"></div>
+      <div class="tablet-banquet-label" id="tabletBanquetLabel">宴享</div>
+      <h1 class="tablet-banquet" id="tabletBanquet" tabindex="0" title="长按切换其他宴席">山水臻宴</h1>
+      <div class="tablet-banquet-menu" id="tabletBanquetMenu" hidden></div>
+      <div class="tablet-en" id="tabletBanquetEn">Shanshui Grand Banquet</div>
+      <div class="tablet-rule"></div>
+      <div class="tablet-price" id="tabletPrice">¥ 0 <span>/ 桌</span></div>
+      <div class="tablet-meta" id="tabletMeta">精选宴席菜单</div>
+      <div class="tablet-directory-title">菜单目录</div>
+      <div class="tablet-packages" id="tabletPackages"></div>
+      <nav class="tablet-categories" id="tabletCategories" aria-label="菜品分类"></nav>
+      <div class="tablet-bottom-actions">
+        <button class="tablet-action tablet-custom" id="tabletCustom" type="button">定制菜单</button>
+        <button class="tablet-action" id="tabletManage" type="button">⚙ 设置</button>
+      </div>
+      <div class="tablet-footer">山水 S 酒店宴席系统</div>
+    </aside>
     <!-- pad 沉浸外壳：封面轮播层 -->
     <div class="cover" id="coverShell" aria-hidden="true">
       <div class="cover-grain" aria-hidden="true"></div>
@@ -165,10 +184,10 @@
 
         <!-- 设置入口 -->
         <div class="mg-setwrap" id="mgSetWrap">
-          <button class="mg-btn ghost small" id="mgQuickLock" type="button">🔒 演示锁定</button>
-          <button class="mg-btn ghost small" id="mgQuickExport" type="button">⤓ 导出菜单</button>
-          <button class="mg-btn ghost small" id="mgSettings" type="button">⚙ 设置</button>
-          <button class="mg-btn ghost small mg-done" id="mgDone" type="button" aria-label="退出管理">✕ 完成</button>
+          <button class="mg-btn ghost small icon-btn" id="mgQuickLock" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>演示锁定</button>
+          <button class="mg-btn ghost small icon-btn" id="mgQuickExport" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>导出菜单</button>
+          <button class="mg-btn ghost small icon-btn" id="mgSettings" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.3 3h-4.1L9.8 5.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5.5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.3 2.6h4.1l.3-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>设置</button>
+          <button class="mg-btn ghost small mg-done" id="mgDone" type="button" aria-label="退出管理">完成</button>
         </div>
         <input type="file" id="importFile" accept="application/json" hidden>
         <input type="file" id="batchImgInput" accept="image/*" multiple hidden>
@@ -194,7 +213,7 @@
         </div>
         <div class="cs-head-right">
           <span class="cs-source" id="csSource"></span>
-          <button class="cs-done" id="csDone" type="button" aria-label="退出定制">✕ 完成</button>
+          <button class="cs-done" id="csDone" type="button" aria-label="退出定制">完成</button>
           <div class="cs-export-dropdown" id="csExportDropdown">
             <button class="mg-btn primary" id="csExportBtn" type="button">存为图片</button>
             <button class="mg-btn primary cs-export-caret" id="csExportCaret" type="button" aria-label="更多导出选项" aria-haspopup="true" aria-expanded="false">▾</button>
@@ -211,9 +230,9 @@
           <div class="cs-total">
             <label>本单总价（元 / 桌）</label>
             <div class="cs-calc" id="csCalc" title="点击输入加 / 减金额，回车计算">
-              <span class="cs-calc-base" id="csCalcBase">0</span>
-              <span class="cs-calc-plus">＋</span>
-              <input id="csTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="加/减">
+              <input class="cs-calc-base" id="csCalcBase" type="text" inputmode="decimal" autocomplete="off" aria-label="直接修改总价" value="0">
+              <span class="cs-calc-plus">±</span>
+              <input id="csTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="">
             </div>
           </div>
           <span class="cs-price-hint" id="csPriceHint">请先填写价格</span>
@@ -344,6 +363,11 @@
         <input type="range" id="cropZoom" min="100" max="400" step="1" value="150">
         <span class="crop-zoom-val" id="cropZoomVal">150%</span>
       </div>
+      <div class="crop-zoom" id="cropDisplayScaleRow" hidden>
+        <span class="crop-zoom-label">显示大小</span>
+        <input type="range" id="cropDisplayScale" min="35" max="160" step="1" value="100">
+        <span class="crop-zoom-val" id="cropDisplayScaleVal">100%</span>
+      </div>
       </div>
       <div class="edit-actions" style="padding:6px 24px 22px;">
         <span class="spacer"></span>
@@ -453,41 +477,20 @@
     <div class="modal-card exp-modal-card">
       <button class="modal-close" aria-label="关闭" data-close="exportModal">✕</button>
       <h3>导出电子菜单</h3>
-      <div class="exp-builder-grid">
-        <section class="exp-builder-section">
-          <b>用途</b>
-          <div class="exp-choice-row" data-exp-group="purpose">
-            <button type="button" class="exp-choice on" data-exp-purpose="original">原始菜单留底</button>
-            <button type="button" class="exp-choice" data-exp-purpose="updated">客户更新版</button>
-            <button type="button" class="exp-choice" data-exp-purpose="chef">厨房报价版</button>
-          </div>
-          <small id="expPurposeHint">导出修改前的标准菜单，便于客户留档。</small>
-        </section>
-        <section class="exp-builder-section">
-          <b>版式方案</b>
-          <div class="exp-layout-cards">
-            <button type="button" class="exp-layout-card on" data-exp-layout="A"><i>A</i><span>雅宴画册</span><small>朱红金线 · 仪式感</small></button>
-            <button type="button" class="exp-layout-card" data-exp-layout="B"><i>B</i><span>现代席单</span><small>留白克制 · 信息清晰</small></button>
-          </div>
-        </section>
-        <section class="exp-builder-section">
-          <b>输出尺寸</b>
-          <div class="exp-choice-row">
-            <button type="button" class="exp-choice on" data-exp-size="a4">A4 纸版</button>
-            <button type="button" class="exp-choice" data-exp-size="mobile">手机长图 · 小票</button>
-          </div>
-        </section>
+      <div class="exp-export-summary" aria-label="固定导出方案">
+        <span class="exp-layout-badge">A</span>
+        <div><b>雅宴菜单版式</b><small>带图为横向 A4 菜品卡；无图为便于核对的小票清单</small></div>
       </div>
       <div class="exp-options">
         <label class="exp-opt on" data-exp-ver="thumb">
           <input type="radio" name="expVer" value="thumb" checked>
           <span class="exp-opt-title">带图版</span>
-          <span class="exp-opt-desc">保留菜品库 4:3 图片比例与原始裁切位置</span>
+          <span class="exp-opt-desc">横向 A4 排版 · 4:3 图片卡片、菜名与备注完整保留</span>
         </label>
         <label class="exp-opt" data-exp-ver="plain">
           <input type="radio" name="expVer" value="plain">
           <span class="exp-opt-title">无图版</span>
-          <span class="exp-opt-desc">分组清单，适合打印、确认与厨房报价</span>
+          <span class="exp-opt-desc">小票式清单 · 有备注时会显示在对应菜品下方</span>
         </label>
       </div>
       <!-- 预览区 -->
@@ -570,8 +573,11 @@
         <div class="settings-section settings-brand" data-settings-section>
           <div class="settings-section-title"><span>品牌与门店</span><i>控制标题、标识和导出署名</i></div>
           <div class="settings-section-content">
-          <div class="set-row set-brand"><span class="set-ic">🖼</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 无背景图（建议 120×120 以上）</i><div class="brand-logo-wrap" id="brandLogoWrap"><div class="brand-logo-preview" id="brandLogoPreview">S</div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="清除恢复默认">✕ 清除</button></span></div>
+          <div class="set-row set-brand"><span class="set-ic">◐</span><span class="set-txt"><label for="setTheme">界面皮肤</label><i>琥珀绿以水墨、琥珀与翡翠纹理统一全系统视觉</i><select id="setTheme" class="set-input"><option value="shanshui">山水朱砂</option><option value="amber-green">琥珀绿</option></select></span></div>
+          <div class="set-row set-brand"><span class="set-ic">▣</span><span class="set-txt"><label>LOGO 图片</label><i>上传 PNG 后，在下方直接预览它处于平板左侧区域时的实际效果</i><div class="tablet-region-preview tablet-logo-region-preview" id="tabletLogoRegionPreview"><div class="tablet-preview-sidebar"><div class="brand-logo-preview" id="brandLogoPreview"></div><b>SHANSHUI S HOTEL</b><span>山水 S 酒店</span><em>婚宴</em></div><div class="tablet-preview-paper"></div></div><button type="button" class="mg-btn small" id="setBrandLogoBtn">选择图片</button><button type="button" class="mg-btn ghost small" id="setBrandLogoCropBtn">调整展示区域</button><button type="button" class="mg-btn ghost small" id="setBrandLogoClear" title="恢复内置酒店 LOGO">✕ 恢复默认</button></span></div>
           <input type="file" id="brandLogoInput" accept="image/png,image/*" hidden>
+          <div class="set-row set-brand"><span class="set-ic">⌑</span><span class="set-txt"><label>平板页头图案</label><i>宽幅展示区会在两端羽化融入页头；用固定比例取景框拖动和缩放，所见即主页所见</i><div class="tablet-region-preview pad-art-region-preview" id="padArtPreview"><div class="pad-art-preview-copy"><b>佳偶天成宴</b><span>A TASTE FOR EVERY SEASON</span></div><div class="pad-art-preview-layer"></div></div><button type="button" class="mg-btn small" id="setPadArtBtn">选择 PNG</button><button type="button" class="mg-btn ghost small" id="setPadArtCropBtn">调整展示区域</button><button type="button" class="mg-btn ghost small" id="setPadArtClear" title="恢复默认水墨">✕ 恢复默认</button></span></div>
+          <input type="file" id="padArtInput" accept="image/png" hidden>
           <div class="set-row set-brand"><span class="set-ic">✎</span><span class="set-txt"><label for="setBrandName">酒店/品牌名称</label><i>用于标题栏、导出报价单等</i><input type="text" id="setBrandName" maxlength="20" placeholder="山水S酒店" class="set-input"></span></div>
           <div class="set-row set-brand"><span class="set-ic">⌂</span><span class="set-txt"><label for="setTenantId">门店标识</label><i>英文字母开头，可包含数字、短横线和下划线</i><input type="text" id="setTenantId" maxlength="32" placeholder="shanshui-s" class="set-input"><em class="set-field-error" id="tenantIdError" hidden></em></span></div>
           <div class="set-row set-brand"><span class="set-ic">店</span><span class="set-txt"><label for="setStoreName">门店名称</label><i>随配置导出，便于集团内识别</i><input type="text" id="setStoreName" maxlength="30" placeholder="默认门店" class="set-input"></span></div>
@@ -598,7 +604,10 @@
         </div>
         <div class="settings-section settings-export" data-settings-section>
           <div class="settings-section-title"><span>导出与文件</span><i>生成供客人离线查看的菜单文件</i></div>
-          <div class="settings-section-content" id="settingsExportContent"></div>
+          <div class="settings-section-content" id="settingsExportContent">
+            <div class="set-row set-brand"><span class="set-ic">✦</span><span class="set-txt"><label for="setExportHeaderSlogan">菜单副标语</label><i>显示在导出菜单名称下方；留空则使用默认文案</i><input type="text" id="setExportHeaderSlogan" maxlength="32" class="set-input" placeholder="珍馐美馔 · 共聚美好时光"></span></div>
+            <div class="set-row set-brand"><span class="set-ic">⌁</span><span class="set-txt"><label for="setExportFooterSlogan">菜单页脚文案</label><i>显示在山水图案上方；留空则使用默认文案</i><input type="text" id="setExportFooterSlogan" maxlength="40" class="set-input" placeholder="以美食致敬相聚的美好"></span></div>
+          </div>
         </div>
         <div class="settings-section settings-advanced" data-settings-section>
           <div class="settings-section-title"><span>高级与重置</span><i>以下操作可能影响门店数据归属或清除本机修改</i></div>
@@ -637,6 +646,7 @@
   <script src="assets/webdav.js"></script>
   <script src="assets/immersive.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/export-assets.js"></script>
   <script src="assets/custom.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
