@@ -1,4 +1,4 @@
-// 默认皮肤（shanshui）冒烟：验证移除四套可选皮肤后，骨架/DOM/JS 正常、默认皮肤生效
+// 默认皮肤（amber-green）冒烟：验证当前首页归入琥珀绿后，骨架/DOM/JS 正常、默认皮肤生效
 // 复用 custom-order.test.js 的 jsdom 注入机制（runScripts:dangerously + 手动注入本地 JS）
 const fs = require('fs');
 const path = require('path');
@@ -47,15 +47,15 @@ const document = window.document;
 setTimeout(run, 80);
 
 async function run() {
-  console.log('\n[默认皮肤（shanshui）冒烟]');
+  console.log('\n[默认皮肤（amber-green）冒烟]');
   try {
     const storeOk = window.eval("typeof Store === 'object' && typeof Store.getTheme === 'function'");
     assert(storeOk, 'Store.getTheme/setTheme 已暴露');
 
-    // 四套可选皮肤已移除：皮肤切换器不再存在，仅默认 shanshui 生效
+    // 旧的独立皮肤切换器已移除，设置内统一维护琥珀绿/朱砂红两套完整主题。
     const themeOptsEl = document.getElementById('themeOpts');
     assert(!themeOptsEl, '皮肤切换器已移除（#themeOpts 不存在）');
-    assert(document.documentElement.getAttribute('data-theme') === 'shanshui', '默认 data-theme=shanshui 已应用');
+    assert(document.documentElement.getAttribute('data-theme') === 'amber-green', '默认 data-theme=amber-green 已应用');
 
     // 骨架关键节点应存在（证明 DOM/JS 正常）
     const skeletonIds = ['pkgbar', 'list', 'settingsModal', 'modal', 'customScreen', 'brandMenu'];

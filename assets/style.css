@@ -37,6 +37,21 @@
   --shadow-soft: 0 6px 18px rgba(58,46,38,.10);
   --accent-line: inset 0 0 0 1px rgba(194,161,90,.55);
   --hint-bg-2: #F8F0DC;
+  /* 平板首页以主题令牌组织：左侧材质、右侧纸感和文字随皮肤一起变更。 */
+  --pad-canvas:#fbf7ee;
+  --pad-content-bg:url("cinnabar-a-content-paper.png");
+  /* 右侧朱砂纸感按约 60% 强度显示，保留文字阅读所需的留白。 */
+  --pad-content-overlay:linear-gradient(rgba(255,250,243,.40),rgba(255,250,243,.40));
+  --pad-sidebar-texture:url("cinnabar-a-sidebar-gold-dust.png");
+  --pad-sidebar-overlay:linear-gradient(180deg,rgba(90,11,9,.20),rgba(64,7,6,.45));
+  --pad-sidebar-fallback:#8f160f;
+  --pad-hero-paper:rgba(255,250,243,.48);
+  --pad-hero-fade:linear-gradient(92deg,rgba(255,250,243,.92) 0%,rgba(255,250,243,.86) 46%,rgba(255,250,243,.38) 72%,rgba(255,250,243,.08) 100%);
+  --pad-title:#7b1c18;
+  --pad-kicker:#9b4a32;
+  --pad-secondary:#987369;
+  --pad-list-line:rgba(138,66,47,.20);
+  --pad-card-hover:rgba(255,250,243,.42);
 }
 
 /* 仅默认新中式红（shanshui）皮肤；四套可选皮肤（apple/glass/wabi/zhifou）已移除 */
@@ -1982,16 +1997,16 @@ body.shell-pad #settingsModal .settings-card { width:920px; min-width:920px; max
 .tablet-sidebar { display: none; }
 .pad-dish-desc, .pad-dish-note { display:none; }
 body.shell-pad {
-  background: #f7f4ee;
+  background: var(--pad-canvas);
   overflow: hidden;
   touch-action: pan-y;
 }
 body.shell-pad .cover,
 body.shell-pad .topbar { display: none !important; }
-body.shell-pad .app { display: block; position: fixed; inset: 0; overflow: hidden; background: #f7f4ee; }
+body.shell-pad .app { display: block; position: fixed; inset: 0; overflow: hidden; background: var(--pad-canvas); }
 body.shell-pad #orderScreen {
   position: absolute; inset: 0 0 0 330px; z-index: 1; display: flex;
-  transform: none; opacity: 1; transition: none; background: #f7f4ee;
+  transform: none; opacity: 1; transition: none; background:var(--pad-content-overlay), var(--pad-content-bg) center / cover no-repeat, var(--pad-canvas);
 }
 body.shell-pad #orderScreen.entered { transform: none; }
 body.shell-pad #orderScreen .pkgbar { display: none !important; }
@@ -1999,33 +2014,35 @@ body.shell-pad #orderScreen .body { display: block; flex: 1; overflow: hidden; }
 body.shell-pad #orderScreen .content { height:100%; padding:0 54px 64px; overflow-y:auto; }
 body.shell-pad #orderScreen .content::before { display:none; }
 body.shell-pad #orderScreen .hero { display:block !important; margin:0 -54px 24px; }
-body.shell-pad .pad-hero-card { position:relative; min-height:245px; padding:43px max(54px, calc((100% - 920px)/2)); overflow:hidden; background:#f7f6f0; border-bottom:1px solid #ded8ca; }
-body.shell-pad .pad-hero-card::before { content:''; position:absolute; inset:0; background:linear-gradient(92deg,#f7f6f0 0%,#f7f6f0 42%,rgba(247,246,240,.94) 66%,rgba(241,244,239,.78) 100%); }
+body.shell-pad .pad-hero-card { position:relative; min-height:245px; padding:43px max(54px, calc((100% - 920px)/2)); overflow:hidden; background:var(--pad-hero-paper); border-bottom:1px solid var(--pad-list-line); }
+body.shell-pad .pad-hero-card::before { content:''; position:absolute; inset:0; background:var(--pad-hero-fade); }
 /* 右上为独立宽幅装饰层：左右透明遮罩形成羽化边缘，任何 PNG 均不会生硬地切断在内容区。 */
 body.shell-pad .pad-hero-card::after { content:''; position:absolute; z-index:0; top:0; right:0; width:min(65%,780px); height:100%; opacity:.96; background:var(--pad-header-art,url("pad-header-ink-landscape.png")) var(--pad-header-art-position,50% 50%) / var(--pad-header-art-size,auto 88%) no-repeat; -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 20%,#000 83%,transparent 100%); mask-image:linear-gradient(90deg,transparent 0%,#000 20%,#000 83%,transparent 100%); }
+/* 朱砂红主页只使用内置红金纸感，不叠加琥珀绿的右上角水墨贴图。 */
+html[data-theme="shanshui"] body.shell-pad .pad-hero-card::after { display:none; }
 body.shell-pad .pad-hero-copy { position:relative; z-index:1; max-width:620px; }
-body.shell-pad .pad-hero-kicker { color:#34504a; font:14px/1 var(--font-title); letter-spacing:.18em; }
-body.shell-pad .pad-hero-card h2 { margin:18px 0 5px; color:#102b28; font:400 clamp(37px,4.2vw,56px)/1.12 var(--font-title); letter-spacing:.16em; }
-body.shell-pad .pad-hero-en { color:#89908b; font:12px/1.5 Georgia,serif; letter-spacing:.18em; }
-body.shell-pad .pad-hero-rule { width:40px; height:1px; margin:18px 0 12px; background:#b99454; }
-body.shell-pad .pad-hero-copy p { color:#65706a; font-size:14px; letter-spacing:.08em; }
+body.shell-pad .pad-hero-kicker { color:var(--pad-kicker); font:14px/1 var(--font-title); letter-spacing:.18em; }
+body.shell-pad .pad-hero-card h2 { margin:18px 0 5px; color:var(--pad-title); font:400 clamp(37px,4.2vw,56px)/1.12 var(--font-title); letter-spacing:.16em; }
+body.shell-pad .pad-hero-en { color:var(--pad-secondary); font:12px/1.5 Georgia,serif; letter-spacing:.18em; }
+body.shell-pad .pad-hero-rule { width:40px; height:1px; margin:18px 0 12px; background:var(--gold); }
+body.shell-pad .pad-hero-copy p { color:var(--desc); font-size:14px; letter-spacing:.08em; }
 body.shell-pad #list { display:block; max-width:920px; margin:0 auto; padding-top:0; }
 body.shell-pad #list .sec { margin:0 0 18px; scroll-margin-top:18px; }
-body.shell-pad #list .sec-head { margin:0; padding:15px 0 10px; border-bottom:1px solid #d8d8cd; }
-body.shell-pad #list .sec-head h3 { font-size:13px; color:#8a744b; letter-spacing:.2em; }
+body.shell-pad #list .sec-head { margin:0; padding:15px 0 10px; border-bottom:1px solid var(--pad-list-line); }
+body.shell-pad #list .sec-head h3 { font-size:13px; color:var(--gold-deep); letter-spacing:.2em; }
 body.shell-pad #list .sec-head span { display: none; }
 body.shell-pad #list .sec-num { font-size: 11px; margin-right: 2px; }
 body.shell-pad #list .grid { display: block; }
-body.shell-pad #list .card { display:grid; grid-template-columns:112px minmax(0,1fr) minmax(115px, .35fr) 24px; gap:24px; align-items:center; min-height:142px; padding:18px 0; border:0; border-bottom:1px solid #deded5; border-radius:0; background:transparent; box-shadow:none; position:relative; }
-body.shell-pad #list .card::after { content:'›'; color:#b69351; font-size:29px; font-family:Georgia,serif; text-align:right; }
-body.shell-pad #list .card:hover { transform:none; background:rgba(246,247,241,.75); }
+body.shell-pad #list .card { display:grid; grid-template-columns:112px minmax(0,1fr) minmax(115px, .35fr) 24px; gap:24px; align-items:center; min-height:142px; padding:18px 0; border:0; border-bottom:1px solid var(--pad-list-line); border-radius:0; background:transparent; box-shadow:none; position:relative; }
+body.shell-pad #list .card::after { content:'›'; color:var(--gold); font-size:29px; font-family:Georgia,serif; text-align:right; }
+body.shell-pad #list .card:hover { transform:none; background:var(--pad-card-hover); }
 /* 首页列表也沿用菜品库的 4:3 取景框，不能把同一张菜图再裁成正方形。 */
-body.shell-pad #list .thumb { width:108px; aspect-ratio:4 / 3; border-radius:0; background:#e4d9c6; box-shadow:0 0 0 1px rgba(178,148,83,.28); }
+body.shell-pad #list .thumb { width:108px; aspect-ratio:4 / 3; border-radius:0; background:var(--img-bg); box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 35%,transparent); }
 body.shell-pad #list .info { padding: 0; min-width: 0; }
-body.shell-pad #list .cn { font-size:clamp(20px,2.25vw,28px); font-weight:400; letter-spacing:.08em; color:#192f2c; }
-body.shell-pad #list .en { height:auto; margin-top:6px; font:13px/1.35 Georgia,serif; letter-spacing:.03em; color:#89908b; text-transform:none; }
-body.shell-pad #list .pad-dish-desc { display:block; margin-top:10px; color:#70807a; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-body.shell-pad #list .pad-dish-note { display:block; color:#7d806f; font:14px/1.55 var(--font-title); text-align:right; letter-spacing:.12em; }
+body.shell-pad #list .cn { font-size:clamp(20px,2.25vw,28px); font-weight:400; letter-spacing:.08em; color:var(--pad-title); }
+body.shell-pad #list .en { height:auto; margin-top:6px; font:13px/1.35 Georgia,serif; letter-spacing:.03em; color:var(--pad-secondary); text-transform:none; }
+body.shell-pad #list .pad-dish-desc { display:block; margin-top:10px; color:var(--desc); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+body.shell-pad #list .pad-dish-note { display:block; color:var(--pad-secondary); font:14px/1.55 var(--font-title); text-align:right; letter-spacing:.12em; }
 body.shell-pad #list .cat-tag { display: none; }
 
 /* 首页三档阅读比例。zoom 在本项目的 Chromium/iPad WebView 中保持布局参与尺寸，
@@ -2041,9 +2058,9 @@ body.shell-pad .tablet-sidebar {
   position:absolute; inset:0 auto 0 0; z-index:10; width:330px; padding:30px 30px 24px;
   display: flex; flex-direction: column; overflow: hidden; color: #f8f2e8;
   background:
-    linear-gradient(180deg, rgba(5,28,25,.26), rgba(4,20,19,.56)),
-    url("pad-sidebar-jade-texture.png") center / cover no-repeat,
-    #09201e;
+    var(--pad-sidebar-overlay),
+    var(--pad-sidebar-texture) center / cover no-repeat,
+    var(--pad-sidebar-fallback);
   border-right: 1px solid rgba(213,180,113,.28);
 }
 body.shell-pad .tablet-brand { width:100%; min-height:116px; margin-top:8px; }
@@ -2117,6 +2134,20 @@ html[data-theme="amber-green"] {
   --scrim:rgba(7,29,26,.68); --shadow-card:0 10px 28px rgba(20,61,52,.10);
   --shadow-pop:0 18px 46px rgba(8,35,30,.20); --shadow-soft:0 7px 20px rgba(20,61,52,.09);
   --accent-line:inset 0 0 0 1px rgba(195,146,60,.46);
+  /* 当前首页的水墨、翡翠石纹和暖宣纸，是琥珀绿主题的组成部分。 */
+  --pad-canvas:#f7f4ee;
+  --pad-content-bg:linear-gradient(#f7f4ee,#f7f4ee);
+  --pad-content-overlay:linear-gradient(rgba(247,244,238,0),rgba(247,244,238,0));
+  --pad-sidebar-texture:url("pad-sidebar-jade-texture.png");
+  --pad-sidebar-overlay:linear-gradient(180deg,rgba(5,28,25,.26),rgba(4,20,19,.56));
+  --pad-sidebar-fallback:#09201e;
+  --pad-hero-paper:#f7f6f0;
+  --pad-hero-fade:linear-gradient(92deg,#f7f6f0 0%,#f7f6f0 42%,rgba(247,246,240,.94) 66%,rgba(241,244,239,.78) 100%);
+  --pad-title:#102b28;
+  --pad-kicker:#34504a;
+  --pad-secondary:#89908b;
+  --pad-list-line:#ded8ca;
+  --pad-card-hover:rgba(246,247,241,.75);
 }
 html[data-theme="amber-green"] body {
   background-color:var(--bg);

@@ -433,21 +433,31 @@
     }).catch(function () { direct(); });
   }
 
-  // 预加载所有菜品图片，按 crop 渲染成 4:3 缩略图存到 line._thumb。
+  // 预加载所有菜品图片，并把菜品库使用的同一份 crop 先固化为 4:3 位图。
+  // 最终横版导出只绘制这份位图，杜绝再次计算 cover 后产生取景偏移。
   // cb(lines, errors)：应有的菜图任一失败都会被导出流程阻断。
   function preloadImages(lines, cb) {
-    // Canvas 导出还需要保留可直接 drawImage 的 Image 对象；不能只因已有缩略图就跳过。
-    var pending = lines.filter(function (l) { return l.image && !l._exportImage; });
+    // Canvas 导出保留原图作兼容回退，同时必须等待已裁好的缩略图解码完成。
+    var pending = lines.filter(function (l) { return l.image && (!l._exportImage || !l._exportThumb); });
     if (!pending.length) { cb(lines, []); return; }
     var remain = pending.length;
     var errors = [];
+    function complete() { if (--remain === 0) cb(lines, errors); }
     pending.forEach(function (l) {
+      function makeCroppedThumb(im) {
+        var thumb = renderThumb(im, l.crop);
+        if (!thumb) { errors.push((l.cn || '未命名菜品') + '：无法生成与菜品库一致的截图'); complete(); return; }
+        var thumbImage = new Image();
+        thumbImage.onload = function () { l._thumb = thumb; l._exportThumb = thumbImage; complete(); };
+        thumbImage.onerror = function () { errors.push((l.cn || '未命名菜品') + '：裁切图解码失败'); complete(); };
+        thumbImage.src = thumb;
+      }
+      if (l._exportImage) { makeCroppedThumb(l._exportImage); return; }
       loadExportImage(l.image, function (im, err) {
         if (im) {
-        l._exportImage = im;
-        l._thumb = renderThumb(im, l.crop);
-        } else { l._thumb = null; errors.push((l.cn || '未命名菜品') + '：' + err); }
-        if (--remain === 0) cb(lines, errors);
+          l._exportImage = im;
+          makeCroppedThumb(im);
+        } else { l._thumb = null; errors.push((l.cn || '未命名菜品') + '：' + err); complete(); }
       });
     });
   }
@@ -791,7 +801,11 @@
       var pad = Math.max(9, grid.w * .025), imageH = grid.w * .75;
       ctx.fillStyle = C.card; roundedRect(ctx, x, y, grid.w, grid.h, 12); ctx.fill(); ctx.strokeStyle = C.hair; ctx.lineWidth = 3; ctx.stroke();
       ctx.save(); roundedRect(ctx, x + pad, y + pad, grid.w - pad * 2, imageH - pad, 7); ctx.clip(); ctx.fillStyle = C.image; ctx.fillRect(x + pad, y + pad, grid.w - pad * 2, imageH - pad);
-      canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.w - pad * 2, imageH - pad, line.crop); ctx.restore();
+      // _exportThumb 是由 renderThumb 按菜品库 cropBg 的同一算法产生的 4:3 截图。
+      // 导出时等比铺满，不再二次裁切，因此取景位置与菜品库逐像素一致。
+      if (line._exportThumb) ctx.drawImage(line._exportThumb, x + pad, y + pad, grid.w - pad * 2, imageH - pad);
+      else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.w - pad * 2, imageH - pad, line.crop);
+      ctx.restore();
       var titleFs = Math.max(24, Math.min(36, grid.w * .052)), noteFs = Math.max(18, Math.min(25, grid.w * .036)), name = line.cn || '未命名菜品', note = (line.note || '').trim();
       ctx.textAlign = 'center'; ctx.fillStyle = C.ink; ctx.font = '700 ' + titleFs + 'px "Songti SC", "STSong", SimSun, serif';
       var textY = y + imageH + (note ? titleFs + 12 : grid.caption / 2 + titleFs / 3);

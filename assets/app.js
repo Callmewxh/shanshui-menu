@@ -2748,9 +2748,14 @@
     const qs = new URLSearchParams(location.search);
     const padOn = (PAD_ENABLED && shell === 'tablet') || qs.get('shell') === 'pad';
     document.body.classList.toggle('shell-pad', padOn);
-    let t = 'shanshui';
-    try { if (localStorage.getItem('ss_theme') === 'amber-green') t = 'amber-green'; } catch (_) {}
+    // 当前平板首页原本就是琥珀绿视觉，因此没有用户选择时归入琥珀绿；
+    // 仅在用户明确选择后切到朱砂红，避免首页与侧栏材质混搭。
+    let t = 'amber-green';
+    try { if (localStorage.getItem('ss_theme') === 'shanshui') t = 'shanshui'; } catch (_) {}
     document.documentElement.setAttribute('data-theme', t);
+    // 页头贴图是琥珀绿的水墨层，不属于朱砂红的红金纸感首页。
+    const padArtSetting = $('#padArtSetting');
+    if (padArtSetting) padArtSetting.hidden = t !== 'amber-green';
   }
 
   // 原生下拉展开样式由浏览器决定，容易与酒店皮肤割裂；统一为轻量菜单组件，
@@ -2871,7 +2876,8 @@
       el.addEventListener('touchend', end, { passive: true });
       el.addEventListener('touchcancel', () => { active = false; }, { passive: true });
     }
-    bindPinch(drawer, [2, 3, 4], () => drawerCols, applyDrawer);
+    // 抽屉的列数与视觉缩放相反：捏合=缩小卡片=更多列，展开=放大卡片=更少列。
+    bindPinch(drawer, [4, 3, 2], () => drawerCols, applyDrawer);
     bindPinch(home, [80, 90, 100], () => homeScale, applyHome);
   }
 
@@ -2901,7 +2907,7 @@
         applyTheme();
         renderAll();
         if (document.getElementById('manageScreen')?.classList.contains('show')) renderManage();
-        toast(themeSelect.value === 'amber-green' ? '已切换为琥珀绿皮肤' : '已切换为山水朱砂皮肤');
+        toast(themeSelect.value === 'amber-green' ? '已切换为琥珀绿皮肤' : '已切换为朱砂红皮肤');
       });
     }
     // 平板侧栏的套餐切换与分类定位：事件委托，重渲染后仍然有效。
