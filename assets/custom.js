@@ -321,7 +321,8 @@
 
   function getExportLines() {
     if (!draft) return [];
-    return expPurpose === 'original' && draft.originalLines ? draft.originalLines : draft.lines;
+    // 导出的是当前定制结果：菜品、换菜以及刚输入的备注都必须使用实时草案。
+    return draft.lines || [];
   }
 
   function getExportTitle() {
@@ -741,14 +742,14 @@
     var count = Math.max(1, lines.length), best = null, maxCols = Math.min(6, Math.max(3, count));
     function measure(cols, w) {
       var gap = 30, rows = Math.ceil(count / cols), pad = Math.max(9, w * .025), imageW = w - pad * 2, imageH = imageW * .75;
-      var titleFs = Math.max(24, Math.min(36, w * .052)), noteFs = Math.max(18, Math.min(25, w * .036)), noteStep = Math.round(noteFs * 1.42), rowHeights = [];
+      var titleFs = Math.max(30, Math.min(46, w * .075)), noteFs = Math.max(22, Math.min(30, w * .043)), noteStep = Math.round(noteFs * 1.42), rowHeights = [];
       for (var r = 0; r < rows; r++) {
         var rowH = imageH + pad + titleFs + 26;
         for (var c = 0; c < cols; c++) {
           var dish = lines[r * cols + c]; if (!options.showNotes || !dish || !(dish.note || '').trim()) continue;
           ctx.font = noteFs + 'px "Microsoft YaHei", sans-serif';
           var noteLines = wrapCanvasLines(ctx, '备注：' + dish.note.trim(), imageW);
-          rowH = Math.max(rowH, imageH + pad + titleFs + 14 + noteLines.length * noteStep + 16);
+          rowH = Math.max(rowH, imageH + pad + titleFs + 18 + noteLines.length * noteStep + 16);
         }
         rowHeights.push(rowH);
       }
@@ -820,7 +821,7 @@
     ctx.fillStyle = C.red; canvasFontToFit(ctx, '400', 48 * s, '"Times New Roman", "Songti SC", serif', priceText, 180 * s, 30 * s); ctx.fillText(priceText, priceRight, 155 * s);
     ctx.font = (17 * s) + 'px ' + sansFamily; ctx.fillText(deskText, deskRight, 155 * s);
     ctx.textAlign = 'center'; ctx.fillStyle = C.muted; canvasFontToFit(ctx, '400', 15 * s, sansFamily, getExportHeaderSlogan(), 260 * s, 10 * s); ctx.fillText(getExportHeaderSlogan(), 746 * s, 194 * s);
-    var showNotes = meta.showNotes !== false, centerNames = !!meta.catalogMode;
+    var showNotes = meta.showNotes !== false;
     var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines, bounds, ctx, { showNotes: showNotes });
     var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.total;
     var startX = bounds.x + (bounds.w - gridW) / 2, startY = bounds.y + Math.max(0, (bounds.h - gridH) / 2);
@@ -836,12 +837,14 @@
       else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.imageW, grid.imageH, line.crop);
       ctx.restore();
       var name = line.cn || '未命名菜品', note = (line.note || '').trim(), nameY = y + pad + grid.imageH + grid.titleFs + 12;
-      ctx.textAlign = centerNames ? 'center' : 'left'; ctx.fillStyle = C.ink; ctx.font = '700 ' + grid.titleFs + 'px "Noto Serif SC", "Songti SC", "STSong", serif';
-      var nameX = centerNames ? x + grid.w / 2 : x + pad;
-      ctx.fillText(canvasText(ctx, name, nameX, nameY, grid.imageW), nameX, nameY);
+      // 菜名始终以菜图中心为锚点；过长只缩小字号，不改变居中位置。
+      ctx.textAlign = 'center'; ctx.fillStyle = C.ink;
+      canvasFontToFit(ctx, '700', grid.titleFs, '"Noto Serif SC", "Songti SC", "STSong", serif', name, grid.imageW, Math.max(24, grid.titleFs * .72));
+      var nameX = x + pad + grid.imageW / 2;
+      ctx.fillText(name, nameX, nameY);
       if (showNotes && note) {
-        ctx.fillStyle = C.muted; ctx.font = grid.noteFs + 'px "Microsoft YaHei", sans-serif';
-        var noteLines = wrapCanvasLines(ctx, '备注：' + note, grid.imageW), noteY = nameY + grid.noteStep;
+        ctx.textAlign = 'left'; ctx.fillStyle = C.red; ctx.font = grid.noteFs + 'px "Microsoft YaHei", sans-serif';
+        var noteLines = wrapCanvasLines(ctx, '备注：' + note, grid.imageW), noteY = nameY + grid.noteFs + 14;
         noteLines.forEach(function (text, n) { ctx.fillText(text, x + pad, noteY + n * grid.noteStep); });
       }
     });
@@ -1185,7 +1188,9 @@
   }
 
   // 手机长图：拟物化餐厅小票。宽度固定 750px，高度随菜品数量自动增长。
-  function buildMobileSVG(ver) {
+  function buildMobileSVG(ver, options) {
+    options = options || {};
+    var kitchenMode = !!options.kitchenMode;
     var lines = draft.lines || [];
     var photo = ver !== 'plain';
     var groups = cats().map(function (cat) {
@@ -1193,7 +1198,7 @@
     }).filter(function (g) { return g.rows.length; });
     var W = 750, pad = 58, rowH = photo ? 154 : 78, groupHead = 58;
     var bodyH = groups.reduce(function (n, g) { return n + groupHead + g.rows.length * rowH + 22; }, 0);
-    if (expPurpose === 'chef' && draft.removedLines && draft.removedLines.length) bodyH += 74 + draft.removedLines.length * 56;
+    if ((expPurpose === 'chef' || kitchenMode) && draft.removedLines && draft.removedLines.length) bodyH += 74 + draft.removedLines.length * 56;
     var H = 400 + bodyH + 110;
     var C = expLayout === 'B'
       ? { paper:'#FCFBF7', ink:'#282522', muted:'#8A8178', primary:'#74322E', gold:'#A98B52', line:'#DED8CF' }
@@ -1205,7 +1210,8 @@
     p.push('<path d="M25 20 H725 V'+(H-22)+' L710 '+(H-10)+' 695 '+(H-22)+' 680 '+(H-10)+' 665 '+(H-22)+' 650 '+(H-10)+' 635 '+(H-22)+' 620 '+(H-10)+' 605 '+(H-22)+' 590 '+(H-10)+' 575 '+(H-22)+' 560 '+(H-10)+' 545 '+(H-22)+' 530 '+(H-10)+' 515 '+(H-22)+' 500 '+(H-10)+' 485 '+(H-22)+' 470 '+(H-10)+' 455 '+(H-22)+' 440 '+(H-10)+' 425 '+(H-22)+' 410 '+(H-10)+' 395 '+(H-22)+' 380 '+(H-10)+' 365 '+(H-22)+' 350 '+(H-10)+' 335 '+(H-22)+' 320 '+(H-10)+' 305 '+(H-22)+' 290 '+(H-10)+' 275 '+(H-22)+' 260 '+(H-10)+' 245 '+(H-22)+' 230 '+(H-10)+' 215 '+(H-22)+' 200 '+(H-10)+' 185 '+(H-22)+' 170 '+(H-10)+' 155 '+(H-22)+' 140 '+(H-10)+' 125 '+(H-22)+' 110 '+(H-10)+' 95 '+(H-22)+' 80 '+(H-10)+' 65 '+(H-22)+' 50 '+(H-10)+' 25 '+(H-22)+' Z" fill="'+C.paper+'" filter="url(#s)"/>');
     p.push('<rect x="25" y="20" width="700" height="'+(H-42)+'" fill="url(#grain)"/>');
     p.push('<text x="375" y="82" text-anchor="middle" font-family="'+FONT_SERIF+'" font-size="34" font-weight="700" fill="'+C.primary+'">'+esc(getBrandName())+'</text>');
-    p.push('<text x="375" y="124" text-anchor="middle" font-family="'+FONT_SANS+'" font-size="18" letter-spacing="4" fill="'+C.muted+'">'+esc(getExportTitle())+'</text>');
+    var receiptTitle = kitchenMode ? '厨房报价联' : '宴席菜单';
+    p.push('<text x="375" y="124" text-anchor="middle" font-family="'+FONT_SANS+'" font-size="18" letter-spacing="4" fill="'+C.muted+'">'+esc(receiptTitle)+'</text>');
     p.push('<line x1="'+pad+'" y1="154" x2="'+(W-pad)+'" y2="154" stroke="'+C.gold+'" stroke-width="2" stroke-dasharray="8 7"/>');
     p.push('<text x="'+pad+'" y="198" font-family="'+FONT_SANS+'" font-size="20" fill="'+C.muted+'">宴会类型</text><text x="'+(W-pad)+'" y="198" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="24" fill="'+C.ink+'">'+esc(draft.type||'宴席')+'</text>');
     p.push('<text x="'+pad+'" y="238" font-family="'+FONT_SANS+'" font-size="20" fill="'+C.muted+'">客户 / 贵宾</text><text x="'+(W-pad)+'" y="238" text-anchor="end" font-family="'+FONT_SERIF+'" font-size="24" fill="'+C.ink+'">'+esc(draft.client||'—')+'</text>');
@@ -1224,14 +1230,21 @@
           p.push('<text x="'+(pad+178)+'" y="'+(y+40)+'" font-family="'+FONT_SERIF+'" font-size="24" font-weight="600" fill="'+C.ink+'">'+esc(l.cn||'未命名菜品')+'</text>');
           if (l.note) p.push('<text x="'+(pad+178)+'" y="'+(y+77)+'" font-family="'+FONT_SANS+'" font-size="18" fill="'+C.primary+'">备注：'+esc(l.note)+'</text>');
         } else {
-          var mark=l.swappedFromCn?'原 '+l.swappedFromCn+' → '+l.cn:(l.added?'新增 · '+l.cn:l.cn);
-          p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">'+String(seq).padStart(2,'0')+'</text><text x="'+(pad+54)+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="25" fill="'+(l.swappedFromCn||l.added?C.primary:C.ink)+'">'+esc(mark)+'</text>');
-          if(l.note)p.push('<text x="'+(pad+54)+'" y="'+(y+59)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">备注：'+esc(l.note)+'</text>');
+          var inlineNote = (l.note || '').trim();
+          var dishText = '';
+          if (kitchenMode && l.swappedFromCn) {
+            dishText = '<tspan fill="'+C.ink+'" text-decoration="line-through" text-decoration-color="'+C.primary+'">'+esc(l.swappedFromCn)+'</tspan><tspan fill="'+C.ink+'">　'+esc(l.cn || '未命名菜品')+'</tspan>';
+          } else if (kitchenMode && l.added) {
+            dishText = '<tspan fill="'+C.primary+'">新增 · </tspan><tspan fill="'+C.ink+'">'+esc(l.cn || '未命名菜品')+'</tspan>';
+          } else {
+            dishText = '<tspan fill="'+C.ink+'">'+esc(l.cn || '未命名菜品')+'</tspan>';
+          }
+          p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SANS+'" font-size="16" fill="'+C.muted+'">'+String(seq).padStart(2,'0')+'</text><text x="'+(pad+54)+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="25">'+dishText+(inlineNote?'<tspan fill="'+C.primary+'" font-family="'+FONT_SANS+'" font-size="17">（备注：'+esc(inlineNote)+'）</tspan>':'')+'</text>');
         }
         p.push('<line x1="'+pad+'" y1="'+(y+rowH-14)+'" x2="'+(W-pad)+'" y2="'+(y+rowH-14)+'" stroke="'+C.line+'"/>'); y += rowH;
       }); y += 22;
     });
-    if(expPurpose==='chef'&&draft.removedLines&&draft.removedLines.length){p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="23" font-weight="700" fill="'+C.primary+'">删减菜品</text>');y+=64;draft.removedLines.forEach(function(l){p.push('<text x="'+(pad+16)+'" y="'+(y+26)+'" font-family="'+FONT_SERIF+'" font-size="22" fill="'+C.muted+'" text-decoration="line-through">'+esc(l.cn)+'</text>');y+=56;});}
+    if((expPurpose==='chef'||kitchenMode)&&draft.removedLines&&draft.removedLines.length){p.push('<text x="'+pad+'" y="'+(y+32)+'" font-family="'+FONT_SERIF+'" font-size="23" font-weight="700" fill="'+C.primary+'">删减菜品</text>');y+=64;draft.removedLines.forEach(function(l){p.push('<text x="'+(pad+16)+'" y="'+(y+26)+'" font-family="'+FONT_SERIF+'" font-size="22" fill="'+C.muted+'" text-decoration="line-through" text-decoration-color="'+C.primary+'">'+esc(l.cn)+'</text>');y+=56;});}
     p.push('<line x1="'+pad+'" y1="'+(H-86)+'" x2="'+(W-pad)+'" y2="'+(H-86)+'" stroke="'+C.gold+'" stroke-dasharray="8 7"/><text x="375" y="'+(H-52)+'" text-anchor="middle" font-family="'+FONT_SANS+'" font-size="15" fill="'+C.muted+'">共 '+lines.length+' 道 · 本单仅作报价参考，菜品请以实物为主</text></svg>');
     return p.join('');
   }
@@ -1784,6 +1797,9 @@
   // 主体为无图双栏宴席清单，整张只有无图版。
   // ============================================================
   function buildChefSVG() {
+    // 厨房报价联与无图小票共用同一份版式，只额外标明换菜、加菜和删菜。
+    return buildMobileSVG('plain', { kitchenMode: true });
+    /* legacy A4 chef layout kept below temporarily for backward source compatibility */
     var MM = 5.90476;
     var m = function (mm) { return +(mm * MM).toFixed(2); };
     var PAGE_W = m(210), PAGE_H = m(297);
@@ -1926,7 +1942,7 @@
     if (!draft) return;
     var svg = buildChefSVG();
     if (!svg) { try { alert('导出失败'); } catch (e) {} return; }
-    var base = safeName(draft.client) + '-' + safeName(draft.type) + '-总厨单';
+    var base = safeName(draft.client) + '-' + safeName(draft.type) + '-厨房报价联';
     // 总厨单为纯无图排版，无需预加载菜品图片，直接栅格化
     rasterize(svg, function (canvas) {
       if (!canvas) { try { alert('导出失败，请重试'); } catch (e) {} return; }

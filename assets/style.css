@@ -707,10 +707,6 @@ body.detail-modal-open .content { overscroll-behavior: none; }
   margin: 0 auto; overflow: hidden; border-radius: 12px; background: #111;
   touch-action: none; user-select: none;
 }
-.modal-close.m-back {
-  left: 14px; right: auto; width: auto; height: auto; padding: 7px 10px;
-  border-radius: var(--r-pill); font: 13px/1 var(--sans); letter-spacing: .03em;
-}
 .crop-win img { width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; }
 .crop-workspace { display:grid; grid-template-columns:minmax(360px,1.35fr) minmax(260px,.85fr); gap:24px; align-items:center; }
 .crop-preview-column { min-width:0; }
@@ -2107,7 +2103,6 @@ body.shell-pad #modal .modal-card .m-cn { font-size: 26px; }
 body.shell-pad #modal .modal-card .m-en { margin-top: 6px; font: 14px/1.5 Georgia, serif; letter-spacing: .04em; }
 body.shell-pad #modal .modal-card .m-cat { margin: 16px 0 12px; }
 body.shell-pad #modal .modal-card .m-desc { margin: 0; display:block; font-size:15px; line-height:1.8; color:#5f6861; }
-body.shell-pad #modal .modal-close.m-back { top: 12px; left: 12px; right: auto; color:#fff; background:rgba(12,29,26,.48); border-color:rgba(255,255,255,.28); backdrop-filter:blur(7px); }
 .pad-art-region-preview { max-width:360px; height:118px; background:linear-gradient(105deg,#faf8f1 0%,#faf8f1 40%,#eef1ea 100%); }
 .pad-art-preview-copy { position:relative; z-index:2; display:flex; flex-direction:column; gap:5px; padding:30px 22px; width:52%; color:#183f37; }
 .pad-art-preview-copy b { font:400 21px/1 var(--font-title); letter-spacing:.12em; white-space:nowrap; }
