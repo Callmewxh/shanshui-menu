@@ -2071,11 +2071,11 @@ body.shell-pad .tablet-price { color:#d4a74e; font:400 28px/1 Georgia,var(--font
 body.shell-pad .tablet-price span { color: #a3a2af; font: 12px var(--sans); }
 body.shell-pad .tablet-meta { margin-top:12px; color:#aebbb2; font-size:11px; text-align:center; }
 body.shell-pad .tablet-directory-title { margin-top:25px; padding-top:17px; border-top:1px solid rgba(219,198,143,.25); color:#d0ad68; font-size:11px; letter-spacing:.2em; }
-body.shell-pad .tablet-packages { display:flex; flex-direction:column; gap:1px; margin:9px 0 15px; }
+body.shell-pad .tablet-packages { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:1px; margin:9px 0 15px; overflow-y:auto; overscroll-behavior:contain; }
 body.shell-pad .tablet-package { display:flex; justify-content:space-between; border:0; padding:7px 8px; color:#bcc7bf; background:transparent; text-align:left; font:14px var(--font-title); cursor:pointer; border-radius:0; }
 body.shell-pad .tablet-package small { padding-top: 2px; font: 10px var(--sans); opacity: .72; }
 body.shell-pad .tablet-package.on { color: #fff8ef; background: rgba(255,255,255,.06); }
-body.shell-pad .tablet-categories { display:flex; flex-direction:column; gap:4px; }
+body.shell-pad .tablet-categories { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:4px; overflow-y:auto; overscroll-behavior:contain; }
 body.shell-pad .tablet-category { display:flex; align-items:center; gap:10px; padding:6px 0; border:0; color:#b9c4ba; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
 body.shell-pad .tablet-category i { width: 6px; height: 6px; border: 1px solid #73798a; border-radius: 50%; }
 body.shell-pad .tablet-category.on { color: #fff8ef; }
@@ -2087,12 +2087,29 @@ body.shell-pad .tablet-banquet-menu[hidden] { display: none; }
 body.shell-pad .tablet-banquet-option { display:block; width:100%; border:0; border-radius:5px; padding:10px; color:#c9d4ca; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
 body.shell-pad .tablet-banquet-option:hover,
 body.shell-pad .tablet-banquet-option.on { color: #fff8ef; background: rgba(255,255,255,.08); }
-body.shell-pad .tablet-bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 12px; }
+body.shell-pad .tablet-bottom-actions { display: grid; flex:0 0 auto; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 12px; }
 body.shell-pad .tablet-action { border: 1px solid rgba(213,180,113,.3); border-radius: 5px; padding: 9px 6px; color: #d8d3ca; background: rgba(255,255,255,.04); font: 12px var(--sans); cursor: pointer; }
 body.shell-pad .tablet-action:hover { background: rgba(255,255,255,.1); }
 body.shell-pad .tablet-action.tablet-custom { color: #f0c66d; border-color: rgba(209,166,78,.6); }
-body.shell-pad .tablet-footer { margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.12); color: #626b7f; font-size: 10px; letter-spacing: .08em; }
+body.shell-pad .tablet-footer { flex:0 0 auto; margin-top:13px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.12); color: #626b7f; font-size: 10px; letter-spacing: .08em; }
 body.shell-pad .tablet-bottom-actions + .tablet-footer { margin-top: 13px; }
+
+/* 1920×1200 等高分屏常按约 600px CSS 高度工作：底部操作固定可见，目录改为中段滚动。 */
+@media (max-height:700px) {
+  body.shell-pad .tablet-sidebar { padding:16px 24px 14px; }
+  body.shell-pad .tablet-brand { min-height:76px; margin-top:0; }
+  body.shell-pad .tablet-banquet-label { margin-top:10px; }
+  body.shell-pad .tablet-banquet { margin:4px 0 1px; font-size:clamp(26px,3vw,34px); }
+  body.shell-pad .tablet-rule { margin:12px auto; }
+  body.shell-pad .tablet-meta { margin-top:7px; }
+  body.shell-pad .tablet-directory-title { margin-top:12px; padding-top:10px; }
+  body.shell-pad .tablet-packages { margin:6px 0 8px; }
+  body.shell-pad .tablet-package { padding:5px 7px; }
+  body.shell-pad .tablet-category { padding:4px 0; }
+  body.shell-pad .tablet-bottom-actions { padding-top:8px; }
+  body.shell-pad .tablet-action { padding:8px 5px; }
+  body.shell-pad .tablet-footer { margin-top:9px; padding-top:9px; }
+}
 /* 详情维持为可快速关闭的居中卡片，避免占满平板工作区。 */
 body.shell-pad #modal { z-index: 60; display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; background: rgba(10,14,25,.68); backdrop-filter: blur(13px); }
 body.shell-pad #modal .modal-card { display: flex; flex-direction: column; width: min(62vw, 620px); height: auto; max-width: 620px; max-height: 90vh; overflow: hidden; border-radius: 16px; border-color: rgba(255,255,255,.18); box-shadow: 0 24px 70px rgba(0,0,0,.38); }
