@@ -53,6 +53,11 @@
   --pad-secondary:#987369;
   --pad-list-line:rgba(138,66,47,.20);
   --pad-card-hover:rgba(255,250,243,.42);
+  --bookmark-base:#77140f;
+  --bookmark-deep:#4d0b08;
+  --bookmark-thread:rgba(255,232,201,.055);
+  --bookmark-border:rgba(239,205,164,.30);
+  --bookmark-text:#f4dfc4;
 }
 
 /* 仅默认新中式红（shanshui）皮肤；四套可选皮肤（apple/glass/wabi/zhifou）已移除 */
@@ -2032,7 +2037,7 @@ body.shell-pad #list .sec-head h3 { font-size:13px; color:var(--gold-deep); lett
 body.shell-pad #list .sec-head span { display: none; }
 body.shell-pad #list .sec-num { font-size: 11px; margin-right: 2px; }
 body.shell-pad #list .grid { display: block; }
-body.shell-pad #list .card { display:grid; grid-template-columns:112px minmax(0,1fr) minmax(115px, .35fr) 24px; gap:24px; align-items:center; min-height:142px; padding:18px 0; border:0; border-bottom:1px solid var(--pad-list-line); border-radius:0; background:transparent; box-shadow:none; position:relative; }
+body.shell-pad #list .card { display:grid; grid-template-columns:112px minmax(0,1fr) 24px; gap:24px; align-items:center; min-height:142px; padding:18px 0; border:0; border-bottom:1px solid var(--pad-list-line); border-radius:0; background:transparent; box-shadow:none; position:relative; }
 body.shell-pad #list .card::after { content:'›'; color:var(--gold); font-size:29px; font-family:Georgia,serif; text-align:right; }
 body.shell-pad #list .card:hover { transform:none; background:var(--pad-card-hover); }
 /* 首页列表也沿用菜品库的 4:3 取景框，不能把同一张菜图再裁成正方形。 */
@@ -2041,7 +2046,7 @@ body.shell-pad #list .info { padding: 0; min-width: 0; }
 body.shell-pad #list .cn { font-size:clamp(20px,2.25vw,28px); font-weight:400; letter-spacing:.08em; color:var(--pad-title); }
 body.shell-pad #list .en { height:auto; margin-top:6px; font:13px/1.35 Georgia,serif; letter-spacing:.03em; color:var(--pad-secondary); text-transform:none; }
 body.shell-pad #list .pad-dish-desc { display:block; margin-top:10px; color:var(--desc); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-body.shell-pad #list .pad-dish-note { display:block; color:var(--pad-secondary); font:14px/1.55 var(--font-title); text-align:right; letter-spacing:.12em; }
+body.shell-pad #list .pad-dish-note { display:none; }
 body.shell-pad #list .cat-tag { display: none; }
 
 /* 首页三档阅读比例。zoom 在本项目的 Chromium/iPad WebView 中保持布局参与尺寸，
@@ -2054,35 +2059,46 @@ body.shell-pad #manageScreen { --drawer-grid-cols: 3; }
 body.shell-pad #manageScreen .mg-grid { grid-template-columns: repeat(var(--drawer-grid-cols), minmax(0, 1fr)); }
 
 body.shell-pad .tablet-sidebar {
-  position:absolute; inset:0 auto 0 0; z-index:10; width:330px; padding:30px 30px 24px;
-  display: flex; flex-direction: column; overflow: hidden; color: #f8f2e8;
+  position:absolute; inset:0 auto 0 0; z-index:10; width:330px; padding:24px 30px 18px;
+  display: flex; flex-direction: column; overflow: visible; color: #f8f2e8;
   background:
     var(--pad-sidebar-overlay),
     var(--pad-sidebar-texture) center / cover no-repeat,
     var(--pad-sidebar-fallback);
   border-right: 1px solid rgba(213,180,113,.28);
 }
-body.shell-pad .tablet-brand { width:100%; min-height:116px; margin-top:8px; }
-body.shell-pad .tablet-banquet-label { margin-top: 25px; color: #cba15d; font-size: 11px; letter-spacing: .2em; text-align:center; }
+body.shell-pad .tablet-sidebar::after { display:none; }
+body.shell-pad .tablet-brand { width:100%; min-height:96px; margin-top:0; }
+body.shell-pad .tablet-banquet-label { margin-top: 18px; color: #cba15d; font-size: 11px; letter-spacing: .2em; text-align:center; }
 body.shell-pad .tablet-banquet { margin: 8px 0 3px; font: 400 clamp(31px, 3vw, 43px)/1.25 var(--font-title); letter-spacing: .12em; color: #fff8ef; text-align:center; }
 body.shell-pad .tablet-en { color: #edcf9f; font: 12px/1.5 Georgia, serif; text-align:center; letter-spacing:.07em; }
-body.shell-pad .tablet-rule { width: 34px; height: 1px; margin: 25px auto 26px; background: #d2a653; }
+body.shell-pad .tablet-rule { width: 34px; height: 1px; margin: 18px auto; background: #d2a653; }
 body.shell-pad .tablet-price { color:#d4a74e; font:400 28px/1 Georgia,var(--font-title); text-align:center; }
 body.shell-pad .tablet-price span { color: #efd5ad; font: 12px var(--sans); }
 body.shell-pad .tablet-meta { margin-top:12px; color:#e7c79b; font-size:11px; text-align:center; }
-body.shell-pad .tablet-directory-title { margin-top:25px; padding-top:17px; border-top:1px solid rgba(219,198,143,.25); color:#d0ad68; font-size:11px; letter-spacing:.2em; }
-body.shell-pad .tablet-packages { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:1px; margin:9px 0 15px; overflow:hidden; overscroll-behavior:contain; }
-body.shell-pad .tablet-packages.is-scrollable { max-height:132px; overflow-y:auto; scrollbar-width:none; -ms-overflow-style:none; }
-body.shell-pad .tablet-packages.is-scrollable::-webkit-scrollbar { width:0; height:0; display:none; }
+body.shell-pad .tablet-directory-title { margin-top:18px; padding-top:12px; border-top:1px solid rgba(219,198,143,.25); color:#d0ad68; font-size:11px; letter-spacing:.2em; }
+/* 目录是一个连续阅读区：套餐和分类共用剩余空间，超过四套时以手指上下滑动浏览。 */
+body.shell-pad .tablet-directory-scroll { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; margin-top:7px; overflow:hidden; touch-action:pan-y; overscroll-behavior:contain; }
+body.shell-pad .tablet-directory-scroll.is-scrollable { overflow-y:auto; scrollbar-width:none; -ms-overflow-style:none; }
+body.shell-pad .tablet-directory-scroll.is-scrollable::-webkit-scrollbar { width:0; height:0; display:none; }
+body.shell-pad .tablet-packages { display:flex; flex:0 0 auto; flex-direction:column; gap:1px; margin:0 0 13px; overflow:visible; }
 body.shell-pad .tablet-package { display:flex; justify-content:space-between; border:0; padding:7px 8px; color:#f0d2a3; background:transparent; text-align:left; font:14px var(--font-title); cursor:pointer; border-radius:0; }
 body.shell-pad .tablet-package small { padding-top: 2px; font: 10px var(--sans); opacity: .72; }
 body.shell-pad .tablet-package.on { color: #fff8ef; background: rgba(255,255,255,.06); }
-body.shell-pad .tablet-categories { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:4px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; -ms-overflow-style:none; }
-body.shell-pad .tablet-categories::-webkit-scrollbar { width:0; height:0; display:none; }
-body.shell-pad .tablet-category { display:flex; align-items:center; gap:10px; padding:6px 0; border:0; color:#edd1a5; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
-body.shell-pad .tablet-category i { width: 6px; height: 6px; border: 1px solid #c99559; border-radius: 50%; }
-body.shell-pad .tablet-category.on { color: #fff8ef; }
-body.shell-pad .tablet-category.on i { border-color: #d1a64e; background: #d1a64e; }
+/* 分类书签锚定在底部操作区上沿，向上排列，不占用菜单目录的可视高度。 */
+body.shell-pad .tablet-categories { position:absolute; z-index:auto; right:-38px; bottom:104px; display:flex; flex-direction:column; justify-content:flex-end; gap:0; width:42px; overflow:visible; }
+body.shell-pad .tablet-categories::before { display:none; }
+body.shell-pad .tablet-categories.is-single { display:none; }
+body.shell-pad .tablet-category { position:relative; z-index:1; isolation:isolate; box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:42px; min-height:52px; height:clamp(56px,calc(var(--bookmark-chars,2) * 14px + 26px),82px); margin:0; padding:13px 10px; overflow:hidden; border:0; border-radius:0 5px 5px 0; color:color-mix(in srgb,var(--bookmark-text) 76%,transparent); background:transparent; box-shadow:none; filter:drop-shadow(2px 3px 3px rgba(43,11,8,.15)); font:500 12px/1.2 var(--font-title); letter-spacing:.06em; white-space:nowrap; text-align:center; writing-mode:vertical-rl; text-orientation:mixed; cursor:pointer; transition:color .16s ease,filter .16s ease; }
+body.shell-pad .tablet-category::before { content:''; position:absolute; z-index:-1; inset:0; border-radius:inherit; background:var(--pad-sidebar-overlay),var(--pad-sidebar-texture) right center / 330px 100vh no-repeat,var(--pad-sidebar-fallback); box-shadow:inset 1px 0 rgba(255,255,255,.04); transform:translateX(-8px); transition:transform .18s cubic-bezier(.2,.72,.25,1); }
+body.shell-pad .tablet-category + .tablet-category { margin-top:-1px; }
+body.shell-pad .tablet-categories.is-dense .tablet-category { min-height:46px; height:clamp(48px,calc(var(--bookmark-chars,2) * 11px + 20px),64px); padding:10px 9px; font-size:11px; }
+body.shell-pad .tablet-category:nth-child(n+7) { display:none; }
+body.shell-pad .tablet-category:hover, body.shell-pad .tablet-category:focus-visible { color:var(--bookmark-text); filter:drop-shadow(2px 3px 4px rgba(43,11,8,.18)); outline:0; }
+body.shell-pad .tablet-category:hover::before, body.shell-pad .tablet-category:focus-visible::before { transform:translateX(-4px); }
+body.shell-pad .tablet-category.on { z-index:8; color:var(--bookmark-text); filter:drop-shadow(3px 3px 5px rgba(43,11,8,.18)); }
+body.shell-pad .tablet-category.on::before { transform:translateX(0); }
+body.shell-pad .tablet-category i { display:none; }
 body.shell-pad .tablet-banquet { cursor: pointer; user-select: none; outline: none; }
 body.shell-pad .tablet-banquet:focus-visible { text-decoration: underline; text-decoration-color: #d1a64e; text-underline-offset: 6px; }
 body.shell-pad .tablet-banquet-menu { position:absolute; top:220px; left:24px; right:24px; z-index:4; padding:7px; background:rgba(13,51,45,.96); border:1px solid rgba(211,166,78,.42); border-radius:8px; box-shadow:0 14px 32px rgba(0,0,0,.3); backdrop-filter:blur(12px); }
@@ -2099,16 +2115,17 @@ body.shell-pad .tablet-bottom-actions + .tablet-footer { margin-top: 13px; }
 
 /* 1920×1200 等高分屏常按约 600px CSS 高度工作：底部操作固定可见，目录改为中段滚动。 */
 @media (max-height:700px) {
-  body.shell-pad .tablet-sidebar { padding:16px 24px 14px; }
+  body.shell-pad .tablet-sidebar { padding:14px 24px 12px; }
   body.shell-pad .tablet-brand { min-height:76px; margin-top:0; }
   body.shell-pad .tablet-banquet-label { margin-top:10px; }
   body.shell-pad .tablet-banquet { margin:4px 0 1px; font-size:clamp(26px,3vw,34px); }
   body.shell-pad .tablet-rule { margin:12px auto; }
   body.shell-pad .tablet-meta { margin-top:7px; }
-  body.shell-pad .tablet-directory-title { margin-top:12px; padding-top:10px; }
-  body.shell-pad .tablet-packages { margin:6px 0 8px; }
+  body.shell-pad .tablet-directory-title { margin-top:10px; padding-top:8px; }
+  body.shell-pad .tablet-directory-scroll { margin-top:5px; }
+  body.shell-pad .tablet-packages { margin:0 0 8px; }
   body.shell-pad .tablet-package { padding:5px 7px; }
-  body.shell-pad .tablet-category { padding:4px 0; }
+  body.shell-pad .tablet-category { padding:12px 7px 7px; }
   body.shell-pad .tablet-bottom-actions { padding-top:8px; }
   body.shell-pad .tablet-action { padding:8px 5px; }
   body.shell-pad .tablet-footer { margin-top:9px; padding-top:9px; }
@@ -2140,6 +2157,50 @@ body.shell-pad .onboard { display: none !important; }
   body.shell-pad #list .thumb { width: 58px; }
 }
 
+/* 竖屏平板仍保留左侧目录的上下滑动，但按屏宽缩放，让菜品列表不再被挤成窄条。 */
+@media (orientation: portrait) {
+  body.shell-pad .tablet-sidebar {
+    width:clamp(124px,25vw,190px); padding:16px 13px 12px;
+  }
+  body.shell-pad #orderScreen { left:clamp(124px,25vw,190px); }
+  body.shell-pad .tablet-brand { min-height:58px; }
+  body.shell-pad .tablet-banquet-label { margin-top:8px; font-size:9px; }
+  body.shell-pad .tablet-banquet { margin:3px 0 0; font-size:clamp(21px,4.2vw,30px); letter-spacing:.06em; }
+  body.shell-pad .tablet-en { display:none; }
+  body.shell-pad .tablet-rule { width:24px; margin:9px auto; }
+  body.shell-pad .tablet-price { font-size:21px; }
+  body.shell-pad .tablet-price span { font-size:10px; }
+  body.shell-pad .tablet-meta { display:none; }
+  body.shell-pad .tablet-directory-title { margin-top:10px; padding-top:9px; font-size:9px; }
+  body.shell-pad .tablet-package { padding:6px 4px; font-size:12px; }
+  body.shell-pad .tablet-package small { display:none; }
+  body.shell-pad .tablet-categories { right:-30px; bottom:88px; width:34px; }
+  body.shell-pad .tablet-category { width:34px; min-height:46px; height:clamp(48px,calc(var(--bookmark-chars,2) * 12px + 20px),68px); padding:10px 8px; border-radius:0 4px 4px 0; font-size:10px; letter-spacing:.04em; filter:drop-shadow(2px 2px 3px rgba(43,11,8,.14)); }
+  body.shell-pad .tablet-category + .tablet-category { margin-top:-1px; }
+  body.shell-pad .tablet-categories.is-dense .tablet-category { min-height:43px; height:clamp(44px,calc(var(--bookmark-chars,2) * 10px + 18px),58px); padding:8px 7px; font-size:9px; }
+  body.shell-pad .tablet-category::before { transform:translateX(-6px); }
+  body.shell-pad .tablet-category:hover::before, body.shell-pad .tablet-category:focus-visible::before { transform:translateX(-3px); }
+  body.shell-pad .tablet-category.on { filter:drop-shadow(2px 3px 4px rgba(43,11,8,.17)); }
+  body.shell-pad .tablet-category.on::before { transform:translateX(0); }
+  body.shell-pad .tablet-bottom-actions { grid-template-columns:1fr; gap:5px; padding-top:7px; }
+  body.shell-pad .tablet-action { padding:7px 3px; font-size:10px; }
+  body.shell-pad .tablet-footer { display:none; }
+  body.shell-pad #orderScreen .content { padding:0 18px 38px; }
+  body.shell-pad #orderScreen .hero { margin:0 -18px 16px; }
+  body.shell-pad .pad-hero-card { min-height:178px; padding:30px 22px; }
+  body.shell-pad .pad-hero-card h2 { margin:12px 0 4px; font-size:clamp(27px,7vw,39px); letter-spacing:.08em; }
+  body.shell-pad .pad-hero-kicker { font-size:11px; }
+  body.shell-pad .pad-hero-en { font-size:9px; letter-spacing:.1em; }
+  body.shell-pad .pad-hero-rule { margin:12px 0 9px; }
+  body.shell-pad .pad-hero-copy p { font-size:11px; }
+  body.shell-pad #list .card { grid-template-columns:58px minmax(0,1fr) 18px; gap:10px; min-height:100px; padding:13px 0; }
+  body.shell-pad #list .thumb { width:58px; }
+  body.shell-pad #list .cn { font-size:clamp(16px,4vw,22px); letter-spacing:.04em; }
+  body.shell-pad #list .en { margin-top:3px; font-size:10px; }
+  body.shell-pad #list .pad-dish-desc { margin-top:6px; font-size:10px; }
+  body.shell-pad #list .card::after { font-size:22px; }
+}
+
 /* ============================================================
    琥珀绿：低饱和翡翠石纹 + 琥珀金属细节，应用于展示、管理、定制与设置。
    ============================================================ */
@@ -2166,6 +2227,11 @@ html[data-theme="amber-green"] {
   --pad-secondary:#89908b;
   --pad-list-line:#ded8ca;
   --pad-card-hover:rgba(246,247,241,.75);
+  --bookmark-base:#123d34;
+  --bookmark-deep:#08271f;
+  --bookmark-thread:rgba(235,224,190,.05);
+  --bookmark-border:rgba(213,189,136,.28);
+  --bookmark-text:#eee0bf;
 }
 html[data-theme="amber-green"] body {
   background-color:var(--bg);
@@ -2181,8 +2247,7 @@ html[data-theme="amber-green"] body.shell-pad .tablet-en { color:#bdc1b7; }
 html[data-theme="amber-green"] body.shell-pad .tablet-price span { color:#a3a2af; }
 html[data-theme="amber-green"] body.shell-pad .tablet-meta { color:#aebbb2; }
 html[data-theme="amber-green"] body.shell-pad .tablet-package { color:#bcc7bf; }
-html[data-theme="amber-green"] body.shell-pad .tablet-category { color:#b9c4ba; }
-html[data-theme="amber-green"] body.shell-pad .tablet-category i { border-color:#73798a; }
+html[data-theme="amber-green"] body.shell-pad .tablet-category.on { color:#fff8e9; }
 html[data-theme="amber-green"] body.shell-pad .tablet-action { border-color:rgba(213,180,113,.3); color:#d8d3ca; }
 html[data-theme="amber-green"] body.shell-pad .tablet-footer { border-top-color:rgba(255,255,255,.12); color:#626b7f; }
 html[data-theme="amber-green"] .topbar { box-shadow:0 1px 0 rgba(195,146,60,.14); }

@@ -93,7 +93,9 @@
       <div class="tablet-price" id="tabletPrice">¥ 0 <span>/ 桌</span></div>
       <div class="tablet-meta" id="tabletMeta">精选宴席菜单</div>
       <div class="tablet-directory-title">菜单目录</div>
-      <div class="tablet-packages" id="tabletPackages"></div>
+      <div class="tablet-directory-scroll" id="tabletDirectoryScroll">
+        <div class="tablet-packages" id="tabletPackages"></div>
+      </div>
       <nav class="tablet-categories" id="tabletCategories" aria-label="菜品分类"></nav>
       <div class="tablet-bottom-actions">
         <button class="tablet-action tablet-custom" id="tabletCustom" type="button">定制菜单</button>
@@ -595,7 +597,7 @@
           <div class="settings-section-title"><span>菜单配置</span><i>配置可选宴席、菜品分类及展示顺序</i></div>
           <div class="settings-section-content">
           <div class="set-row set-brand"><span class="set-ic">宴</span><span class="set-txt"><label for="setBanquets">宴席类型</label><i>格式：英文ID:中文名，多个用逗号分隔</i><input type="text" id="setBanquets" class="set-input" placeholder="wedding:婚宴,baby:宝宝宴"><em class="set-field-error" id="banquetsError" hidden></em></span></div>
-          <div class="set-row set-brand"><span class="set-ic">类</span><span class="set-txt"><label for="setCategories">菜品分类</label><i>多个分类用逗号分隔，顺序即展示顺序</i><input type="text" id="setCategories" class="set-input" placeholder="凉菜,主菜,主食点心"><em class="set-field-error" id="categoriesError" hidden></em></span></div>
+          <div class="set-row set-brand"><span class="set-ic">类</span><span class="set-txt"><label for="setCategories">菜品分类</label><i>多个分类用逗号分隔，顺序即展示顺序；最多 6 个</i><input type="text" id="setCategories" class="set-input" placeholder="凉菜,主菜,主食点心"><em class="set-field-error" id="categoriesError" hidden></em></span></div>
           <button class="set-row primary-row" id="setCatalogSave" type="button"><span class="set-ic">✓</span><span><b>保存业务配置</b><i>立即更新宴席选择与菜品分类</i></span></button>
           </div>
         </div>
