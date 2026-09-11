@@ -2065,19 +2065,22 @@ body.shell-pad .tablet-sidebar {
 body.shell-pad .tablet-brand { width:100%; min-height:116px; margin-top:8px; }
 body.shell-pad .tablet-banquet-label { margin-top: 25px; color: #cba15d; font-size: 11px; letter-spacing: .2em; text-align:center; }
 body.shell-pad .tablet-banquet { margin: 8px 0 3px; font: 400 clamp(31px, 3vw, 43px)/1.25 var(--font-title); letter-spacing: .12em; color: #fff8ef; text-align:center; }
-body.shell-pad .tablet-en { color: #bdc1b7; font: 12px/1.5 Georgia, serif; text-align:center; letter-spacing:.07em; }
+body.shell-pad .tablet-en { color: #edcf9f; font: 12px/1.5 Georgia, serif; text-align:center; letter-spacing:.07em; }
 body.shell-pad .tablet-rule { width: 34px; height: 1px; margin: 25px auto 26px; background: #d2a653; }
 body.shell-pad .tablet-price { color:#d4a74e; font:400 28px/1 Georgia,var(--font-title); text-align:center; }
-body.shell-pad .tablet-price span { color: #a3a2af; font: 12px var(--sans); }
-body.shell-pad .tablet-meta { margin-top:12px; color:#aebbb2; font-size:11px; text-align:center; }
+body.shell-pad .tablet-price span { color: #efd5ad; font: 12px var(--sans); }
+body.shell-pad .tablet-meta { margin-top:12px; color:#e7c79b; font-size:11px; text-align:center; }
 body.shell-pad .tablet-directory-title { margin-top:25px; padding-top:17px; border-top:1px solid rgba(219,198,143,.25); color:#d0ad68; font-size:11px; letter-spacing:.2em; }
-body.shell-pad .tablet-packages { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:1px; margin:9px 0 15px; overflow-y:auto; overscroll-behavior:contain; }
-body.shell-pad .tablet-package { display:flex; justify-content:space-between; border:0; padding:7px 8px; color:#bcc7bf; background:transparent; text-align:left; font:14px var(--font-title); cursor:pointer; border-radius:0; }
+body.shell-pad .tablet-packages { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:1px; margin:9px 0 15px; overflow:hidden; overscroll-behavior:contain; }
+body.shell-pad .tablet-packages.is-scrollable { max-height:132px; overflow-y:auto; scrollbar-width:none; -ms-overflow-style:none; }
+body.shell-pad .tablet-packages.is-scrollable::-webkit-scrollbar { width:0; height:0; display:none; }
+body.shell-pad .tablet-package { display:flex; justify-content:space-between; border:0; padding:7px 8px; color:#f0d2a3; background:transparent; text-align:left; font:14px var(--font-title); cursor:pointer; border-radius:0; }
 body.shell-pad .tablet-package small { padding-top: 2px; font: 10px var(--sans); opacity: .72; }
 body.shell-pad .tablet-package.on { color: #fff8ef; background: rgba(255,255,255,.06); }
-body.shell-pad .tablet-categories { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:4px; overflow-y:auto; overscroll-behavior:contain; }
-body.shell-pad .tablet-category { display:flex; align-items:center; gap:10px; padding:6px 0; border:0; color:#b9c4ba; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
-body.shell-pad .tablet-category i { width: 6px; height: 6px; border: 1px solid #73798a; border-radius: 50%; }
+body.shell-pad .tablet-categories { display:flex; flex:0 1 auto; min-height:0; flex-direction:column; gap:4px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; -ms-overflow-style:none; }
+body.shell-pad .tablet-categories::-webkit-scrollbar { width:0; height:0; display:none; }
+body.shell-pad .tablet-category { display:flex; align-items:center; gap:10px; padding:6px 0; border:0; color:#edd1a5; background:transparent; text-align:left; font:15px var(--font-title); cursor:pointer; }
+body.shell-pad .tablet-category i { width: 6px; height: 6px; border: 1px solid #c99559; border-radius: 50%; }
 body.shell-pad .tablet-category.on { color: #fff8ef; }
 body.shell-pad .tablet-category.on i { border-color: #d1a64e; background: #d1a64e; }
 body.shell-pad .tablet-banquet { cursor: pointer; user-select: none; outline: none; }
@@ -2088,10 +2091,10 @@ body.shell-pad .tablet-banquet-option { display:block; width:100%; border:0; bor
 body.shell-pad .tablet-banquet-option:hover,
 body.shell-pad .tablet-banquet-option.on { color: #fff8ef; background: rgba(255,255,255,.08); }
 body.shell-pad .tablet-bottom-actions { display: grid; flex:0 0 auto; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 12px; }
-body.shell-pad .tablet-action { border: 1px solid rgba(213,180,113,.3); border-radius: 5px; padding: 9px 6px; color: #d8d3ca; background: rgba(255,255,255,.04); font: 12px var(--sans); cursor: pointer; }
+body.shell-pad .tablet-action { border: 1px solid rgba(231,193,126,.42); border-radius: 5px; padding: 9px 6px; color: #f0d2a4; background: rgba(255,255,255,.04); font: 12px var(--sans); cursor: pointer; }
 body.shell-pad .tablet-action:hover { background: rgba(255,255,255,.1); }
 body.shell-pad .tablet-action.tablet-custom { color: #f0c66d; border-color: rgba(209,166,78,.6); }
-body.shell-pad .tablet-footer { flex:0 0 auto; margin-top:13px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.12); color: #626b7f; font-size: 10px; letter-spacing: .08em; }
+body.shell-pad .tablet-footer { flex:0 0 auto; margin-top:13px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.18); color: #d8b786; font-size: 10px; letter-spacing: .08em; }
 body.shell-pad .tablet-bottom-actions + .tablet-footer { margin-top: 13px; }
 
 /* 1920×1200 等高分屏常按约 600px CSS 高度工作：底部操作固定可见，目录改为中段滚动。 */
@@ -2173,6 +2176,15 @@ html[data-theme="amber-green"] .topbar,
 html[data-theme="amber-green"] .pkgbar,
 html[data-theme="amber-green"] .cs-head,
 html[data-theme="amber-green"] .cs-foot { background:rgba(252,250,244,.94); }
+/* 琥珀绿沿用翡翠侧栏的冷静灰绿文字；朱砂红则由基础规则使用暖米金。 */
+html[data-theme="amber-green"] body.shell-pad .tablet-en { color:#bdc1b7; }
+html[data-theme="amber-green"] body.shell-pad .tablet-price span { color:#a3a2af; }
+html[data-theme="amber-green"] body.shell-pad .tablet-meta { color:#aebbb2; }
+html[data-theme="amber-green"] body.shell-pad .tablet-package { color:#bcc7bf; }
+html[data-theme="amber-green"] body.shell-pad .tablet-category { color:#b9c4ba; }
+html[data-theme="amber-green"] body.shell-pad .tablet-category i { border-color:#73798a; }
+html[data-theme="amber-green"] body.shell-pad .tablet-action { border-color:rgba(213,180,113,.3); color:#d8d3ca; }
+html[data-theme="amber-green"] body.shell-pad .tablet-footer { border-top-color:rgba(255,255,255,.12); color:#626b7f; }
 html[data-theme="amber-green"] .topbar { box-shadow:0 1px 0 rgba(195,146,60,.14); }
 html[data-theme="amber-green"] .mg-toolbar,
 html[data-theme="amber-green"] .settings-card .settings-head { background:linear-gradient(110deg,#fbf8ef,#f3efe4); }

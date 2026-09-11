@@ -229,6 +229,8 @@
     packages.innerHTML = b.packages.map((item) =>
       `<button class="tablet-package ${item.id === state.pkg ? 'on' : ''}" type="button" data-tablet-pkg="${item.id}"><span>${item.name}</span><small>¥${item.price}</small></button>`
     ).join('');
+    // 目录仅在套餐超过四个时成为独立滚动区；不显示滚动轴，避免破坏侧栏的留白感。
+    packages.classList.toggle('is-scrollable', b.packages.length > 4);
     if (banquetMenu) {
       banquetMenu.innerHTML = availableBanquets().map((item) =>
         `<button type="button" class="tablet-banquet-option ${item.id === state.banquet ? 'on' : ''}" data-tablet-banquet="${item.id}">${item.name}</button>`
