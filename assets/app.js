@@ -67,8 +67,6 @@
   let cropDisplayScale = 100;
   let cropScaleChangeFn = null;
   let cropPreviewSrc = '';
-  let tabletCategoryObserver = null;
-  let tabletCategoryLockUntil = 0;
   // management 子状态
   const mg = {
     tab: 'lib',            // 'lib' 菜品库 | 'menu' 菜单
@@ -397,7 +395,7 @@
       const items = ds.filter((d) => d.cat === cat);
       if (!items.length) return '';
       const cards = items.map((d) => cardHTML(d, ds.indexOf(d))).join('');
-      return `<section class="sec" data-tablet-section="${cat}">
+      return `<section class="sec">
         <div class="sec-head">
           <h3><span class="sec-num">${CN_NUM[ci] || (ci + 1)}</span>${cat}</h3>
           <span>${items.length} 道</span>
@@ -406,33 +404,6 @@
       </section>`;
     }).join('');
     list.innerHTML = sections || '<div class="empty-state">未找到相关菜品</div>';
-    const tabletCategories = $('#tabletCategories');
-    if (tabletCategories) {
-      const visibleCategories = CAT_ORDER.filter((cat) => ds.some((d) => d.cat === cat));
-      tabletCategories.innerHTML = visibleCategories.map((cat, i) =>
-        `<button type="button" class="tablet-category ${i === 0 ? 'on' : ''}" data-tablet-cat="${cat}" style="--bookmark-chars:${Math.min(4, Array.from(cat).length)}"><i></i>${cat}</button>`
-      ).join('');
-      tabletCategories.classList.toggle('is-single', visibleCategories.length < 2);
-      tabletCategories.classList.toggle('is-dense', visibleCategories.length > 4);
-      if (tabletCategoryObserver) tabletCategoryObserver.disconnect();
-      const scrollRoot = $('#content');
-      if (scrollRoot && visibleCategories.length > 1 && 'IntersectionObserver' in window) {
-        tabletCategoryObserver = new IntersectionObserver((entries) => {
-          if (Date.now() < tabletCategoryLockUntil) return;
-          // 到达列表底部时强制保持最后一个分类，避免最后一节高度不足导致高亮回弹。
-          if (scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 3) {
-            const lastCategory = visibleCategories[visibleCategories.length - 1];
-            tabletCategories.querySelectorAll('.tablet-category').forEach((button) => button.classList.toggle('on', button.dataset.tabletCat === lastCategory));
-            return;
-          }
-          const active = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-          if (!active) return;
-          const category = active.target.dataset.tabletSection;
-          tabletCategories.querySelectorAll('.tablet-category').forEach((button) => button.classList.toggle('on', button.dataset.tabletCat === category));
-        }, { root: scrollRoot, rootMargin: '-14% 0px -68% 0px', threshold: [0, .2, .55] });
-        list.querySelectorAll('[data-tablet-section]').forEach((section) => tabletCategoryObserver.observe(section));
-      }
-    }
     hydrateLazyDishImages(list);
   }
 
@@ -2988,13 +2959,6 @@
         state.pkg = packageButton.dataset.tabletPkg;
         renderHero(); renderPkg(); renderBanner(); renderList();
         return;
-      }
-      const categoryButton = e.target.closest('[data-tablet-cat]');
-      if (categoryButton) {
-        const section = Array.from(document.querySelectorAll('#list [data-tablet-section]')).find((el) => el.dataset.tabletSection === categoryButton.dataset.tabletCat);
-        tabletCategoryLockUntil = Date.now() + 900;
-        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        tabletSidebar.querySelectorAll('.tablet-category').forEach((el) => el.classList.toggle('on', el === categoryButton));
       }
     });
     // 双击当前宴席名打开二级菜单；菜单保留直到选中其他宴席或点击侧栏以外。
