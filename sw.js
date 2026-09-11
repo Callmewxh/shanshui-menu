@@ -1,7 +1,7 @@
 // 山水S酒店 · 菜单系统 Service Worker（离线缓存 + 安装为 App）
 // CACHE 由 `npm run build:cache` 按核心静态文件内容生成；`npm test` 会拦截过期缓存键。
 // 发布流程先执行 `npm run build`，无需也不得手动递增版本号。
-const CACHE = 'ss-menu-22dcfe9900e0';
+const CACHE = 'ss-menu-868ab6dd604b';
 const ASSETS = [
   './',
   './index.html',
@@ -41,11 +41,29 @@ const ASSETS = [
   './data/img/lib041.jpg',
   './data/img/lib042.jpg',
   './data/img/lib043.jpg',
+  './data/img/lib044.jpg',
+  './data/img/lib045.jpg',
+  './data/img/lib046.jpg',
+  './data/img/lib047.jpg',
   './data/img/lib048.jpg',
   './data/img/lib05.jpg',
+  './data/img/lib050.jpg',
+  './data/img/lib051.jpg',
+  './data/img/lib052.jpg',
   './data/img/lib053.jpg',
+  './data/img/lib054.jpg',
   './data/img/lib055.jpg',
+  './data/img/lib056.jpg',
+  './data/img/lib057.jpg',
+  './data/img/lib058.jpg',
+  './data/img/lib059.jpg',
   './data/img/lib06.jpg',
+  './data/img/lib060.jpg',
+  './data/img/lib061.jpg',
+  './data/img/lib062.jpg',
+  './data/img/lib064.jpg',
+  './data/img/lib065.jpg',
+  './data/img/lib07.jpg',
   './data/img/lib08.jpg',
   './data/img/lib09.jpg',
   './data/img/lib10.jpg',
