@@ -14,6 +14,7 @@ const tests = [
   'tools/guest.test.js',
   'tools/settings-webdav-smoke.js',
   'tools/theme-smoke.js',
+  'tools/ui-system.test.js',
 ];
 
 for (const entry of tests) {

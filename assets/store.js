@@ -46,6 +46,11 @@ const Store = (function () {
     state.categories = Array.isArray(state.categories) && state.categories.length ? state.categories : defaults.categories;
     state.library = Array.isArray(state.library) ? state.library : [];
     state.menu = state.menu && typeof state.menu === 'object' ? state.menu : {};
+    // 宴席目录是名称的单一真相源。历史配置曾把 menu.*.name 保存成 baby / housewarming，
+    // 导致平板定制页与导出文件名泄漏技术 ID；载入本机旧数据和导入配置时统一迁移为中文名。
+    state.banquets.forEach((item) => {
+      if (item && item.id && item.name && state.menu[item.id]) state.menu[item.id].name = item.name;
+    });
     state.library.forEach((dish) => { delete dish.pitch; delete dish.talkingPoint; });
     return state;
   }

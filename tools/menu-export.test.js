@@ -60,6 +60,19 @@ function run() {
     assert(typeof window.CustomOrder.shareUrl === 'undefined', '线上分享 shareUrl 未暴露');
     assert(typeof window.CustomOrder.makeQRCanvas === 'undefined', '二维码生成入口未暴露');
 
+    // 中文宴席名与文件名规则：不得泄漏 baby / housewarming 等技术 ID。
+    assert(window.CustomOrder._getBanquetDisplayName('baby') === '宝宝宴', 'baby 映射为「宝宝宴」');
+    assert(window.CustomOrder._getBanquetDisplayName('housewarming') === '乔迁宴', 'housewarming 映射为「乔迁宴」');
+    assert(window.CustomOrder._getMenuExportBaseName('wedding', null) === '婚宴菜单', '婚宴整份导出名为「婚宴菜单」');
+    const namingPkg = window.eval("Store.getPackage('wedding', 'A')");
+    const originalNamingPkgName = namingPkg && namingPkg.name;
+    if (namingPkg) namingPkg.name = '百年好合';
+    assert(window.CustomOrder._getMenuExportBaseName('wedding', 'A') === '婚宴菜单-百年好合', '婚宴单份导出名为「婚宴菜单-百年好合」');
+    assert(window.CustomOrder._getMenuExportBaseName('wedding', 'A', '刘府') === '刘府婚宴-百年好合', '填写客户后导出名为「刘府婚宴-百年好合」');
+    if (namingPkg) namingPkg.name = originalNamingPkgName;
+    assert(window.CustomOrder._getMenuExportBaseName('housewarming', null) === '乔迁宴菜单', '乔迁宴整份导出名为「乔迁宴菜单」');
+    assert(window.CustomOrder._getMenuExportBaseName('housewarming', 'A') === '乔迁宴菜单-A菜单', '乔迁宴单份导出名为「乔迁宴菜单-A菜单」');
+
     // 3) 多页 PDF 生成器
     const fakeJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0xFF, 0xD9]);
     const pages = [

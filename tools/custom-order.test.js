@@ -100,6 +100,18 @@ function run() {
     const csClient = document.getElementById('csClient');
     assert(csClient && csClient.value === '', '客户姓氏初始为空（可编辑）');
 
+    // 历史草案或菜单对象即便残留技术 ID，也必须在定制页与导出名中恢复成中文。
+    assert(window.CustomOrder._getBanquetDisplayName('baby', 'baby') === '宝宝宴', '定制页不会显示技术 ID baby');
+    assert(window.CustomOrder._getBanquetDisplayName('housewarming', 'housewarming') === '乔迁宴', '定制页不会显示技术 ID housewarming');
+    const assetDraft = window.CustomOrder._getDraft();
+    const assetLine = assetDraft && assetDraft.lines && assetDraft.lines.find(function (line) { return line.libId; });
+    if (assetLine) {
+      const currentImage = window.eval("Store.getLibDish('" + assetLine.libId + "').image");
+      assetLine.image = null;
+      window.CustomOrder._refreshDraftAssets(assetDraft);
+      assert(assetLine.image === currentImage, '旧草稿图片会从当前菜品库刷新，不再永久保留“无图”快照');
+    } else assert(false, '草稿中应存在可刷新图片的菜品行');
+
     // 导出弹窗（需先填写总价，否则校验拦截）
     const csTotal = document.getElementById('csTotal');
     if (csTotal) csTotal.value = '3888';

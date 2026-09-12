@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>山水S酒店 · 婚宴菜单</title>
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="theme-color" content="#B23A2E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -186,7 +187,6 @@
 
         <!-- 设置入口 -->
         <div class="mg-setwrap" id="mgSetWrap">
-          <button class="mg-btn ghost small icon-btn" id="mgQuickLock" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>演示锁定</button>
           <button class="mg-btn ghost small icon-btn" id="mgQuickExport" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>导出菜单</button>
           <button class="mg-btn ghost small icon-btn" id="mgSettings" type="button"><svg class="flat-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.3 3h-4.1L9.8 5.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5.5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.3 2.6h4.1l.3-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>设置</button>
           <button class="mg-btn ghost small mg-done" id="mgDone" type="button" aria-label="退出管理">完成</button>
@@ -266,21 +266,30 @@
         <button type="button" class="onboard-x" id="editOnboardX">知道了</button>
       </p>
       <form id="editForm">
-        <div class="field"><label>中文名</label><input id="eCn" name="cn" placeholder="菜品名称" autocomplete="off"><div class="field-err" id="cnErr" hidden></div></div>
-        <div class="field"><label>英文名</label><input id="eEn" name="en" placeholder="English name"></div>
-        <div class="field"><label>分类</label>
-          <select id="eCat" name="cat">
-            <option value="凉菜">凉菜</option>
-            <option value="主菜">主菜</option>
-            <option value="主食点心">主食点心</option>
-          </select>
-        </div>
-        <div class="field"><label>简介</label><textarea id="eDesc" name="desc" rows="3" placeholder="菜品介绍…"></textarea></div>
-        <div class="field">
-          <label>菜品图片</label>
-          <input type="file" id="imgInput" accept="image/*">
-          <div class="progress" id="imgProgress" hidden><div class="bar"></div></div>
-          <div class="img-prev" id="imgPrev"></div>
+        <div class="edit-layout">
+          <section class="edit-media-panel" aria-labelledby="editImageLabel">
+            <div class="edit-media-heading" id="editImageLabel">菜品图片</div>
+            <div class="img-prev" id="imgPrev"></div>
+            <div class="edit-upload-row">
+              <input type="file" id="imgInput" accept="image/*" hidden>
+              <button type="button" class="mg-btn secondary" id="imgChooseBtn">选择图片</button>
+              <span class="edit-file-name" id="imgFileName">JPG、PNG、WebP</span>
+            </div>
+            <div class="progress" id="imgProgress" hidden><div class="bar"></div></div>
+            <p class="edit-media-note">建议使用 4:3 横图；上传后可调整展示位置。</p>
+          </section>
+          <div class="edit-fields">
+            <div class="field"><label for="eCn">中文名</label><input id="eCn" name="cn" maxlength="40" placeholder="菜品名称" autocomplete="off"><div class="field-err" id="cnErr" hidden></div></div>
+            <div class="field"><label for="eEn">英文名</label><input id="eEn" name="en" maxlength="120" placeholder="English name"></div>
+            <div class="field"><label for="eCat">分类</label>
+              <select id="eCat" name="cat">
+                <option value="凉菜">凉菜</option>
+                <option value="主菜">主菜</option>
+                <option value="主食点心">主食点心</option>
+              </select>
+            </div>
+            <div class="field"><label for="eDesc">简介</label><textarea id="eDesc" name="desc" rows="4" maxlength="240" placeholder="菜品介绍…"></textarea></div>
+          </div>
         </div>
         <div class="edit-actions">
           <button type="button" class="mg-btn danger" id="editDelete">删除</button>
@@ -554,17 +563,16 @@
       <div class="settings-head"><div><h3 class="settings-title">设置</h3><p>管理展示、导出、菜单配置与本机数据</p></div><span class="settings-save-state" id="settingsSaveState" aria-live="polite">已同步至本机</span></div>
       <div class="settings-body">
         <nav class="settings-nav" aria-label="设置分类">
-          <button type="button" class="settings-nav-item on" data-settings-target="display" aria-selected="true"><span>▣</span><b>展示设置</b><i>显示偏好与演示保护</i></button>
-          <button type="button" class="settings-nav-item" data-settings-target="export" aria-selected="false"><span>⇩</span><b>导出与文件</b><i>菜单 PDF 与文件生成</i></button>
-          <button type="button" class="settings-nav-item" data-settings-target="brand" aria-selected="false"><span>◇</span><b>品牌与门店</b><i>名称、LOGO 与门店</i></button>
-          <button type="button" class="settings-nav-item" data-settings-target="business" aria-selected="false"><span>宴</span><b>菜单配置</b><i>宴席、分类与批量建菜</i></button>
-          <button type="button" class="settings-nav-item" data-settings-target="data" aria-selected="false"><span>↥</span><b>数据与安全</b><i>备份、导入和恢复</i></button>
-          <button type="button" class="settings-nav-item" data-settings-target="advanced" aria-selected="false"><span>!</span><b>高级与重置</b><i>内部标识与危险操作</i></button>
+          <button type="button" class="settings-nav-item on" data-settings-target="display" aria-selected="true"><span>▣</span><b>展示与品牌</b><i>显示、皮肤、LOGO 与门店</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="business" aria-selected="false"><span>宴</span><b>菜单结构</b><i>宴席、分类与批量建菜</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="export" aria-selected="false"><span>⇩</span><b>导出</b><i>菜单 PDF 与版式文案</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="data" aria-selected="false"><span>↥</span><b>备份与恢复</b><i>备份、导入和恢复</i></button>
+          <button type="button" class="settings-nav-item" data-settings-target="advanced" aria-selected="false"><span>!</span><b>高级</b><i>内部标识与危险操作</i></button>
         </nav>
         <div class="settings-panels">
         <!-- 数据同步 -->
-        <div class="settings-section settings-data" data-settings-section>
-          <div class="settings-section-title"><span>数据与安全</span><i>备份、导入和恢复</i></div>
+        <div class="settings-section settings-data" data-settings-section data-settings-group="data">
+          <div class="settings-section-title"><span>备份与恢复</span><i>备份、导入和恢复</i></div>
           <div class="settings-section-content">
           <button class="set-row primary-row" id="setPull" type="button" hidden><span class="set-ic">☁</span><span><b>从云端拉取菜单</b><i>推荐：拉取已发布的 menu-config.json</i></span></button>
           <button class="set-row primary-row" id="setExport" type="button"><span class="set-ic">⤓</span><span><b>导出菜单备份</b><i>推荐：备份当前全部菜品与菜单</i></span></button>
@@ -579,7 +587,7 @@
           <button class="set-row primary-row" id="setDavPublish" type="button"><span class="set-ic">⤒</span><span><b>发布到 WebDAV</b><i>把当前菜单推送到云端</i></span></button>
         </div>
         <!-- 品牌信息 -->
-        <div class="settings-section settings-brand" data-settings-section>
+        <div class="settings-section settings-brand" data-settings-section data-settings-group="display">
           <div class="settings-section-title"><span>品牌与门店</span><i>控制标题、标识和导出署名</i></div>
           <div class="settings-section-content">
           <div class="set-row set-brand"><span class="set-ic">◐</span><span class="set-txt"><label for="setTheme">界面皮肤</label><i>皮肤会同步切换首页、侧栏、内容纸感与操作色，保持整套界面一致</i><select id="setTheme" class="set-input"><option value="amber-green">琥珀绿</option><option value="shanshui">朱砂红</option></select></span></div>
@@ -592,8 +600,8 @@
           <div class="set-row set-brand"><span class="set-ic">店</span><span class="set-txt"><label for="setStoreName">门店名称</label><i>随配置导出，便于集团内识别</i><input type="text" id="setStoreName" maxlength="30" placeholder="默认门店" class="set-input"></span></div>
           </div>
         </div>
-        <div class="settings-section settings-business" data-settings-section>
-          <div class="settings-section-title"><span>菜单配置</span><i>配置可选宴席、菜品分类及展示顺序</i></div>
+        <div class="settings-section settings-business" data-settings-section data-settings-group="business">
+          <div class="settings-section-title"><span>菜单结构</span><i>配置可选宴席、菜品分类及展示顺序</i></div>
           <div class="settings-section-content">
           <div class="set-row set-brand"><span class="set-ic">宴</span><span class="set-txt"><label for="setBanquets">宴席类型</label><i>格式：英文ID:中文名，多个用逗号分隔</i><input type="text" id="setBanquets" class="set-input" placeholder="wedding:婚宴,baby:宝宝宴"><em class="set-field-error" id="banquetsError" hidden></em></span></div>
           <div class="set-row set-brand"><span class="set-ic">类</span><span class="set-txt"><label for="setCategories">菜品分类</label><i>多个分类用逗号分隔，顺序即展示顺序；最多 6 个</i><input type="text" id="setCategories" class="set-input" placeholder="凉菜,主菜,主食点心"><em class="set-field-error" id="categoriesError" hidden></em></span></div>
@@ -601,8 +609,8 @@
           </div>
         </div>
         <!-- 显示与其他 -->
-        <div class="settings-section settings-display" data-settings-section>
-          <div class="settings-section-title"><span>展示设置</span><i>控制销售展示时的内容与防误触状态</i></div>
+        <div class="settings-section settings-display" data-settings-section data-settings-group="display">
+          <div class="settings-section-title"><span>销售展示</span><i>控制销售展示时的内容与防误触状态</i></div>
           <div class="settings-section-content">
           <label class="set-row set-toggle" id="setShowDesc"><span class="set-ic">☰</span><span class="set-txt"><b>显示菜品简介</b><i>点菜详情是否展示菜品介绍</i></span><input type="checkbox" id="setShowDescCb" checked></label>
           <label class="set-row set-toggle" id="setDemoLock"><span class="set-ic">🔒</span><span class="set-txt"><b>演示锁定模式</b><i>当面讲解时防误触（禁改数据）；长按左上角品牌名可解除</i></span><input type="checkbox" id="setDemoLockCb"></label>
@@ -611,15 +619,15 @@
           <button class="set-row danger" id="setReset" type="button"><span class="set-ic">⟲</span><span><b>恢复默认</b><i>清空本设备所有修改</i></span></button>
           </div>
         </div>
-        <div class="settings-section settings-export" data-settings-section>
-          <div class="settings-section-title"><span>导出与文件</span><i>生成供客人离线查看的菜单文件</i></div>
+        <div class="settings-section settings-export" data-settings-section data-settings-group="export">
+          <div class="settings-section-title"><span>导出</span><i>生成供客人离线查看的菜单文件</i></div>
           <div class="settings-section-content" id="settingsExportContent">
             <div class="set-row set-brand"><span class="set-ic">✦</span><span class="set-txt"><label for="setExportHeaderSlogan">菜单副标语</label><i>显示在导出菜单名称下方；留空则使用默认文案</i><input type="text" id="setExportHeaderSlogan" maxlength="32" class="set-input" placeholder="珍馐美馔 · 共聚美好时光"></span></div>
             <div class="set-row set-brand"><span class="set-ic">⌁</span><span class="set-txt"><label for="setExportFooterSlogan">菜单页脚文案</label><i>显示在山水图案上方；留空则使用默认文案</i><input type="text" id="setExportFooterSlogan" maxlength="40" class="set-input" placeholder="以美食致敬相聚的美好"></span></div>
           </div>
         </div>
-        <div class="settings-section settings-advanced" data-settings-section>
-          <div class="settings-section-title"><span>高级与重置</span><i>以下操作可能影响门店数据归属或清除本机修改</i></div>
+        <div class="settings-section settings-advanced" data-settings-section data-settings-group="advanced">
+          <div class="settings-section-title"><span>高级</span><i>以下操作可能影响门店数据归属或清除本机修改</i></div>
           <div class="settings-danger-note">谨慎操作：修改门店内部编号可能切换数据归属；恢复默认会清除本机全部修改。</div>
           <div class="settings-section-content" id="settingsAdvancedContent"></div>
         </div>

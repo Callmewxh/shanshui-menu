@@ -22,6 +22,49 @@
     } catch (e) { return '#EDE4D3'; }
   };
 
+  var DEFAULT_BANQUET_NAMES = {
+    wedding: '婚宴', baby: '宝宝宴', engagement: '订婚宴', yearEnd: '尾牙宴', housewarming: '乔迁宴'
+  };
+  function hasChinese(s) { return /[\u3400-\u9fff]/.test(String(s || '')); }
+  function getBanquetDisplayName(banquetId, preferred) {
+    preferred = String(preferred || '').trim();
+    if (preferred && hasChinese(preferred)) return preferred;
+    var catalog = null;
+    try {
+      catalog = Store && Store.BANQUETS && Store.BANQUETS.find(function (item) { return item.id === banquetId; });
+    } catch (_) {}
+    if (catalog && catalog.name && hasChinese(catalog.name)) return String(catalog.name).trim();
+    var banquet = null;
+    try { banquet = Store && Store.getBanquet ? Store.getBanquet(banquetId) : null; } catch (_) {}
+    if (banquet && banquet.name && hasChinese(banquet.name)) return String(banquet.name).trim();
+    return DEFAULT_BANQUET_NAMES[banquetId] || '宴席';
+  }
+  function getPackageDisplayName(banquetId, pkgId) {
+    var pkg = null;
+    try { pkg = Store && Store.getPackage ? Store.getPackage(banquetId, pkgId) : null; } catch (_) {}
+    var name = pkg && pkg.name ? String(pkg.name).trim() : '';
+    if (name && hasChinese(name)) return name;
+    var id = String((pkg && pkg.id) || pkgId || '').trim();
+    return id ? id + '菜单' : '套餐';
+  }
+  // 文件名规则：整份「婚宴菜单」；单份「婚宴菜单-百年好合」；填写客户后「刘府婚宴-百年好合」。
+  function getMenuExportBaseName(banquetId, pkgId, client, preferredBanquetName) {
+    var banquetName = getBanquetDisplayName(banquetId, preferredBanquetName).replace(/菜单$/, '');
+    var guest = String(client || '').trim();
+    if (!pkgId) return safeName(banquetName + '菜单');
+    var prefix = guest ? guest + banquetName : banquetName + '菜单';
+    return safeName(prefix + '-' + getPackageDisplayName(banquetId, pkgId));
+  }
+  function bundledDishImage(libId) {
+    if (!libId || !window.__EXPORT_ASSETS__) return null;
+    var base = 'data/img/' + String(libId);
+    var exts = ['.jpg', '.jpeg', '.png', '.webp'];
+    for (var i = 0; i < exts.length; i++) {
+      if (window.__EXPORT_ASSETS__[base + exts[i]]) return './' + base + exts[i];
+    }
+    return null;
+  }
+
   // —— 裁剪背景（自包含兜底；运行时优先复用 assets/app.js 的 window.cropBgStyle 单一真相源，保证展示/导出一致）——
   function cropBgStyle(d) {
     var c = d && d.crop ? d.crop : null;
@@ -85,8 +128,22 @@
     } catch (e) {}
     return null;
   }
+  function refreshDraftAssets(saved) {
+    if (!saved || !Array.isArray(saved.lines) || !Store || !Store.getLibDish) return saved;
+    saved.lines.forEach(function (line) {
+      if (!line || !line.libId) return;
+      var current = Store.getLibDish(line.libId);
+      if (!current) return;
+      // 草稿保留客户、改菜与备注，但图片始终跟随当前菜品库，避免旧草稿永久缓存“无图”状态。
+      line.image = current.image || bundledDishImage(line.libId) || null;
+      line.crop = current.crop || null;
+      line._thumb = null; line._exportThumb = null; line._exportImage = null; line._exportAssetKey = null;
+    });
+    return saved;
+  }
   function syncDraftHeader() {
     if (!draft) return;
+    draft.type = getBanquetDisplayName(draft.banquetId, draft.type);
     var t = $('#csType'), c = $('#csClient'), src = $('#csSource'), tot = $('#csTotal'), base = $('#csCalcBase');
     if (t) t.value = draft.type || '';
     if (c) c.value = draft.client || '';
@@ -101,7 +158,7 @@
     if (!Store || !Store.resolvePackage) return;
     if (draft && draft.banquetId === banquetId && draft.pkgId === pkgId) { syncDraftHeader(); render(); return; }
     var restored = loadDraft(banquetId, pkgId);
-    if (restored) { draft = restored; syncDraftHeader(); render(); return; }
+    if (restored) { draft = refreshDraftAssets(restored); draft.type = getBanquetDisplayName(banquetId, draft.type); saveDraft(); syncDraftHeader(); render(); return; }
     var b = Store.getBanquet(banquetId);
     var pkg = Store.getPackage(banquetId, pkgId);
     var dishes = Store.resolvePackage(banquetId, pkgId) || [];
@@ -109,7 +166,7 @@
     draft = {
       banquetId: banquetId,
       pkgId: pkgId,
-      type: (b && b.name) ? b.name : '宴席',
+      type: getBanquetDisplayName(banquetId, b && b.name),
       client: '',
       total: pkgPrice,
       basePrice: pkgPrice,   // 套餐原价，用于总厨单显示价格变化
@@ -123,7 +180,7 @@
           cat: d.cat || '主菜',
           cn: d.cn || '',
           en: d.en || '',
-          image: d.image || null,
+          image: d.image || bundledDishImage(d.id) || null,
           crop: d.crop || null,
           note: '',
           swappedFrom: null,    // 换菜前的菜品库 id（truthy 表示该行是换菜）
@@ -434,33 +491,60 @@
     }).catch(function () { direct(); });
   }
 
+  function exportAssetKey(line) {
+    var crop = line && line.crop ? line.crop : null;
+    return String(line && line.image || '') + '|' + JSON.stringify(crop || {});
+  }
+
   // 预加载所有菜品图片，并把菜品库使用的同一份 crop 先固化为 4:3 位图。
-  // 最终横版导出只绘制这份位图，杜绝再次计算 cover 后产生取景偏移。
+  // 同一道菜会跨多个套餐重复出现；旧实现会为每次出现并发解码一遍，在平板上造成瞬时内存峰值，
+  // 也会让同一对象的 _exportThumb 发生竞态。这里按「图片地址 + crop」合并任务，并限制并发数。
   // cb(lines, errors)：应有的菜图任一失败都会被导出流程阻断。
   function preloadImages(lines, cb) {
-    // Canvas 导出保留原图作兼容回退，同时必须等待已裁好的缩略图解码完成。
-    var pending = lines.filter(function (l) { return l.image && (!l._exportImage || !l._exportThumb); });
-    if (!pending.length) { cb(lines, []); return; }
-    var remain = pending.length;
-    var errors = [];
-    function complete() { if (--remain === 0) cb(lines, errors); }
-    pending.forEach(function (l) {
-      function makeCroppedThumb(im) {
-        var thumb = renderThumb(im, l.crop);
-        if (!thumb) { errors.push((l.cn || '未命名菜品') + '：无法生成与菜品库一致的截图'); complete(); return; }
-        var thumbImage = new Image();
-        thumbImage.onload = function () { l._thumb = thumb; l._exportThumb = thumbImage; complete(); };
-        thumbImage.onerror = function () { errors.push((l.cn || '未命名菜品') + '：裁切图解码失败'); complete(); };
-        thumbImage.src = thumb;
-      }
-      if (l._exportImage) { makeCroppedThumb(l._exportImage); return; }
-      loadExportImage(l.image, function (im, err) {
-        if (im) {
-          l._exportImage = im;
-          makeCroppedThumb(im);
-        } else { l._thumb = null; errors.push((l.cn || '未命名菜品') + '：' + err); complete(); }
-      });
+    lines = Array.isArray(lines) ? lines : [];
+    var groups = Object.create(null), jobs = [];
+    lines.forEach(function (line) {
+      if (!line || !line.image) return;
+      var key = exportAssetKey(line);
+      if (line._exportAssetKey === key && line._exportThumb) return;
+      line._thumb = null; line._exportThumb = null; line._exportImage = null;
+      if (!groups[key]) { groups[key] = { key: key, src: line.image, crop: line.crop, lines: [] }; jobs.push(groups[key]); }
+      groups[key].lines.push(line);
     });
+    if (!jobs.length) { cb(lines, []); return; }
+    var errors = [];
+    var cursor = 0, active = 0, finished = 0;
+    function label(job) {
+      var names = job.lines.map(function (line) { return line.cn || '未命名菜品'; });
+      return names.filter(function (name, i) { return names.indexOf(name) === i; }).join('、');
+    }
+    function pump() {
+      if (finished === jobs.length) { cb(lines, errors); return; }
+      while (active < 3 && cursor < jobs.length) {
+        active++;
+        (function (job) {
+          loadExportImage(job.src, function (im, err) {
+            if (!im) { errors.push(label(job) + '：' + err); settle(); return; }
+            var thumb = renderThumb(im, job.crop);
+            if (!thumb) { errors.push(label(job) + '：无法生成与菜品库一致的截图'); settle(); return; }
+            var thumbImage = new Image();
+            thumbImage.onload = function () {
+              job.lines.forEach(function (line) {
+                line._thumb = thumb;
+                line._exportThumb = thumbImage;
+                line._exportAssetKey = job.key;
+                line._exportImage = null;
+              });
+              settle();
+            };
+            thumbImage.onerror = function () { errors.push(label(job) + '：裁切图解码失败'); settle(); };
+            thumbImage.src = thumb;
+          });
+          function settle() { active--; finished++; pump(); }
+        })(jobs[cursor++]);
+      }
+    }
+    pump();
   }
 
   // 菜名换行：每行最多 maxChars 字，超过截断 + …；返回数组（1-2 行）
@@ -789,9 +873,12 @@
   }
   function buildPhotoLandscapeCanvas(lines, done, meta) {
     meta = meta || {};
-    var W = 3508, H = 2480, canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
+    // 横向 A4 采用约 240 DPI（2806×1984），清晰度足够印刷，同时把平板峰值画布内存降到原来的 64%。
+    // 版式继续在 3508×2480 逻辑坐标中计算，由 Canvas 统一缩放，不改变任何对齐和裁切规则。
+    var W = 3508, H = 2480, outputScale = 0.8, canvas = document.createElement('canvas');
+    canvas.width = Math.round(W * outputScale); canvas.height = Math.round(H * outputScale);
     var ctx = canvas.getContext('2d'), C = { bg:'#f8f3e9', ink:'#382c25', muted:'#a88d67', red:'#a52f29', gold:'#b78d40', hair:'#cfb878', card:'#fffdf8', image:'#e8dcc0' };
+    ctx.scale(outputScale, outputScale);
     // 固定层来自无文字底稿；绝不使用带菜单名、价格或 Logo 的参考图。
     if (exportBackdropImage) ctx.drawImage(exportBackdropImage, 0, 0, W, H);
     else drawLandscapeTemplate(ctx, W, H, C); // 仅在底稿异常时的保守离线兜底
@@ -825,6 +912,7 @@
     var bounds = { x: 165, y: 635, w: W - 330, h: 1500 }, grid = getLandscapeGrid(lines, bounds, ctx, { showNotes: showNotes });
     var gridW = grid.cols * grid.w + (grid.cols - 1) * grid.gap, gridH = grid.total;
     var startX = bounds.x + (bounds.w - gridW) / 2, startY = bounds.y + Math.max(0, (bounds.h - gridH) / 2);
+    var renderErrors = [];
     lines.forEach(function (line, i) {
       var row = Math.floor(i / grid.cols), y = startY;
       for (var prior = 0; prior < row; prior++) y += grid.rowHeights[prior] + grid.gap;
@@ -833,8 +921,16 @@
       ctx.save(); roundedRect(ctx, x + pad, y + pad, grid.imageW, grid.imageH, 7); ctx.clip(); ctx.fillStyle = C.image; ctx.fillRect(x + pad, y + pad, grid.imageW, grid.imageH);
       // _exportThumb 是由 renderThumb 按菜品库 cropBg 的同一算法产生的 4:3 截图。
       // 导出时等比铺满，不再二次裁切，因此取景位置与菜品库逐像素一致。
-      if (line._exportThumb) ctx.drawImage(line._exportThumb, x + pad, y + pad, grid.imageW, grid.imageH);
-      else canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.imageW, grid.imageH, line.crop);
+      var imageDrawn = false;
+      if (line._exportThumb) {
+        try { ctx.drawImage(line._exportThumb, x + pad, y + pad, grid.imageW, grid.imageH); imageDrawn = true; }
+        catch (_) { imageDrawn = false; }
+      } else imageDrawn = canvasCover(ctx, line._exportImage, x + pad, y + pad, grid.imageW, grid.imageH, line.crop);
+      if (!line.image) {
+        ctx.fillStyle = 'rgba(165,47,41,.10)'; ctx.beginPath(); ctx.arc(x + pad + grid.imageW / 2, y + pad + grid.imageH / 2 - 18, 34, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.font = '22px "Microsoft YaHei", sans-serif';
+        ctx.fillText('暂无菜品图', x + pad + grid.imageW / 2, y + pad + grid.imageH / 2 + 42);
+      } else if (!imageDrawn) renderErrors.push((line.cn || '未命名菜品') + '：图片未写入画布');
       ctx.restore();
       var name = line.cn || '未命名菜品', note = (line.note || '').trim(), nameY = y + pad + grid.imageH + grid.titleFs + 12;
       // 菜名始终以菜图中心为锚点；过长只缩小字号，不改变居中位置。
@@ -850,7 +946,7 @@
     });
     ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.font = '26px "Microsoft YaHei", sans-serif'; ctx.fillText(getExportFooterSlogan(), W / 2, 2350);
     // 在 Logo 加载完成后交给下载和 PDF，保证同一张 Canvas 被两个格式复用。
-    drawCanvasLogo(ctx, logoX, logoY, logoSize, function () { done(canvas); });
+    drawCanvasLogo(ctx, logoX, logoY, logoSize, function () { done(canvas, renderErrors); });
   }
 
   // 构造导出 SVG（A4 竖版单页：保留旧版作为兼容路径）
@@ -1506,7 +1602,7 @@
       parts.push('<rect x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(cellW) + '" height="' + m(cellH) + '" rx="' + m(2) + '" fill="#FFFDF8" stroke="' + C.line + '" stroke-width="' + m(0.35) + '"/>');
       parts.push('<rect x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(cellW) + '" height="' + m(imgH) + '" rx="' + m(2) + '" fill="' + C.imgBg + '"/>');
       parts.push('<clipPath id="' + cid + '"><rect x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(cellW) + '" height="' + m(imgH) + '" rx="' + m(2) + '"/></clipPath>');
-      var src = d._thumb || d.image;
+      var src = d._thumb || d.image || bundledDishImage(d.id);
       if (src) parts.push('<g clip-path="url(#' + cid + ')"><image href="' + src + '" xlink:href="' + src + '" x="' + m(gx) + '" y="' + m(gy) + '" width="' + m(cellW) + '" height="' + m(imgH) + '" preserveAspectRatio="xMidYMid slice"/></g>');
       // 菜名：卡片内换行（最多两行），严禁溢出
       var cn = d.cn || '未命名菜品';
@@ -1539,10 +1635,15 @@
     var b = Store ? Store.getBanquet(banquetId) : null;
     var pk = Store && Store.getPackage ? Store.getPackage(banquetId, pkgId) : null;
     var resolved = Store && Store.resolvePackage ? Store.resolvePackage(banquetId, pkgId) : [];
-    var dishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
+    var sourceDishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
+    var dishes = sourceDishes.map(function (dish) {
+      var copy = Object.assign({}, dish);
+      copy.image = copy.image || bundledDishImage(copy.id) || null;
+      return copy;
+    });
     preloadExportAssets(dishes, function (_, errors) {
       if (errors && errors.length) { done(null, errors); return; }
-      buildPhotoLandscapeCanvas(dishes, function (canvas) { done(canvas, null); }, {
+      buildPhotoLandscapeCanvas(dishes, function (canvas, renderErrors) { done(canvas, renderErrors || null); }, {
         title: pk && pk.name ? pk.name : (b && b.name ? b.name : '宴会菜单'),
         price: pk && typeof pk.price !== 'undefined' ? pk.price : '—',
         catalogMode: true, showNotes: false
@@ -1553,7 +1654,6 @@
   // 整份宴席菜单 → 多页横版 PDF（每套餐一页）；opts.pkgId 传单个套餐 id 时只导出该套餐
   function exportWholeMenu(banquetId, opts) {
     opts = opts || {};
-    var k = opts.scale || 1;
     var b = Store ? Store.getBanquet(banquetId) : null;
     if (!b || !b.packages || !b.packages.length) {
       try { alert('该宴席暂无套餐，无法导出'); } catch (e) {}
@@ -1573,50 +1673,65 @@
       try { pendingWin = window.open('', '_blank'); } catch (e) { pendingWin = null; }
     }
 
-    // 先把所有套餐用到的菜品图片与无文字底稿预加载；任一资源失败则不输出半成品。
-    var allLines = [];
-    pkgs.forEach(function (p) {
-      var rp = (Store.resolvePackage) ? Store.resolvePackage(banquetId, p.id) : null;
-      var list = Array.isArray(rp) ? rp : ((rp && rp.dishes) || []);
-      list.forEach(function (d) { allLines.push(d); });
-    });
+    function abortExport(message) {
+      try { if (pendingWin && !pendingWin.closed) pendingWin.close(); } catch (_) {}
+      pendingWin = null;
+      try { alert(message); } catch (_) {}
+    }
 
-    preloadExportAssets(allLines, function (_, assetErrors) {
-      if (assetErrors && assetErrors.length) { try { alert('导出未生成：' + assetErrors.join('；')); } catch (e) {} return; }
+    // 平板内存比桌面紧张：只常驻固定底稿，每次仅解码当前套餐的菜图；页面压成 JPEG 后立刻释放画布和缩略图。
+    preloadExportBackdrop(function (backdropError) {
+      if (backdropError) { abortExport('导出未生成：' + backdropError); return; }
       var pages = [];
       var idx = 0;
       function next() {
         if (idx >= pkgs.length) {
-          if (!pages.length) { try { alert('导出失败，请重试'); } catch (e) {} return; }
+          if (pages.length !== pkgs.length) { abortExport('导出未生成：页面数量校验失败，请重试'); return; }
           try {
             var pdf = buildMultiPagePdf(pages);
-            var fname = single
-              ? safeName(b.name) + '-' + safeName(pkgs[0].name) + '.pdf'
-              : safeName(/菜单$/.test(b.name) ? b.name : b.name + '菜单') + '.pdf';
+            var fname = getMenuExportBaseName(banquetId, single ? pkgs[0].id : null) + '.pdf';
             downloadBlob(new Blob([pdf], { type: 'application/pdf' }), fname);
           } catch (e) {
-            try { alert('生成 PDF 失败：' + (e && e.message ? e.message : e)); } catch (e2) {}
+            abortExport('生成 PDF 失败：' + (e && e.message ? e.message : e));
           }
           return;
         }
         var pkg = pkgs[idx++];
         var resolved = Store.resolvePackage ? Store.resolvePackage(banquetId, pkg.id) : [];
-        var dishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
-        buildPhotoLandscapeCanvas(dishes, function (canvas) {
-          if (!canvas) { next(); return; }
-          try {
-            var jpg = canvas.toDataURL('image/jpeg', 0.92);
-            var bin = atob(jpg.split(',')[1]);
-            var bytes = new Uint8Array(bin.length);
-            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            pages.push({ bytes: bytes, w: canvas.width, h: canvas.height });
-          } catch (e) { /* 单页失败则跳过该页 */ }
-          next();
-        }, {
-          title: pkg.name || b.name,
-          price: typeof pkg.price !== 'undefined' ? pkg.price : '—',
-          catalogMode: true,
-          showNotes: false
+        var sourceDishes = Array.isArray(resolved) ? resolved : ((resolved && resolved.dishes) || []);
+        // 使用短生命周期副本，避免把导出用 Image/DataURL 挂在 Store 主数据上越积越多。
+        var dishes = sourceDishes.map(function (dish) {
+          var copy = Object.assign({}, dish);
+          copy.image = copy.image || bundledDishImage(copy.id) || null;
+          return copy;
+        });
+        preloadImages(dishes, function (_, imageErrors) {
+          if (imageErrors && imageErrors.length) { abortExport('导出未生成：' + imageErrors.join('；')); return; }
+          buildPhotoLandscapeCanvas(dishes, function (canvas, renderErrors) {
+            if (!canvas || (renderErrors && renderErrors.length)) {
+              abortExport('导出未生成：' + ((renderErrors && renderErrors.join('；')) || ('套餐“' + getPackageDisplayName(banquetId, pkg.id) + '”渲染失败')));
+              return;
+            }
+            try {
+              var pageW = canvas.width, pageH = canvas.height;
+              var jpg = canvas.toDataURL('image/jpeg', 0.92);
+              var bin = atob(jpg.split(',')[1]);
+              var bytes = new Uint8Array(bin.length);
+              for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              pages.push({ bytes: bytes, w: pageW, h: pageH });
+              dishes.forEach(function (dish) { dish._thumb = null; dish._exportThumb = null; dish._exportImage = null; });
+              canvas.width = 1; canvas.height = 1;
+            } catch (e) {
+              abortExport('导出未生成：套餐“' + getPackageDisplayName(banquetId, pkg.id) + '”转码失败');
+              return;
+            }
+            setTimeout(next, 0);
+          }, {
+            title: pkg.name || getBanquetDisplayName(banquetId, b.name),
+            price: typeof pkg.price !== 'undefined' ? pkg.price : '—',
+            catalogMode: true,
+            showNotes: false
+          });
         });
       }
       next();
@@ -1688,7 +1803,7 @@
     }
     var ver = getExpVer();
     var k = getExpScale();
-    var base = safeName(draft.client) + '-' + safeName(draft.type) + '-' + (ver === 'plain' ? '无图小票' : '横版A4菜单') + '-A';
+    var base = getMenuExportBaseName(draft.banquetId, draft.pkgId, draft.client, draft.type);
     var exportLines = getExportLines();
     // 预加载所有菜品图片获取原始尺寸，确保 SVG 裁切与菜品库一致
     prepareExportAssets(ver, exportLines, function (_, assetErrors) {
@@ -1697,7 +1812,11 @@
         return;
       }
       if (ver !== 'plain') {
-        buildPhotoLandscapeCanvas(exportLines, function (canvas) {
+        buildPhotoLandscapeCanvas(exportLines, function (canvas, renderErrors) {
+          if (!canvas || (renderErrors && renderErrors.length)) {
+            alert('导出未生成：' + ((renderErrors && renderErrors.join('；')) || '菜单画布生成失败'));
+            return;
+          }
           var output = function (cv) {
             if (expFmt === 'pdf') {
               canvasToPdfBlob(cv, base, function (blob, name) { if (blob) downloadBlob(blob, name); else cv.toBlob(function (b) { if (b) downloadBlob(b, base + '.png'); }, 'image/png'); });
@@ -2135,6 +2254,9 @@
     _buildSVG: buildSVG, _buildPhotoLandscapeSVG: buildPhotoLandscapeSVG, _buildMobileSVG: buildMobileSVG, _doExport: doExport, _getExpScale: getExpScale, _buildPdfWithJpeg: buildPdfWithJpeg, _buildChefSVG: buildChefSVG,
     _setTotal: function (v) { if (draft) { draft.total = v; saveDraft(); var b = document.getElementById('csCalcBase'); if (b) b.value = v || '0'; } },
     _openExport: openExport, _preloadImages: preloadImages, _getDraft: function () { return draft; },
+    _getBanquetDisplayName: getBanquetDisplayName, _getPackageDisplayName: getPackageDisplayName,
+    _getMenuExportBaseName: getMenuExportBaseName, _exportAssetKey: exportAssetKey,
+    _refreshDraftAssets: refreshDraftAssets, _bundledDishImage: bundledDishImage,
     getDraftBanquet: function () { return draft ? draft.banquetId : null; },
     getDraftPkg: function () { return draft ? draft.pkgId : null; }
   };

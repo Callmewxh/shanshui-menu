@@ -86,6 +86,52 @@
   const $ = (s) => document.querySelector(s);
   const MENU = () => Store.STATE.menu;
 
+  // 所有弹窗共享焦点进入、循环与返回逻辑，避免键盘 Tab 穿透到被遮罩的页面。
+  const modalFocusOrigins = new WeakMap();
+  function openModals() { return Array.from(document.querySelectorAll('.modal')).filter((modal) => !modal.hidden); }
+  function modalFocusable(modal) {
+    return Array.from(modal.querySelectorAll('button:not(:disabled),[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])'))
+      .filter((node) => !node.closest('[hidden]') && node.getAttribute('aria-hidden') !== 'true');
+  }
+  function initDialogFocusManagement() {
+    document.querySelectorAll('.modal').forEach((modal, index) => {
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      const heading = modal.querySelector('h2,h3');
+      if (heading) {
+        if (!heading.id) heading.id = `dialog-title-${index + 1}`;
+        modal.setAttribute('aria-labelledby', heading.id);
+        heading.tabIndex = -1;
+      }
+      let wasHidden = modal.hidden;
+      new MutationObserver(() => {
+        if (wasHidden === modal.hidden) return;
+        wasHidden = modal.hidden;
+        if (!modal.hidden) {
+          modalFocusOrigins.set(modal, document.activeElement);
+          requestAnimationFrame(() => (modalFocusable(modal)[0] || heading || modal).focus({ preventScroll:true }));
+        } else {
+          const origin = modalFocusOrigins.get(modal);
+          if (origin && origin.isConnected && openModals().length === 0) origin.focus({ preventScroll:true });
+        }
+      }).observe(modal, { attributes:true, attributeFilter:['hidden'] });
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab') return;
+      const modals = openModals();
+      const modal = modals[modals.length - 1];
+      if (!modal) return;
+      const focusable = modalFocusable(modal);
+      if (!focusable.length) { event.preventDefault(); modal.focus(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
+    }, true);
+  }
+
   // ---------- 轻提示 ----------
   function toast(msg) {
     let t = $('#toast');
@@ -256,24 +302,35 @@
     }
     return { backgroundImage:`url('${url}')`, backgroundSize:'cover', backgroundPosition:'center', backgroundRepeat:'no-repeat' };
   }
-  // 平板 LOGO 既要保持侧栏容器居中，也必须忠实执行取景框的 x/y。
-  // 用取景框中心反推 CSS background-position，使缩小显示时仍以选中的区域为锚点。
-  function tabletLogoRegionStyle(url, crop, scale) {
+  // LOGO 永远由真实 <img> 以 contain 呈现，只做等比缩放与位移。
+  // 这样任何视口比例下都不会因为 background-size 的 X/Y 独立计算而被拉伸。
+  function tabletLogoTransformStyle(crop, scale) {
     const c = (crop && typeof crop.w === 'number') ? crop : null;
     const s = Math.max(.35, Math.min(1.6, (Number(scale) || 100) / 100));
-    if (!c) return { backgroundImage:`url('${url}')`, backgroundSize:`${Math.round(s * 100)}% auto`, backgroundPosition:'50% 50%', backgroundRepeat:'no-repeat', backgroundColor:'transparent' };
+    if (!c) return { transform:`translate(0%,0%) scale(${s.toFixed(3)})` };
     const w = Math.max(.05, Math.min(1, c.w));
     const h = Math.max(.05, Math.min(1, typeof c.h === 'number' ? c.h : c.w));
     const x = Math.max(0, Math.min(1 - w, Number(c.x) || 0));
     const y = Math.max(0, Math.min(1 - h, Number(c.y) || 0));
-    const sx = s / w, sy = s / h;
-    const centerPos = (selectedCenter, renderedSize) => Math.abs(1 - renderedSize) < .0001 ? 50 : ((.5 - renderedSize * selectedCenter) / (1 - renderedSize) * 100);
-    return {
-      backgroundImage:`url('${url}')`,
-      backgroundSize:`${(sx * 100).toFixed(3)}% ${(sy * 100).toFixed(3)}%`,
-      backgroundPosition:`${centerPos(x + w / 2, sx).toFixed(2)}% ${centerPos(y + h / 2, sy).toFixed(2)}%`,
-      backgroundRepeat:'no-repeat', backgroundColor:'transparent'
-    };
+    const zoom = Math.max(.35, Math.min(4, s / w));
+    const tx = (.5 - (x + w / 2)) * 100;
+    const ty = (.5 - (y + h / 2)) * 100;
+    return { transform:`translate(${tx.toFixed(2)}%,${ty.toFixed(2)}%) scale(${zoom.toFixed(3)})` };
+  }
+  function applyTabletLogoImage(container, url, crop, scale) {
+    if (!container || !url) return;
+    let image = container.querySelector('.tablet-logo-img');
+    if (!image) {
+      container.textContent = '';
+      image = document.createElement('img');
+      image.className = 'tablet-logo-img';
+      image.alt = '';
+      image.decoding = 'async';
+      container.appendChild(image);
+    }
+    if (image.getAttribute('src') !== url) image.src = url;
+    Object.assign(image.style, tabletLogoTransformStyle(crop, scale));
+    container.style.backgroundImage = 'none';
   }
   function getPadArtCrop() {
     try {
@@ -368,7 +425,7 @@
   }
 
   function cardHTML(d, idx) {
-    return `<article class="card" data-idx="${idx}" data-dish-id="${d.id}">
+    return `<article class="card" tabindex="0" role="button" aria-label="查看菜品：${d.cn}" data-idx="${idx}" data-dish-id="${d.id}">
       ${thumbHTML(d, idx)}
       <div class="info">
         <div class="cn">${d.cn}</div>
@@ -429,6 +486,10 @@
   }
 
   function renderAll() {
+    const currentBanquet = banquet();
+    const banquetLabel = currentBanquet && currentBanquet.name ? currentBanquet.name.replace(/菜单$/, '') : '宴席';
+    const tenantLabel = (Store.TENANT && Store.TENANT.name) || '山水S酒店';
+    document.title = tenantLabel + ' · ' + banquetLabel + '菜单';
     renderTopTabs();
     renderPkg();
     renderHero();
@@ -841,7 +902,7 @@
     const inner = d.image
       ? dishCropThumb(d)
       : `<div class="thumb" style="background:${categoryColor(d.cat)}">${ICONS[d.icon] || ''}</div>`;
-    return `<div class="mg-card lib-card" data-id="${d.id}">
+    return `<div class="mg-card lib-card" tabindex="0" role="button" aria-label="编辑菜品：${d.cn}" data-id="${d.id}">
       <div class="mg-thumb lib-thumb">
         ${inner}
         <button class="lib-del" data-libdel="${d.id}" title="删除" aria-label="删除">✕</button>
@@ -878,7 +939,7 @@
         : `<div class="thumb" style="background:${categoryColor(d.cat)}">${ICONS[d.icon] || ''}</div>`;
       // 一卡一交互：点卡片=菜单内改名，右上 ✕=移出本菜单（排序请切到「排序」模式）
       const ovTag = d._overridden ? ' <span class="ov-tag" title="本菜单已改名">改</span>' : (d._enOverridden ? ' <span class="ov-tag en" title="本菜单已改英文名">英</span>' : '');
-      return `<div class="mg-card" data-id="${id}" data-libedit="${id}">
+      return `<div class="mg-card" tabindex="0" role="button" aria-label="编辑菜单菜品：${d.cn}" data-id="${id}" data-libedit="${id}">
         <div class="mg-thumb">
           ${inner}
           <button class="lib-del" data-ref="${id}" title="移出本菜单" aria-label="移出本菜单">✕</button>
@@ -1063,6 +1124,8 @@
     $('#eDesc').value = d ? (d.desc || '') : '';
     mg.pendingImage = d ? (d.image || null) : null;
     mg.pendingCrop = (d && d.crop && typeof d.crop.w === 'number') ? { x: d.crop.x, y: d.crop.y, w: d.crop.w, h: (typeof d.crop.h === 'number' ? d.crop.h : undefined) } : defaultCrop();
+    const fileName = $('#imgFileName'); if (fileName) fileName.textContent = mg.pendingImage ? '已使用当前图片' : 'JPG、PNG、WebP';
+    const chooseButton = $('#imgChooseBtn'); if (chooseButton) chooseButton.textContent = mg.pendingImage ? '更换图片' : '选择图片';
     renderImgPrev();
     $('#editDelete').hidden = !id;
     let seen = false;
@@ -1079,7 +1142,12 @@
         `<div id="cropPrevImg" class="cropimg" style="${cropBg(d)}" title="点击调整展示位置"></div>` +
         `<button type="button" id="imgClear" class="mg-btn small ghost">移除图片</button>`;
       const pv = $('#cropPrevImg'); if (pv) pv.onclick = openCrop;
-      const c = $('#imgClear'); if (c) c.onclick = () => { mg.pendingImage = null; mg.pendingCrop = defaultCrop(); renderImgPrev(); };
+      const c = $('#imgClear'); if (c) c.onclick = () => {
+        mg.pendingImage = null; mg.pendingCrop = defaultCrop();
+        const fileName = $('#imgFileName'); if (fileName) fileName.textContent = 'JPG、PNG、WebP';
+        const chooseButton = $('#imgChooseBtn'); if (chooseButton) chooseButton.textContent = '选择图片';
+        renderImgPrev();
+      };
     } else {
       el.innerHTML = '<span class="hint">未设置图片，将使用占位插画</span>';
     }
@@ -1440,6 +1508,7 @@
   }
 
   // ---------- 设置：居中弹窗 ----------
+  let settingsCloseGuard = null;
   function toggleSettings(force) {
     const m = $('#settingsModal');
     const wantOpen = (typeof force === 'boolean') ? force : m.hidden;
@@ -1447,7 +1516,11 @@
     m.hidden = !wantOpen;
     if (wantOpen) { updateSettingsDavSummary(); requestAnimationFrame(() => window.dispatchEvent(new Event('ss-settings-open'))); }
   }
-  function closeSettings() { $('#settingsModal').hidden = true; }
+  function closeSettings(force) {
+    if (!force && settingsCloseGuard && !settingsCloseGuard()) return false;
+    $('#settingsModal').hidden = true;
+    return true;
+  }
   function updateSettingsDavSummary() {
     const sum = $('#setDavSummary');
     if (!sum) return;
@@ -1573,7 +1646,7 @@
     panel.hidden = !isLogo && !isArt;
     logoShell.hidden = !isLogo;
     artShell.hidden = !isArt;
-    if (isLogo && logo && cropPreviewSrc && cropTemp) Object.assign(logo.style, tabletLogoRegionStyle(cropPreviewSrc, cropTemp, cropDisplayScale));
+    if (isLogo && logo && cropPreviewSrc && cropTemp) applyTabletLogoImage(logo, cropPreviewSrc, cropTemp, cropDisplayScale);
     if (isArt && art && cropPreviewSrc && cropTemp) Object.assign(art.style, regionCropStyle(cropPreviewSrc, cropTemp));
   }
 
@@ -1751,10 +1824,14 @@
       brandBtn.setAttribute('aria-expanded', String(open));
     };
     if (brandBtn) {
-      // 长按品牌键 → 演示锁定确认弹窗（锁定中=退出，未锁定=进入；850ms 触发）
+      // 演示锁定后，长按品牌键作为隐蔽但可发现的解除入口。
       let lpLockTimer = null;
       const clearLpLock = () => { if (lpLockTimer) { clearTimeout(lpLockTimer); lpLockTimer = null; } };
-      brandBtn.addEventListener('pointerdown', () => { clearLpLock(); lpLockTimer = setTimeout(() => { lpLockTimer = null; if (!$('#demoLockModal').hidden) return; openDemoLockConfirm(); }, 850); });
+      brandBtn.addEventListener('pointerdown', () => {
+        clearLpLock();
+        if (!demoLock) return;
+        lpLockTimer = setTimeout(() => { lpLockTimer = null; if (!$('#demoLockModal').hidden) return; openDemoLockConfirm(); }, 850);
+      });
       ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => brandBtn.addEventListener(ev, clearLpLock));
       brandBtn.addEventListener('click', (e) => {
         if (e.target.closest('.brand-item')) return; // 菜单项点击交给下面处理
@@ -1914,6 +1991,11 @@
       const wholeMenu = resolvedDishes();
       const index = wholeMenu.findIndex((dish) => dish.id === c.dataset.dishId);
       openModal(index, wholeMenu);
+    });
+    document.addEventListener('keydown', (e) => {
+      if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches('.card,.mg-card')) return;
+      e.preventDefault();
+      e.target.click();
     });
     $('#modal').addEventListener('click', (e) => {
       if (swipeGuard) return;   // 刚滑动过：本次 click 不当作“点遮罩关闭”
@@ -2159,6 +2241,10 @@
       errorEl.hidden = !message; errorEl.textContent = message || '';
     };
     // 将功能按任务归位：导出、批量建菜和危险操作不再混在展示设置中。
+    const settingsPanels = document.querySelector('.settings-panels');
+    const displaySection = document.querySelector('.settings-display');
+    const brandSection = document.querySelector('.settings-brand');
+    if (settingsPanels && displaySection && brandSection) settingsPanels.insertBefore(displaySection, brandSection);
     const exportContent = $('#settingsExportContent'); if (exportContent) exportContent.appendChild($('#setExportMenu'));
     const businessContent = document.querySelector('.settings-business .settings-section-content'); if (businessContent) businessContent.appendChild($('#setBatch'));
     const advancedContent = $('#settingsAdvancedContent');
@@ -2173,12 +2259,21 @@
       const nav = document.querySelector('[data-settings-target="business"]'); if (nav) nav.classList.toggle('dirty', catalogDirty);
       if (catalogDirty) settingsState('saving', '有未保存修改');
     };
+    const resetCatalogDraft = () => {
+      const banquetInput = $('#setBanquets'); if (banquetInput) banquetInput.value = Store.BANQUETS.map((b) => b.id + ':' + b.name).join(',');
+      const categoryInput = $('#setCategories'); if (categoryInput) categoryInput.value = Store.CATEGORIES.join(',');
+      markCatalogDirty(false);
+    };
+    settingsCloseGuard = () => {
+      if (!catalogDirty) return true;
+      if (!confirm('宴席与分类有未保存修改。放弃修改并关闭设置？')) return false;
+      resetCatalogDraft();
+      return true;
+    };
     const selectSettingsPanel = (key, focusPanel) => {
       if (catalogDirty && currentSettingsPanel === 'business' && key !== 'business') {
         if (!confirm('宴席与分类有未保存修改。放弃修改并切换分类？')) return false;
-        const banquetInput = $('#setBanquets'); if (banquetInput) banquetInput.value = Store.BANQUETS.map((b) => b.id + ':' + b.name).join(',');
-        const categoryInput = $('#setCategories'); if (categoryInput) categoryInput.value = Store.CATEGORIES.join(',');
-        markCatalogDirty(false);
+        resetCatalogDraft();
       }
       currentSettingsPanel = key;
       document.querySelectorAll('.settings-nav-item').forEach((item) => {
@@ -2187,7 +2282,7 @@
         if (on) { item.classList.remove('switching'); void item.offsetWidth; item.classList.add('switching'); setTimeout(() => item.classList.remove('switching'), 260); }
       });
       document.querySelectorAll('[data-settings-section]').forEach((section) => {
-        const on = section.classList.contains('settings-' + key);
+        const on = (section.dataset.settingsGroup || '') === key;
         section.classList.toggle('active', on);
       });
       try { sessionStorage.setItem('ss_settings_tab', key); } catch (_) {}
@@ -2196,6 +2291,8 @@
         const heading = document.querySelector('.settings-section.active .settings-section-title');
         if (heading) heading.focus({ preventScroll: true });
       }
+      const activeNav = document.querySelector(`.settings-nav-item[data-settings-target="${key}"]`);
+      if (activeNav && window.innerWidth <= 620) activeNav.scrollIntoView({ block:'nearest', inline:'center', behavior:'smooth' });
       return true;
     };
     document.querySelectorAll('.settings-nav-item').forEach((item) => {
@@ -2203,6 +2300,7 @@
     });
     let initialSettingsTab = 'display';
     try { initialSettingsTab = sessionStorage.getItem('ss_settings_tab') || initialSettingsTab; } catch (_) {}
+    if (!document.querySelector(`[data-settings-target="${initialSettingsTab}"]`)) initialSettingsTab = 'display';
     selectSettingsPanel(initialSettingsTab, false);
 
     $('#mgSettings').addEventListener('click', (e) => { e.stopPropagation(); toggleSettings(); });
@@ -2309,10 +2407,6 @@
       }
       return { backgroundImage: `url('${url}')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundColor: 'transparent' };
     }
-    function tabletLogoBgStyle(url, crop, scale) {
-      return tabletLogoRegionStyle(url, crop, scale);
-    }
-
     // —— 品牌设置（LOGO 图片 + 酒店名称）——
     var BrandConfig = {
       KEY_LOGO: 'ss_brand_logo',   // base64 dataURL of uploaded logo PNG
@@ -2372,17 +2466,18 @@
           }
         }
         var n = $('.brand-name'); if (n) n.textContent = this.name;
-        document.title = this.name + ' · 婚宴菜单';
+        var activeBanquet = Store.getBanquet(state.banquet);
+        var activeName = activeBanquet && activeBanquet.name ? activeBanquet.name.replace(/菜单$/, '') : '宴席';
+        document.title = this.name + ' · ' + activeName + '菜单';
         // 平板侧栏始终有内置默认 LOGO；设置里上传同一入口即可替换。
         var tabletLogo = $('#tabletBrand');
         if (tabletLogo) {
-          Object.assign(tabletLogo.style, tabletLogoBgStyle(this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale));
+          applyTabletLogoImage(tabletLogo, this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale);
         }
         // 同步设置面板预览
         var prev = $('#brandLogoPreview');
         if (prev) {
-          Object.assign(prev.style, tabletLogoBgStyle(this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale));
-          prev.textContent = '';
+          applyTabletLogoImage(prev, this.tabletLogo(), this.tabletLogoCrop, this.tabletLogoScale);
           var wrap = $('#brandLogoWrap');
           if (wrap) wrap.classList.add('has-img');
         }
@@ -2571,16 +2666,24 @@
     $('#pickCancel').addEventListener('click', () => { $('#pickModal').hidden = true; });
     $('#pickCancel2').addEventListener('click', () => { $('#pickModal').hidden = true; });
 
-    // 图片上传（含进度条）
-    $('#imgInput').addEventListener('change', (e) => {
+    // 图片上传（含进度条）：隐藏浏览器原生按钮，交给统一控件触发。
+    const imgInput = $('#imgInput');
+    const imgChooseBtn = $('#imgChooseBtn');
+    if (imgChooseBtn) imgChooseBtn.addEventListener('click', () => imgInput.click());
+    imgInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      const fileName = $('#imgFileName'); if (fileName) fileName.textContent = file.name;
+      if (imgChooseBtn) imgChooseBtn.textContent = '更换图片';
       const prog = $('#imgProgress'); const bar = prog.querySelector('.bar');
       prog.hidden = false; bar.style.width = '8%';
       Store.uploadImage(file, (p) => { bar.style.width = Math.max(8, Math.round(p * 100)) + '%'; })
         .then((url) => { mg.pendingImage = url; renderImgPrev(); })
         .catch((err) => alert('图片处理失败：' + err.message))
-        .finally(() => { setTimeout(() => { prog.hidden = true; bar.style.width = '0%'; }, 400); });
+        .finally(() => {
+          e.target.value = '';
+          setTimeout(() => { prog.hidden = true; bar.style.width = '0%'; }, 400);
+        });
     });
 
     // 菜品库表单
@@ -2669,7 +2772,6 @@
 
     $('#setExportMenu').addEventListener('click', openMenuExport);
     const quickExport = $('#mgQuickExport'); if (quickExport) quickExport.addEventListener('click', openMenuExport);
-    const quickLock = $('#mgQuickLock'); if (quickLock) quickLock.addEventListener('click', openDemoLockConfirm);
     $('#meConfirm').addEventListener('click', function () {
       if (window.CustomOrder) window.CustomOrder.exportWholeMenu(menuExportBanquet(), { withQr: false, scale: menuExportScale() });
       var m = $('#menuExportModal'); if (m) m.hidden = true;
@@ -2688,7 +2790,10 @@
 
     // 弹窗关闭（data-close 按钮 & 点击遮罩）
     document.querySelectorAll('[data-close]').forEach((btn) => {
-      btn.addEventListener('click', () => { $('#' + btn.dataset.close).hidden = true; });
+      btn.addEventListener('click', () => {
+        if (btn.dataset.close === 'settingsModal') { closeSettings(); return; }
+        $('#' + btn.dataset.close).hidden = true;
+      });
     });
     // 「恢复默认」确认框刻意不加点遮罩关闭，必须显式选择，防误触
     ['editModal', 'pkgModal', 'cropModal', 'pickModal', 'menuDishModal', 'copyPkgModal'].forEach((id) => {
@@ -2770,34 +2875,79 @@
   // 原生下拉展开样式由浏览器决定，容易与酒店皮肤割裂；统一为轻量菜单组件，
   // 同时继续触发原 select 的 change 事件，业务逻辑无需改动。
   function initUnifiedSelects() {
+    let selectIndex = 0;
+    const closeMenus = (except) => {
+      document.querySelectorAll('.ui-select-menu').forEach((item) => { if (item !== except) item.hidden = true; });
+      document.querySelectorAll('.ui-select-trigger').forEach((item) => {
+        if (!except || item.getAttribute('aria-controls') !== except.id) item.setAttribute('aria-expanded', 'false');
+      });
+    };
     document.querySelectorAll('select').forEach((select) => {
       if (select.dataset.unifiedSelect === '1') return;
       select.dataset.unifiedSelect = '1';
+      selectIndex += 1;
+      const label = select.id ? document.querySelector(`label[for="${select.id}"]`) : null;
+      const accessibleName = (label && label.textContent.trim()) || select.getAttribute('aria-label') || select.title || '选择选项';
       const wrap = document.createElement('div');
       wrap.className = 'ui-select';
       const trigger = document.createElement('button');
       trigger.type = 'button'; trigger.className = 'ui-select-trigger';
       trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-label', accessibleName);
       const menu = document.createElement('div');
-      menu.className = 'ui-select-menu'; menu.setAttribute('role', 'listbox'); menu.hidden = true;
+      menu.id = `ui-select-menu-${selectIndex}`;
+      menu.className = 'ui-select-menu'; menu.setAttribute('role', 'listbox'); menu.setAttribute('aria-label', accessibleName); menu.hidden = true;
+      trigger.setAttribute('aria-controls', menu.id);
       select.parentNode.insertBefore(wrap, select);
       wrap.appendChild(select); wrap.appendChild(trigger); wrap.appendChild(menu);
       select.classList.add('ui-select-native');
+      select.tabIndex = -1;
+      select.setAttribute('aria-hidden', 'true');
+      const items = () => Array.from(menu.querySelectorAll('.ui-select-option:not(:disabled)'));
+      const openMenu = (preferredIndex) => {
+        closeMenus(menu);
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        const available = items();
+        const selectedIndex = available.findIndex((item) => item.getAttribute('aria-selected') === 'true');
+        const index = preferredIndex === 'last' ? available.length - 1 : (preferredIndex === 'first' ? 0 : Math.max(0, selectedIndex));
+        requestAnimationFrame(() => { if (available[index]) available[index].focus(); });
+      };
+      const closeMenu = (restoreFocus) => {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        if (restoreFocus) trigger.focus();
+      };
       const render = () => {
         const selected = select.options[select.selectedIndex];
         trigger.textContent = selected ? selected.textContent : '请选择';
         menu.innerHTML = '';
-        Array.from(select.options).forEach((option) => {
+        Array.from(select.options).forEach((option, optionIndex) => {
           const item = document.createElement('button');
           item.type = 'button'; item.className = 'ui-select-option'; item.setAttribute('role', 'option');
+          item.id = `${menu.id}-option-${optionIndex}`;
           item.textContent = option.textContent; item.disabled = option.disabled;
           item.classList.toggle('on', option.selected); item.setAttribute('aria-selected', String(option.selected));
           item.addEventListener('click', () => {
             select.value = option.value;
-            // 先关闭菜单再通知业务层，避免主题等较重操作执行时下拉仍停留在屏幕上。
-            menu.hidden = true; trigger.setAttribute('aria-expanded', 'false');
+            closeMenu(false);
             select.dispatchEvent(new Event('change', { bubbles: true }));
             render(); trigger.focus();
+          });
+          item.addEventListener('keydown', (event) => {
+            const available = items();
+            const current = available.indexOf(item);
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              const step = event.key === 'ArrowDown' ? 1 : -1;
+              available[(current + step + available.length) % available.length]?.focus();
+            } else if (event.key === 'Home' || event.key === 'End') {
+              event.preventDefault();
+              available[event.key === 'Home' ? 0 : available.length - 1]?.focus();
+            } else if (event.key === 'Escape' || event.key === 'Tab') {
+              if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
+              closeMenu(event.key === 'Escape');
+            }
           });
           menu.appendChild(item);
         });
@@ -2805,9 +2955,17 @@
       trigger.addEventListener('click', (e) => {
         e.stopPropagation();
         const open = menu.hidden;
-        document.querySelectorAll('.ui-select-menu').forEach((item) => { item.hidden = true; });
-        document.querySelectorAll('.ui-select-trigger').forEach((item) => item.setAttribute('aria-expanded', 'false'));
-        menu.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
+        if (open) openMenu(); else closeMenu(false);
+      });
+      trigger.addEventListener('keydown', (event) => {
+        if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+          event.preventDefault();
+          openMenu(event.key === 'ArrowUp' || event.key === 'End' ? 'last' : 'first');
+        } else if ((event.key === 'Enter' || event.key === ' ') && menu.hidden) {
+          event.preventDefault(); openMenu();
+        } else if (event.key === 'Escape' && !menu.hidden) {
+          event.preventDefault(); event.stopPropagation(); closeMenu(true);
+        }
       });
       select.addEventListener('change', render);
       new MutationObserver(render).observe(select, { childList: true, subtree: true });
@@ -2817,14 +2975,12 @@
       document.body.dataset.unifiedSelectClose = '1';
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.ui-select')) {
-          document.querySelectorAll('.ui-select-menu').forEach((menu) => { menu.hidden = true; });
-          document.querySelectorAll('.ui-select-trigger').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+          closeMenus();
         }
       });
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        document.querySelectorAll('.ui-select-menu').forEach((menu) => { menu.hidden = true; });
-        document.querySelectorAll('.ui-select-trigger').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+        closeMenus();
       });
     }
   }
@@ -2909,6 +3065,7 @@
     syncCategoryOptions();
     bindStatic();
     initUnifiedSelects();
+    initDialogFocusManagement();
     applyPadHeaderArt();
     const themeSelect = $('#setTheme');
     if (themeSelect) {
@@ -2930,6 +3087,7 @@
       tabletManage.addEventListener('pointerdown', () => {
         settingsLongPressed = false;
         clearSettingsHold();
+        if (!demoLock) return;
         settingsHold = setTimeout(() => {
           settingsHold = null;
           settingsLongPressed = true;
